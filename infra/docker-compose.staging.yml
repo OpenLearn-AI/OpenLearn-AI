@@ -73,6 +73,7 @@ services:
     command: celery -A app.workers.celery_app flower --port=5555
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      FLOWER_UNAUTHENTICATED_API: "true"
     ports:
       - "127.0.0.1:5555:5555"
     depends_on:
