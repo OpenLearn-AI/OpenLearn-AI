@@ -58,7 +58,7 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    command: celery -A app.workers.celery_app worker --loglevel=info
+    command: celery -A app.workers.celery_app worker --loglevel=info -E
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
