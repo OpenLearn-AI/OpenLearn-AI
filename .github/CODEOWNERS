@@ -1,20 +1,26 @@
 # CODEOWNERS
 
-# صاحب الملكية الافتراضي لأي حاجة مش متغطية تحت
+# Project default
 *                               @MuhammadSeyam
 
-# ---- Pod A - Backend & Platform ----
-/backend/                       @waleed1032 @0Abanoub @MuhammadSeyam
+# Pod A — Backend & Platform
+/backend/                       @0Abanoub
 
-# ---- Pod B - AI/ML ----
-/backend/app/ai/                @MuhammadSeyam @Poulamaher33 @Hossam445
-/backend/app/rag/               @MuhammadSeyam @Poulamaher33 @Hossam445
-/backend/app/kg/                @MuhammadSeyam @Poulamaher33 @Hossam445
+# Pod B — AI/ML
+/backend/app/ai/                @MuhammadSeyam
+/backend/app/rag/               @MuhammadSeyam
+/backend/app/kg/                @MuhammadSeyam
 
-# ---- Pod C - Frontend & UX ----
-/frontend/                      @ibrahim15456 @waseemwageeh33-wes @MuhammadSeyam
+# Pod C — Frontend & UX
+/frontend/                      @ibrahim15456
 
-# ---- Pod D - DevOps, QA & Eval (بتاعك انت) ----
-/.github/                       @hishamabdo0100 @abdomoaz58-tech @MuhammadSeyam
-/infra/                         @hishamabdo0100 @abdomoaz58-tech @MuhammadSeyam
-/docs/runbooks/                 @hishamabdo0100 @abdomoaz58-tech @MuhammadSeyam
+# Pod D — DevOps, QA & Eval
+/.github/                       @hishamabdo0100
+/infra/                         @hishamabdo0100
+
+# Project governance, planning, research, and presentation material
+/docs/                          @MuhammadSeyam
+/docs/runbooks/                 @hishamabdo0100
+/planning/                      @MuhammadSeyam
+/experiments/                   @MuhammadSeyam
+/presentations/                 @MuhammadSeyam

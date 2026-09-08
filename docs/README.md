@@ -47,7 +47,7 @@ reference, explicitly non-authoritative.
 
 ### Known deferred decisions
 
-- **Vector store default (ChromaDB vs Qdrant):** contradiction between the
-  Tech Spec and the Master Roadmap is *not* silently resolved — see
-  [ADR-0004](adr/0004-vector-store-deferred.md) for the deferral rationale,
-  evidence criteria, and decision deadline.
+- **Vector store default (ChromaDB vs Qdrant):** resolved — see
+  [ADR-0004 (pgvector)](adr/0004-vector-store-pgvector.md) (Accepted,
+  2026-08-31). The original deferral is retained for history at
+  [ADR-0004 (deferred)](adr/0004-vector-store-deferred.md) (Superseded).

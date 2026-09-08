@@ -1,9 +1,10 @@
 # ADR-0004: Vector store default (ChromaDB vs Qdrant) — DEFERRED
 
-- **Status:** Deferred (2026-08-16) — decision required by end of Week 4
-  (before the embedding spike, W5)
+- **Status:** Superseded (2026-08-31) by
+  [ADR-0004 (pgvector)](./0004-vector-store-pgvector.md)
 - **Deciders:** Pending — AI/ML pod lead + tech lead (this ADR records the
-  deferral, not a choice)
+  deferral, not a choice). Kept for historical context; the deferral was
+  resolved on 2026-08-31.
 
 ## Context
 
@@ -19,14 +20,15 @@ store:
 an evaluation; the counts of mentions are not evidence. No vector-store code
 exists anywhere in the repository, so nothing currently depends on either.
 
-## Decision
+## Decision (historical)
 
-**Defer the choice.** Do not treat either document's default as binding.
-Record the contradiction, define the evidence required, and decide once, in a
-superseding ADR, before the embedding spike needs a store (roadmap W5;
-decision deadline: end of W4, 2026-08-30).
+This ADR originally **deferred the choice** and defined the evidence required
+before deciding. The deferral is now **superseded** by
+[ADR-0004 (pgvector)](./0004-vector-store-pgvector.md) (2026-08-31), which
+selects pgvector as the project default. This record is retained so the
+reasoning and evaluation criteria that led to that decision remain traceable.
 
-### Evidence required before deciding
+### Evidence originally required before deciding
 
 1. **Embedding spike results (W3–4)** — BGE-M3 vs OpenAI embedding quality on
    the 10–20 Arabic/English query–chunk pairs (roadmap W2 methodology doc) —
@@ -45,29 +47,19 @@ decision deadline: end of W4, 2026-08-30).
    since the PAL vector-DB interface means application code should not care,
    but operational tooling will.
 
-### What remains flexible until then
-
-- No code may hard-depend on either store. The eventual integration goes
-  through the PAL vector-DB interface (per spec), which is itself
-  intentionally not implemented yet (ADR-0001 rule: no speculative
-  infrastructure).
-- The roadmap's fallback F-1 (pgvector) remains valid regardless of the
-  winner.
-
 ## Consequences
 
-- Prevents a coin-flip choice from becoming load-bearing.
-- Creates a hard deadline: if evidence is not ready by W4's end, the team
-  must either extend the deferral explicitly (update this ADR) or choose with
-  partial evidence and record the risk.
+- The deferral prevented a coin-flip choice from becoming load-bearing while
+  evidence was gathered.
+- The superseding ADR-0004 (pgvector) now selects a single default store;
+  Qdrant and ChromaDB remain viable future alternatives if a dedicated store
+  is later warranted.
 
-## Alternatives considered
+## Alternatives considered (as of the original deferral)
 
 - **Adopt ChromaDB now** (spec default; embedded; simplest local story) —
-  plausible but premature: the spec's local-first framing predates the
-  roadmap's Qdrant alignment, and filtering/persistence evidence is missing.
-- **Adopt Qdrant now** (roadmap default) — same objection in reverse.
-- **pgvector immediately** — attractive operationally (one datastore), but
-  the spec's multi-store design and the roadmap's fallback ordering both
-  treat it as a fallback, not a first choice; changing that ordering is
-  itself a decision requiring evidence.
+  considered premature at deferral time.
+- **Adopt Qdrant now** (roadmap default) — considered premature at deferral
+  time.
+- **pgvector immediately** — attractive operationally (one datastore); this
+  is the option eventually selected by the superseding ADR-0004.

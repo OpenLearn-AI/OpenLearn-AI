@@ -1,7 +1,8 @@
 # ADR-0002: Documentation authority hierarchy
 
 - **Status:** Accepted (2026-08-16)
-- **Deciders:** Foundation cleanup task (Week 2); to be ratified by team review
+- **Deciders:** Foundation cleanup task (Week 2); ratified by team review
+  (Week 4, 2026-08-31)
 
 ## Context
 

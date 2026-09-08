@@ -6,3 +6,4 @@ pytest-cov==6.0.0
 # starlette>=1.6 uses the httpx2 line; the previous entry had the right package
 # but no version pin — pinned here for reproducibility.
 httpx2==2.10.0
+pytest-asyncio==0.24.0
