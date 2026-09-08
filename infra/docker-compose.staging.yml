@@ -9,6 +9,7 @@ services:
     environment:
       - ENVIRONMENT=staging
       - DATABASE_URL=${DATABASE_URL}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     env_file:
       - .env.staging
     depends_on:
