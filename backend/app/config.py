@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     database_url: str = "postgresql+asyncpg://postgres@localhost:5432/openlearn_ai"
 
+    # Keycloak / OIDC
+    keycloak_issuer: str = "http://localhost:8080/realms/openlearn"
+    keycloak_jwks_url: str = (
+        "http://localhost:8080/realms/openlearn/protocol/openid-connect/certs"
+    )
+    keycloak_audience: str = "openlearn-api"
+    keycloak_client_id: str = "openlearn-frontend"
+
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
