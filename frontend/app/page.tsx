@@ -106,4 +106,5 @@ export default function Home() {
 cd frontend
 npm run dev  
 Local: http://localhost:3000
+document.documentElement.classList.add("dark")
 */ 

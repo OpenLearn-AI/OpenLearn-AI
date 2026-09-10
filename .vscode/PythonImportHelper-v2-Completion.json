@@ -1,0 +1,717 @@
+[
+    {
+        "label": "BaseSettings",
+        "importPath": "pydantic_settings",
+        "description": "pydantic_settings",
+        "isExtraImport": true,
+        "detail": "pydantic_settings",
+        "documentation": {}
+    },
+    {
+        "label": "SettingsConfigDict",
+        "importPath": "pydantic_settings",
+        "description": "pydantic_settings",
+        "isExtraImport": true,
+        "detail": "pydantic_settings",
+        "documentation": {}
+    },
+    {
+        "label": "FastAPI",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "CORSMiddleware",
+        "importPath": "fastapi.middleware.cors",
+        "description": "fastapi.middleware.cors",
+        "isExtraImport": true,
+        "detail": "fastapi.middleware.cors",
+        "documentation": {}
+    },
+    {
+        "label": "settings",
+        "importPath": "app.config",
+        "description": "app.config",
+        "isExtraImport": true,
+        "detail": "app.config",
+        "documentation": {}
+    },
+    {
+        "label": "TestClient",
+        "importPath": "fastapi.testclient",
+        "description": "fastapi.testclient",
+        "isExtraImport": true,
+        "detail": "fastapi.testclient",
+        "documentation": {}
+    },
+    {
+        "label": "app",
+        "importPath": "app.main",
+        "description": "app.main",
+        "isExtraImport": true,
+        "detail": "app.main",
+        "documentation": {}
+    },
+    {
+        "label": "annotations",
+        "importPath": "__future__",
+        "description": "__future__",
+        "isExtraImport": true,
+        "detail": "__future__",
+        "documentation": {}
+    },
+    {
+        "label": "argparse",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "argparse",
+        "description": "argparse",
+        "detail": "argparse",
+        "documentation": {}
+    },
+    {
+        "label": "re",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "re",
+        "description": "re",
+        "detail": "re",
+        "documentation": {}
+    },
+    {
+        "label": "sys",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "sys",
+        "description": "sys",
+        "detail": "sys",
+        "documentation": {}
+    },
+    {
+        "label": "Path",
+        "importPath": "pathlib",
+        "description": "pathlib",
+        "isExtraImport": true,
+        "detail": "pathlib",
+        "documentation": {}
+    },
+    {
+        "label": "Path",
+        "importPath": "pathlib",
+        "description": "pathlib",
+        "isExtraImport": true,
+        "detail": "pathlib",
+        "documentation": {}
+    },
+    {
+        "label": "PdfReader",
+        "importPath": "pypdf",
+        "description": "pypdf",
+        "isExtraImport": true,
+        "detail": "pypdf",
+        "documentation": {}
+    },
+    {
+        "label": "PdfWriter",
+        "importPath": "pypdf",
+        "description": "pypdf",
+        "isExtraImport": true,
+        "detail": "pypdf",
+        "documentation": {}
+    },
+    {
+        "label": "json",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "json",
+        "description": "json",
+        "detail": "json",
+        "documentation": {}
+    },
+    {
+        "label": "os",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "os",
+        "description": "os",
+        "detail": "os",
+        "documentation": {}
+    },
+    {
+        "label": "subprocess",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "subprocess",
+        "description": "subprocess",
+        "detail": "subprocess",
+        "documentation": {}
+    },
+    {
+        "label": "tempfile",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "tempfile",
+        "description": "tempfile",
+        "detail": "tempfile",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timezone",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "pyarrow.parquet",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "pyarrow.parquet",
+        "description": "pyarrow.parquet",
+        "detail": "pyarrow.parquet",
+        "documentation": {}
+    },
+    {
+        "label": "Settings",
+        "kind": 6,
+        "importPath": "backend.app.config",
+        "description": "backend.app.config",
+        "peekOfCode": "class Settings(BaseSettings):\n    app_name: str = \"OpenLearn AI\"\n    environment: str = \"development\"\n    debug: bool = False\n    cors_origins: str = \"http://localhost:3000\"\n    model_config = SettingsConfigDict(\n        env_file=\".env\",\n        env_file_encoding=\"utf-8\",\n        extra=\"ignore\",\n    )",
+        "detail": "backend.app.config",
+        "documentation": {}
+    },
+    {
+        "label": "settings",
+        "kind": 5,
+        "importPath": "backend.app.config",
+        "description": "backend.app.config",
+        "peekOfCode": "settings = Settings()",
+        "detail": "backend.app.config",
+        "documentation": {}
+    },
+    {
+        "label": "app",
+        "kind": 5,
+        "importPath": "backend.app.main",
+        "description": "backend.app.main",
+        "peekOfCode": "app = FastAPI(\n    title=settings.app_name,\n)\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=settings.cors_origin_list,\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)",
+        "detail": "backend.app.main",
+        "documentation": {}
+    },
+    {
+        "label": "test_read_root",
+        "kind": 2,
+        "importPath": "backend.tests.test_main",
+        "description": "backend.tests.test_main",
+        "peekOfCode": "def test_read_root():\n    response = client.get(\"/\")\n    assert response.status_code == 200\n    assert response.json() == {\"Hello\": \"World\"}\ndef test_health_check():\n    response = client.get(\"/health\")\n    assert response.status_code == 200\n    assert response.json() == {\"status\": \"ok\"}\ndef test_openapi():\n    response = client.get(\"/openapi.json\")",
+        "detail": "backend.tests.test_main",
+        "documentation": {}
+    },
+    {
+        "label": "test_health_check",
+        "kind": 2,
+        "importPath": "backend.tests.test_main",
+        "description": "backend.tests.test_main",
+        "peekOfCode": "def test_health_check():\n    response = client.get(\"/health\")\n    assert response.status_code == 200\n    assert response.json() == {\"status\": \"ok\"}\ndef test_openapi():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200\n    assert response.json()[\"info\"][\"title\"] == \"OpenLearn AI\"\ndef test_docs():\n    response = client.get(\"/docs\")",
+        "detail": "backend.tests.test_main",
+        "documentation": {}
+    },
+    {
+        "label": "test_openapi",
+        "kind": 2,
+        "importPath": "backend.tests.test_main",
+        "description": "backend.tests.test_main",
+        "peekOfCode": "def test_openapi():\n    response = client.get(\"/openapi.json\")\n    assert response.status_code == 200\n    assert response.json()[\"info\"][\"title\"] == \"OpenLearn AI\"\ndef test_docs():\n    response = client.get(\"/docs\")\n    assert response.status_code == 200\ndef test_cors():\n    response = client.options(\n        \"/health\",",
+        "detail": "backend.tests.test_main",
+        "documentation": {}
+    },
+    {
+        "label": "test_docs",
+        "kind": 2,
+        "importPath": "backend.tests.test_main",
+        "description": "backend.tests.test_main",
+        "peekOfCode": "def test_docs():\n    response = client.get(\"/docs\")\n    assert response.status_code == 200\ndef test_cors():\n    response = client.options(\n        \"/health\",\n        headers={\n            \"Origin\": \"http://localhost:3000\",\n            \"Access-Control-Request-Method\": \"GET\",\n        },",
+        "detail": "backend.tests.test_main",
+        "documentation": {}
+    },
+    {
+        "label": "test_cors",
+        "kind": 2,
+        "importPath": "backend.tests.test_main",
+        "description": "backend.tests.test_main",
+        "peekOfCode": "def test_cors():\n    response = client.options(\n        \"/health\",\n        headers={\n            \"Origin\": \"http://localhost:3000\",\n            \"Access-Control-Request-Method\": \"GET\",\n        },\n    )\n    assert response.status_code == 200\n    assert response.headers[\"access-control-allow-origin\"] == \"http://localhost:3000\"",
+        "detail": "backend.tests.test_main",
+        "documentation": {}
+    },
+    {
+        "label": "client",
+        "kind": 5,
+        "importPath": "backend.tests.test_main",
+        "description": "backend.tests.test_main",
+        "peekOfCode": "client = TestClient(app)\ndef test_read_root():\n    response = client.get(\"/\")\n    assert response.status_code == 200\n    assert response.json() == {\"Hello\": \"World\"}\ndef test_health_check():\n    response = client.get(\"/health\")\n    assert response.status_code == 200\n    assert response.json() == {\"status\": \"ok\"}\ndef test_openapi():",
+        "detail": "backend.tests.test_main",
+        "documentation": {}
+    },
+    {
+        "label": "slugify_filename",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "description": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "peekOfCode": "def slugify_filename(stem: str) -> str:\n    \"\"\"\n    Convert a filename stem into the same style used by the benchmark IDs.\n    Example:\n        Custom_English_born_digital_001\n        ->\n        custom_english_born_digital_001\n    \"\"\"\n    value = stem.strip().lower()\n    # Replace non-alphanumeric runs with underscores.",
+        "detail": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "documentation": {}
+    },
+    {
+        "label": "make_sample_id",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "description": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "peekOfCode": "def make_sample_id(pdf_path: Path, page_number: int) -> str:\n    \"\"\"\n    Build the page-level sample ID.\n    Example:\n        custom_custom_english_born_digital_001_p001\n    \"\"\"\n    stem_slug = slugify_filename(pdf_path.stem)\n    return f\"custom_{stem_slug}_p{page_number:03d}\"\ndef split_pdf(pdf_path: Path, dry_run: bool = False) -> int:\n    \"\"\"",
+        "detail": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "documentation": {}
+    },
+    {
+        "label": "split_pdf",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "description": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "peekOfCode": "def split_pdf(pdf_path: Path, dry_run: bool = False) -> int:\n    \"\"\"\n    Split one PDF into standalone one-page PDFs.\n    Returns the number of generated pages.\n    \"\"\"\n    print(f\"\\nPDF: {pdf_path}\")\n    try:\n        reader = PdfReader(str(pdf_path))\n    except Exception as exc:\n        raise RuntimeError(",
+        "detail": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "documentation": {}
+    },
+    {
+        "label": "find_pdfs",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "description": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "peekOfCode": "def find_pdfs(root: Path) -> list[Path]:\n    \"\"\"\n    Find PDFs recursively.\n    Sorted for deterministic processing.\n    \"\"\"\n    return sorted(\n        path\n        for path in root.rglob(\"*\")\n        if path.is_file()\n        and path.suffix.lower() == \".pdf\"",
+        "detail": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "description": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "peekOfCode": "def main() -> int:\n    parser = argparse.ArgumentParser(\n        description=(\n            \"Split all PDFs in a working copy of the custom OCR \"\n            \"dataset into one-page PDFs.\"\n        )\n    )\n    parser.add_argument(\n        \"root\",\n        type=Path,",
+        "detail": "experiments.OCR.ocr-benchmark.data.raw.custom.script",
+        "documentation": {}
+    },
+    {
+        "label": "discover_on_disk",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "def discover_on_disk(dataset_root):\n    \"\"\"Return {canonical_sample_id: relative_path} for all dataset files.\"\"\"\n    found = {}\n    for dirpath, dirnames, filenames in os.walk(dataset_root):\n        dirnames[:] = [d for d in dirnames if d != \".venv\"]\n        for fname in filenames:\n            if fname.lower() in IGNORED_FILENAMES:\n                continue\n            ext = os.path.splitext(fname)[1].lower()\n            if ext not in IMAGE_EXTS and ext not in PDF_EXTS:",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "discover_gt",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "def discover_gt(gt_dir):\n    \"\"\"Return list of (gt_id, filename) for .txt ground-truth files.\"\"\"\n    gts = []\n    if os.path.isdir(gt_dir):\n        for fname in sorted(os.listdir(gt_dir)):\n            if fname.endswith(\".txt\"):\n                gts.append((os.path.splitext(fname)[0], fname))\n    return gts\ndef section(title):\n    print()",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "section",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "def section(title):\n    print()\n    print(f\"== {title} ==\")\ndef main():\n    ap = argparse.ArgumentParser()\n    ap.add_argument(\"--manifest\", default=\"data/raw/custom/manifest.json\")\n    ap.add_argument(\"--dataset-root\", default=\"data/raw/custom\")\n    ap.add_argument(\"--metadata\", default=\"configs/custom_manifest_metadata.yaml\")\n    ap.add_argument(\"--ground-truth\", default=\"data/ground_truth/custom\")\n    args = ap.parse_args()",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "def main():\n    ap = argparse.ArgumentParser()\n    ap.add_argument(\"--manifest\", default=\"data/raw/custom/manifest.json\")\n    ap.add_argument(\"--dataset-root\", default=\"data/raw/custom\")\n    ap.add_argument(\"--metadata\", default=\"configs/custom_manifest_metadata.yaml\")\n    ap.add_argument(\"--ground-truth\", default=\"data/ground_truth/custom\")\n    args = ap.parse_args()\n    problems = []  # (severity, message)\n    def err(msg):\n        problems.append((\"ERROR\", msg))",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "CANONICAL_CATEGORIES",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "CANONICAL_CATEGORIES = [\n    \"english_born_digital\",\n    \"arabic_born_digital\",\n    \"english_scanned\",\n    \"arabic_scanned\",\n    \"arabic_english_mixed\",\n    \"multi_column\",\n    \"tables\",\n    \"formulas\",\n    \"figures_diagrams\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "FEATURE_KEYS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "FEATURE_KEYS = [\"multi_column\", \"table\", \"formula\", \"figure\", \"dense\", \"noisy\"]\nVALID_LANGUAGE_TOKENS = {\"en\", \"ar\"}\nVALID_GT_STATUSES = {\"pending\", \"verified\", \"partial\"}\nVALID_SOURCE_TYPES = {\"pdf\", \"image\"}\nIMAGE_EXTS = {\".png\", \".jpg\", \".jpeg\"}\nPDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: document-level samples (never expanded to pages).\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\n# category <-> feature pairs (both directions must hold)",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "VALID_LANGUAGE_TOKENS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "VALID_LANGUAGE_TOKENS = {\"en\", \"ar\"}\nVALID_GT_STATUSES = {\"pending\", \"verified\", \"partial\"}\nVALID_SOURCE_TYPES = {\"pdf\", \"image\"}\nIMAGE_EXTS = {\".png\", \".jpg\", \".jpeg\"}\nPDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: document-level samples (never expanded to pages).\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\n# category <-> feature pairs (both directions must hold)\nCAT2FEAT = {",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "VALID_GT_STATUSES",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "VALID_GT_STATUSES = {\"pending\", \"verified\", \"partial\"}\nVALID_SOURCE_TYPES = {\"pdf\", \"image\"}\nIMAGE_EXTS = {\".png\", \".jpg\", \".jpeg\"}\nPDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: document-level samples (never expanded to pages).\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\n# category <-> feature pairs (both directions must hold)\nCAT2FEAT = {\n    \"multi_column\": \"multi_column\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "VALID_SOURCE_TYPES",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "VALID_SOURCE_TYPES = {\"pdf\", \"image\"}\nIMAGE_EXTS = {\".png\", \".jpg\", \".jpeg\"}\nPDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: document-level samples (never expanded to pages).\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\n# category <-> feature pairs (both directions must hold)\nCAT2FEAT = {\n    \"multi_column\": \"multi_column\",\n    \"tables\": \"table\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "IMAGE_EXTS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "IMAGE_EXTS = {\".png\", \".jpg\", \".jpeg\"}\nPDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: document-level samples (never expanded to pages).\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\n# category <-> feature pairs (both directions must hold)\nCAT2FEAT = {\n    \"multi_column\": \"multi_column\",\n    \"tables\": \"table\",\n    \"formulas\": \"formula\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "PDF_EXTS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "PDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: document-level samples (never expanded to pages).\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\n# category <-> feature pairs (both directions must hold)\nCAT2FEAT = {\n    \"multi_column\": \"multi_column\",\n    \"tables\": \"table\",\n    \"formulas\": \"formula\",\n    \"figures_diagrams\": \"figure\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "IGNORED_FILENAMES",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "IGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: document-level samples (never expanded to pages).\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\n# category <-> feature pairs (both directions must hold)\nCAT2FEAT = {\n    \"multi_column\": \"multi_column\",\n    \"tables\": \"table\",\n    \"formulas\": \"formula\",\n    \"figures_diagrams\": \"figure\",\n    \"dense_academic\": \"dense\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "DOCUMENT_LEVEL_PDFS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "DOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\n# category <-> feature pairs (both directions must hold)\nCAT2FEAT = {\n    \"multi_column\": \"multi_column\",\n    \"tables\": \"table\",\n    \"formulas\": \"formula\",\n    \"figures_diagrams\": \"figure\",\n    \"dense_academic\": \"dense\",\n    \"noisy_low_quality\": \"noisy\",\n}",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "CAT2FEAT",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "CAT2FEAT = {\n    \"multi_column\": \"multi_column\",\n    \"tables\": \"table\",\n    \"formulas\": \"formula\",\n    \"figures_diagrams\": \"figure\",\n    \"dense_academic\": \"dense\",\n    \"noisy_low_quality\": \"noisy\",\n}\nDIGITAL_TOKEN = \"digital\"\ndef discover_on_disk(dataset_root):",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "DIGITAL_TOKEN",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "peekOfCode": "DIGITAL_TOKEN = \"digital\"\ndef discover_on_disk(dataset_root):\n    \"\"\"Return {canonical_sample_id: relative_path} for all dataset files.\"\"\"\n    found = {}\n    for dirpath, dirnames, filenames in os.walk(dataset_root):\n        dirnames[:] = [d for d in dirnames if d != \".venv\"]\n        for fname in filenames:\n            if fname.lower() in IGNORED_FILENAMES:\n                continue\n            ext = os.path.splitext(fname)[1].lower()",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.audit_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "BuildError",
+        "kind": 6,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "class BuildError(Exception):\n    \"\"\"Raised for any condition that should fail the build loudly.\"\"\"\n# ---------------------------------------------------------------------------\n# Discovery\n# ---------------------------------------------------------------------------\ndef discover_files(dataset_root):\n    \"\"\"Find all supported dataset files, sorted by relative path.\"\"\"\n    found = []\n    for dirpath, dirnames, filenames in os.walk(dataset_root):\n        dirnames[:] = [d for d in dirnames if d != \".venv\"]",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "discover_files",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def discover_files(dataset_root):\n    \"\"\"Find all supported dataset files, sorted by relative path.\"\"\"\n    found = []\n    for dirpath, dirnames, filenames in os.walk(dataset_root):\n        dirnames[:] = [d for d in dirnames if d != \".venv\"]\n        for fname in sorted(filenames):\n            if fname.lower() in IGNORED_FILENAMES:\n                continue\n            ext = os.path.splitext(fname)[1].lower()\n            if ext not in IMAGE_EXTS and ext not in PDF_EXTS:",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "pdf_page_count",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def pdf_page_count(dataset_root, rel_path):\n    full_path = os.path.join(dataset_root, rel_path)\n    try:\n        out = subprocess.run(\n            [\"pdfinfo\", full_path],\n            check=True,\n            capture_output=True,\n            text=True,\n        ).stdout\n    except FileNotFoundError:",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "canonical_sample_id",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def canonical_sample_id(fname):\n    \"\"\"\n    Canonical sample ID = exact filename stem, byte-for-byte.\n    No prefixing, no slugification, no case folding, no whitespace\n    normalization. The stem IS the identity.\n    \"\"\"\n    return os.path.splitext(fname)[0]\n# ---------------------------------------------------------------------------\n# Metadata loading + validation\n# ---------------------------------------------------------------------------",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "load_metadata",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def load_metadata(metadata_path):\n    if not os.path.exists(metadata_path):\n        return {}\n    with open(metadata_path, \"r\", encoding=\"utf-8\") as f:\n        data = yaml.safe_load(f) or {}\n    if not isinstance(data, dict):\n        raise BuildError(f\"Metadata file '{metadata_path}' must be a mapping of sample_id -> metadata\")\n    return data\ndef validate_metadata_entry(sample_id, entry):\n    if entry is None:",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "validate_metadata_entry",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def validate_metadata_entry(sample_id, entry):\n    if entry is None:\n        return\n    if not isinstance(entry, dict):\n        raise BuildError(f\"Metadata entry for '{sample_id}' must be a mapping\")\n    allowed_keys = {\"language\", \"categories\", \"features\", \"evaluation\", \"ground_truth\"}\n    unknown = set(entry.keys()) - allowed_keys\n    if unknown:\n        raise BuildError(f\"Metadata entry for '{sample_id}' has unknown keys: {sorted(unknown)}\")\n    lang = entry.get(\"language\")",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "build_documents",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def build_documents(dataset_root, metadata):\n    files = discover_files(dataset_root)\n    # Identity integrity: every stem must be unique across the dataset.\n    seen_stems = {}\n    for rel_path, fname, _ext in files:\n        sid = canonical_sample_id(fname)\n        if sid in seen_stems:\n            raise BuildError(\n                f\"Duplicate canonical sample_id '{sid}': files \"\n                f\"'{seen_stems[sid]}' and '{rel_path}' share the same stem.\"",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "check_orphan_metadata",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def check_orphan_metadata(metadata, documents):\n    \"\"\"Identity mismatch: metadata keys with no matching sample_id are fatal.\"\"\"\n    known_ids = {d[\"sample_id\"] for d in documents}\n    return sorted(set(metadata.keys()) - known_ids)\ndef load_existing_created(output_path):\n    if os.path.exists(output_path):\n        try:\n            with open(output_path, \"r\", encoding=\"utf-8\") as f:\n                existing = json.load(f)\n            return existing.get(\"created\")",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "load_existing_created",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def load_existing_created(output_path):\n    if os.path.exists(output_path):\n        try:\n            with open(output_path, \"r\", encoding=\"utf-8\") as f:\n                existing = json.load(f)\n            return existing.get(\"created\")\n        except (json.JSONDecodeError, OSError):\n            return None\n    return None\ndef atomic_write_json(path, data):",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "atomic_write_json",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def atomic_write_json(path, data):\n    directory = os.path.dirname(os.path.abspath(path))\n    fd, tmp_path = tempfile.mkstemp(prefix=\".manifest_\", suffix=\".json.tmp\", dir=directory)\n    try:\n        with os.fdopen(fd, \"w\", encoding=\"utf-8\") as f:\n            json.dump(data, f, indent=2, ensure_ascii=False, sort_keys=False)\n            f.write(\"\\n\")\n        os.replace(tmp_path, path)\n    except Exception:\n        if os.path.exists(tmp_path):",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "def main():\n    parser = argparse.ArgumentParser(description=\"Build the custom OCR benchmark manifest.\")\n    parser.add_argument(\"--dataset-root\", default=\"data/raw/custom\")\n    parser.add_argument(\"--metadata\", default=\"configs/custom_manifest_metadata.yaml\")\n    parser.add_argument(\"--output\", default=\"data/raw/custom/manifest.json\")\n    parser.add_argument(\n        \"--freeze-created\",\n        action=\"store_true\",\n        default=True,\n        help=\"Preserve the existing 'created' timestamp across rebuilds (default: on).\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "page",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "page = null and are never expanded into _pNNN pages.\nDESIGN\n------\n- The dataset on disk is treated as READ-ONLY except manifest.json.\n- Folders are physical organization only; never a source of semantics.\n- All semantic metadata comes exclusively from\n  configs/custom_manifest_metadata.yaml, keyed by canonical sample_id.\n  Metadata keys that do not correspond to any discovered sample_id are an\n  identity mismatch -> the build FAILS loudly instead of inventing IDs.\n- A multi-page PDF whose stem is not in DOCUMENT_LEVEL_PDFS is rejected",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "SCHEMA_NAME",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "SCHEMA_NAME = \"openlearn-ocrbench-manifest\"\nSCHEMA_VERSION = 4\nIMAGE_EXTS = {\".png\", \".jpg\", \".jpeg\"}\nPDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: these stems are document-level samples.\n# They are NOT split into pages even if the PDF contains multiple pages.\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\nCANONICAL_CATEGORIES = [\n    \"english_born_digital\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "SCHEMA_VERSION",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "SCHEMA_VERSION = 4\nIMAGE_EXTS = {\".png\", \".jpg\", \".jpeg\"}\nPDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: these stems are document-level samples.\n# They are NOT split into pages even if the PDF contains multiple pages.\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\nCANONICAL_CATEGORIES = [\n    \"english_born_digital\",\n    \"arabic_born_digital\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "IMAGE_EXTS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "IMAGE_EXTS = {\".png\", \".jpg\", \".jpeg\"}\nPDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: these stems are document-level samples.\n# They are NOT split into pages even if the PDF contains multiple pages.\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\nCANONICAL_CATEGORIES = [\n    \"english_born_digital\",\n    \"arabic_born_digital\",\n    \"english_scanned\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "PDF_EXTS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "PDF_EXTS = {\".pdf\"}\nIGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: these stems are document-level samples.\n# They are NOT split into pages even if the PDF contains multiple pages.\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\nCANONICAL_CATEGORIES = [\n    \"english_born_digital\",\n    \"arabic_born_digital\",\n    \"english_scanned\",\n    \"arabic_scanned\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "IGNORED_FILENAMES",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "IGNORED_FILENAMES = {\"manifest.json\", \"readme.md\"}\n# Phase 2 FINAL decision: these stems are document-level samples.\n# They are NOT split into pages even if the PDF contains multiple pages.\nDOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\nCANONICAL_CATEGORIES = [\n    \"english_born_digital\",\n    \"arabic_born_digital\",\n    \"english_scanned\",\n    \"arabic_scanned\",\n    \"arabic_english_mixed\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "DOCUMENT_LEVEL_PDFS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "DOCUMENT_LEVEL_PDFS = {\"custom_multi_column_004\"}\nCANONICAL_CATEGORIES = [\n    \"english_born_digital\",\n    \"arabic_born_digital\",\n    \"english_scanned\",\n    \"arabic_scanned\",\n    \"arabic_english_mixed\",\n    \"multi_column\",\n    \"tables\",\n    \"formulas\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "CANONICAL_CATEGORIES",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "CANONICAL_CATEGORIES = [\n    \"english_born_digital\",\n    \"arabic_born_digital\",\n    \"english_scanned\",\n    \"arabic_scanned\",\n    \"arabic_english_mixed\",\n    \"multi_column\",\n    \"tables\",\n    \"formulas\",\n    \"figures_diagrams\",",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "FEATURE_KEYS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "FEATURE_KEYS = [\"multi_column\", \"table\", \"formula\", \"figure\", \"dense\", \"noisy\"]\nVALID_LANGUAGE_TOKENS = {\"en\", \"ar\"}\nVALID_GT_STATUSES = {\"pending\", \"verified\", \"partial\"}\nclass BuildError(Exception):\n    \"\"\"Raised for any condition that should fail the build loudly.\"\"\"\n# ---------------------------------------------------------------------------\n# Discovery\n# ---------------------------------------------------------------------------\ndef discover_files(dataset_root):\n    \"\"\"Find all supported dataset files, sorted by relative path.\"\"\"",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "VALID_LANGUAGE_TOKENS",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "VALID_LANGUAGE_TOKENS = {\"en\", \"ar\"}\nVALID_GT_STATUSES = {\"pending\", \"verified\", \"partial\"}\nclass BuildError(Exception):\n    \"\"\"Raised for any condition that should fail the build loudly.\"\"\"\n# ---------------------------------------------------------------------------\n# Discovery\n# ---------------------------------------------------------------------------\ndef discover_files(dataset_root):\n    \"\"\"Find all supported dataset files, sorted by relative path.\"\"\"\n    found = []",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "VALID_GT_STATUSES",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "description": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "peekOfCode": "VALID_GT_STATUSES = {\"pending\", \"verified\", \"partial\"}\nclass BuildError(Exception):\n    \"\"\"Raised for any condition that should fail the build loudly.\"\"\"\n# ---------------------------------------------------------------------------\n# Discovery\n# ---------------------------------------------------------------------------\ndef discover_files(dataset_root):\n    \"\"\"Find all supported dataset files, sorted by relative path.\"\"\"\n    found = []\n    for dirpath, dirnames, filenames in os.walk(dataset_root):",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.build_custom_manifest",
+        "documentation": {}
+    },
+    {
+        "label": "DATA_DIR",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "description": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "peekOfCode": "DATA_DIR = Path(\"data/raw/misraj/data\")\nfor parquet_file in sorted(DATA_DIR.glob(\"*.parquet\")):\n    print(\"=\" * 80)\n    print(f\"FILE: {parquet_file.name}\")\n    parquet = pq.ParquetFile(parquet_file)\n    print(f\"Rows: {parquet.metadata.num_rows}\")\n    print(f\"Row groups: {parquet.num_row_groups}\")\n    print(\"\\nSchema:\")\n    print(parquet.schema_arrow)\n# Inspect 3 Misraj samples",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "documentation": {}
+    },
+    {
+        "label": "parquet_file",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "description": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "peekOfCode": "parquet_file = sorted(DATA_DIR.glob(\"*.parquet\"))[0]\ntable = pq.read_table(parquet_file)\nprint(f\"Columns: {table.column_names}\")\nprint(f\"Total rows: {table.num_rows}\")\nrows = table.slice(0, 3).to_pylist()\nfor i, row in enumerate(rows, start=1):\n    print(\"\\n\" + \"=\" * 80)\n    print(f\"SAMPLE {i}\")\n    print(\"=\" * 80)\n    print(f\"\\nUUID:\\n{row['uuid']}\")",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "documentation": {}
+    },
+    {
+        "label": "table",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "description": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "peekOfCode": "table = pq.read_table(parquet_file)\nprint(f\"Columns: {table.column_names}\")\nprint(f\"Total rows: {table.num_rows}\")\nrows = table.slice(0, 3).to_pylist()\nfor i, row in enumerate(rows, start=1):\n    print(\"\\n\" + \"=\" * 80)\n    print(f\"SAMPLE {i}\")\n    print(\"=\" * 80)\n    print(f\"\\nUUID:\\n{row['uuid']}\")\n    print(\"\\nIMAGE:\")",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "documentation": {}
+    },
+    {
+        "label": "rows",
+        "kind": 5,
+        "importPath": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "description": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "peekOfCode": "rows = table.slice(0, 3).to_pylist()\nfor i, row in enumerate(rows, start=1):\n    print(\"\\n\" + \"=\" * 80)\n    print(f\"SAMPLE {i}\")\n    print(\"=\" * 80)\n    print(f\"\\nUUID:\\n{row['uuid']}\")\n    print(\"\\nIMAGE:\")\n    print(f\"Path: {row['image']['path']}\")\n    image_bytes = row[\"image\"][\"bytes\"]\n    print(f\"Bytes: {len(image_bytes):,}\")",
+        "detail": "experiments.OCR.ocr-benchmark.scripts.inspect-misraj",
+        "documentation": {}
+    },
+    {
+        "label": "_Known",
+        "kind": 6,
+        "importPath": "frontend.node_modules.flatted.python.flatted",
+        "description": "frontend.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _Known:\n    def __init__(self):\n        self.key = []\n        self.value = []\nclass _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    for i in range(len(value)):\n        yield i",
+        "detail": "frontend.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_String",
+        "kind": 6,
+        "importPath": "frontend.node_modules.flatted.python.flatted",
+        "description": "frontend.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    for i in range(len(value)):\n        yield i\ndef _object_keys(value):\n    for key in value:\n        yield key\ndef _is_array(value):",
+        "detail": "frontend.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "parse",
+        "kind": 2,
+        "importPath": "frontend.node_modules.flatted.python.flatted",
+        "description": "frontend.node_modules.flatted.python.flatted",
+        "peekOfCode": "def parse(value, *args, **kwargs):\n    json = _json.loads(value, *args, **kwargs)\n    wrapped = []\n    for value in json:\n        wrapped.append(_wrap(value))\n    input = []\n    for value in wrapped:\n        if isinstance(value, _String):\n            input.append(value.value)\n        else:",
+        "detail": "frontend.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "stringify",
+        "kind": 2,
+        "importPath": "frontend.node_modules.flatted.python.flatted",
+        "description": "frontend.node_modules.flatted.python.flatted",
+        "peekOfCode": "def stringify(value, *args, **kwargs):\n    known = _Known()\n    input = []\n    output = []\n    i = int(_index(known, input, value))\n    while i < len(input):\n        output.append(_transform(known, input, input[i]))\n        i += 1\n    return _json.dumps(output, *args, **kwargs)",
+        "detail": "frontend.node_modules.flatted.python.flatted",
+        "documentation": {}
+    }
+]

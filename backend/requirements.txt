@@ -12,3 +12,6 @@ asyncpg==0.30.0
 # Authentication / Keycloak OIDC access-token validation (JWKS/RS256)
 # (password hashing is owned by Keycloak, not the backend)
 PyJWT==2.13.0
+# Celery task queue with Redis support
+celery[redis]==5.6.3
+flower==2.0.1

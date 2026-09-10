@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   backend:
     build:
@@ -9,10 +11,17 @@ services:
     environment:
       - ENVIRONMENT=staging
       - DATABASE_URL=${DATABASE_URL}
+<<<<<<< Updated upstream
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+=======
+>>>>>>> Stashed changes
+      - LITELLM_API_BASE=http://litellm:4000
     env_file:
-      - .env.staging
+      - .env.staging.example
     depends_on:
       - db
+      - litellm
 
   frontend:
     build:
@@ -27,6 +36,19 @@ services:
     depends_on:
       - backend
 
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml
+    environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+
   db:
     image: postgres:16
     restart: unless-stopped
@@ -36,6 +58,93 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_staging_data:/var/lib/postgresql/data
+#__
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: staging-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    container_name: staging-loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: staging-grafana
+    ports:
+      - "3001:3000" 
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    restart: unless-stopped
+    volumes:
+      - grafana_data:/var/lib/grafana
+<<<<<<< Updated upstream
+
+  redis:
+    image: redis:7.4.11-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis_staging_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  celery_worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app worker --loglevel=info -E
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  flower:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app flower --port=5555
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      FLOWER_UNAUTHENTICATED_API: "true"
+    ports:
+      - "127.0.0.1:5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
 
 volumes:
   postgres_staging_data:
+<<<<<<< Updated upstream
+  redis_staging_data:
+=======
+  grafana_data:
+#___
+>>>>>>> Stashed changes
+=======
+
+volumes:
+  postgres_staging_data:
+  grafana_data:
+#___
+>>>>>>> Stashed changes
