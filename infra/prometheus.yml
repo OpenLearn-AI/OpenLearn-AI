@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 15s  # 15 seconds between scrapes
+
+scrape_configs:
+  - job_name: 'staging-backend'
+    static_configs:
+      - targets: ['backend:8000']  # Target backend service on port 8000

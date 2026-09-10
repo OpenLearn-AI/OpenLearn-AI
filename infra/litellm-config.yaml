@@ -1,0 +1,53 @@
+# =============================================================================
+# LiteLLM Proxy — Staging Configuration
+# =============================================================================
+#
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+#
+# KEY ROTATION STRATEGY (for production readiness):
+# -------------------------------------------------
+# 1. LITELLM_MASTER_KEY  — controls admin access to the proxy.
+#    • Set via env var (never commit the real value).
+#    • Rotate quarterly or immediately on suspected compromise.
+#
+# 2. Provider API keys (e.g. OPENAI_API_KEY) — passed as env vars.
+#    • Rotate per provider's recommended schedule.
+#    • Use separate keys for staging vs production.
+#
+# 3. Virtual keys — for production, generate scoped short-lived keys
+#    via POST /key/generate so the backend never holds the master key.
+#    See: https://docs.litellm.ai/docs/proxy/virtual_keys
+# =============================================================================
+
+model_list:
+  # Primary model — cost-effective for staging workloads
+  - model_name: "gpt-4o-mini"
+    litellm_params:
+      model: "openai/gpt-4o-mini"
+      api_key: "os.environ/OPENAI_API_KEY"
+
+  # Fallback model
+  - model_name: "gpt-3.5-turbo"
+    litellm_params:
+      model: "openai/gpt-3.5-turbo"
+      api_key: "os.environ/OPENAI_API_KEY"
+
+general_settings:
+  # Master key for authenticating requests to the proxy
+  master_key: "os.environ/LITELLM_MASTER_KEY"
+
+  # Maximum budget (USD) — safety net for staging
+  max_budget: 10.0
+
+  # Budget reset interval
+  budget_duration: "30d"
+
+litellm_settings:
+  # Drop unsupported params instead of erroring
+  drop_params: true
+
+  # Enable spend tracking
+  success_callback: ["langfuse"]
+
+  # Set default model when none specified
+  default_model: "gpt-4o-mini"
