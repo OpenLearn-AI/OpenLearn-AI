@@ -11,11 +11,7 @@ services:
     environment:
       - ENVIRONMENT=staging
       - DATABASE_URL=${DATABASE_URL}
-<<<<<<< Updated upstream
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-
-=======
->>>>>>> Stashed changes
       - LITELLM_API_BASE=http://litellm:4000
     env_file:
       - .env.staging.example
@@ -58,7 +54,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_staging_data:/var/lib/postgresql/data
-#__
+
   prometheus:
     image: prom/prometheus:latest
     container_name: staging-prometheus
@@ -87,7 +83,6 @@ services:
     restart: unless-stopped
     volumes:
       - grafana_data:/var/lib/grafana
-<<<<<<< Updated upstream
 
   redis:
     image: redis:7.4.11-alpine
@@ -133,18 +128,20 @@ services:
       celery_worker:
         condition: service_started
 
-volumes:
-  postgres_staging_data:
-<<<<<<< Updated upstream
-  redis_staging_data:
-=======
-  grafana_data:
-#___
->>>>>>> Stashed changes
-=======
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: staging-keycloak
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    command: start-dev --import-realm
+    volumes:
+      - ./realm-export.json:/opt/keycloak/data/import/realm-export.json
 
 volumes:
   postgres_staging_data:
   grafana_data:
-#___
->>>>>>> Stashed changes
+  redis_staging_data:
