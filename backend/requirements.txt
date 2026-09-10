@@ -9,3 +9,6 @@ sqlalchemy==2.0.43
 # Database migrations
 alembic==1.16.5
 asyncpg==0.30.0
+# Authentication / Keycloak OIDC access-token validation (JWKS/RS256)
+# (password hashing is owned by Keycloak, not the backend)
+PyJWT==2.13.0

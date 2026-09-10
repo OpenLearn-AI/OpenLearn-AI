@@ -7,3 +7,6 @@ pytest-cov==6.0.0
 # but no version pin — pinned here for reproducibility.
 httpx2==2.10.0
 pytest-asyncio==0.24.0
+# RS256 signing keys for Keycloak/OIDC token-validation tests.
+# (PyJWT additionally requires this package for RS256.)
+cryptography==45.0.4
