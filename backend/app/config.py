@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
     cors_origins: str = "http://localhost:3000"
-    database_url: str = "postgresql+asyncpg://postgres@localhost:5432/openlearn_ai"
+    database_url: str = (
+        "postgresql+asyncpg://openlearn:devpassword@localhost:5432/openlearn_dev"
+    )
 
     # Keycloak / OIDC
     keycloak_issuer: str = "http://localhost:8080/realms/openlearn"
