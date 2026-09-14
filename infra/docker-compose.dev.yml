@@ -9,6 +9,7 @@ services:
       - ../backend:/app
     environment:
       - ENVIRONMENT=dev
+      - DATABASE_URL=postgresql+asyncpg://openlearn:devpassword@db:5432/openlearn_dev
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   db:
@@ -27,13 +28,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
-      KC_DB_USERNAME: openlearn
-      KC_DB_PASSWORD: devpassword
-      KC_HTTP_ENABLED: "true"
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+      - KC_HTTP_ENABLED=true
     command: start-dev
     depends_on:
       - db
