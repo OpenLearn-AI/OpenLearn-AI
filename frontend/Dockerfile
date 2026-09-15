@@ -1,16 +1,20 @@
-# ---- Builder stage ----
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+
+RUN npm config set maxsockets 1 \
+    && npm config set fetch-retries 1 \
+    && npm config set fetch-timeout 30000 \
+    && npm ci
 
 COPY . .
+
 RUN npm run build
 
-# ---- Runtime stage ----
-FROM node:20-alpine AS runner
+
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
