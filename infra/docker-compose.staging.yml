@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
+    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -14,15 +12,17 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - LITELLM_API_BASE=http://litellm:4000
     env_file:
-      - .env.staging.example
+      - .env.runtime
     depends_on:
-      - db
-      - litellm
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_started
 
   frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/muhammadseyam/openlearn-frontend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -54,6 +54,12 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_staging_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   prometheus:
     image: prom/prometheus:latest
@@ -76,10 +82,10 @@ services:
     image: grafana/grafana:latest
     container_name: staging-grafana
     ports:
-      - "3001:3000" 
+      - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     restart: unless-stopped
     volumes:
       - grafana_data:/var/lib/grafana
@@ -100,26 +106,30 @@ services:
       start_period: 5s
 
   celery_worker:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
+    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     command: celery -A app.workers.celery_app worker --loglevel=info -E
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+    env_file:
+      - .env.runtime
     depends_on:
       redis:
         condition: service_healthy
+      db:
+        condition: service_healthy
 
   flower:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
+    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     command: celery -A app.workers.celery_app flower --port=5555
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       FLOWER_UNAUTHENTICATED_API: "true"
+    env_file:
+      - .env.runtime
+    profiles:
+      - debug
     ports:
       - "127.0.0.1:5555:5555"
     depends_on:
@@ -135,8 +145,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - KEYCLOAK_ADMIN=admin
-      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN_USER}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
     command: start-dev --import-realm
     volumes:
       - ./realm-export.json:/opt/keycloak/data/import/realm-export.json
