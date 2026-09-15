@@ -70,13 +70,26 @@ for IMAGE in \
 do
   echo "==> Removing old SHA-tagged images for $IMAGE..."
 
-  docker images "$IMAGE" \
-    --format '{{.Repository}} {{.Tag}} {{.CreatedAt}}' \
-    | grep ' sha-' \
-    | sort -k3,3r \
-    | tail -n +4 \
-    | awk '{print $1 ":" $2}' \
-    | xargs -r docker rmi || true
+  mapfile -t SHA_TAGS < <(
+    docker images "$IMAGE" --format '{{.Tag}}' |
+      grep '^sha-' |
+      while read -r TAG; do
+        CREATED=$(docker image inspect "$IMAGE:$TAG" --format '{{.Created}}' 2>/dev/null || true)
+
+        if [[ -n "$CREATED" ]]; then
+          printf '%s %s\n' "$CREATED" "$TAG"
+        fi
+      done |
+      sort -r |
+      awk '{print $2}'
+  )
+
+  if (( ${#SHA_TAGS[@]} > 3 )); then
+    for TAG in "${SHA_TAGS[@]:3}"; do
+      echo "==> Removing old SHA-tagged image: $IMAGE:$TAG"
+      docker rmi "$IMAGE:$TAG" || true
+    done
+  fi
 done
 
 echo "==> Deployment completed successfully."
