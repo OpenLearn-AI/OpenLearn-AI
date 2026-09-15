@@ -64,4 +64,19 @@ echo "==> Cleaning old staging images..."
 
 docker image prune -f
 
+for IMAGE in \
+  ghcr.io/muhammadseyam/openlearn-backend \
+  ghcr.io/muhammadseyam/openlearn-frontend
+do
+  echo "==> Removing old SHA-tagged images for $IMAGE..."
+
+  docker images "$IMAGE" \
+    --format '{{.Repository}} {{.Tag}} {{.CreatedAt}}' \
+    | grep ' sha-' \
+    | sort -k3,3r \
+    | tail -n +4 \
+    | awk '{print $1 ":" $2}' \
+    | xargs -r docker rmi || true
+done
+
 echo "==> Deployment completed successfully."
