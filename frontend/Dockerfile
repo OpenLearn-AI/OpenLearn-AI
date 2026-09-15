@@ -4,17 +4,21 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-RUN npm config set maxsockets 1 
-&& npm config set fetch-retries 1 
-&& npm config set fetch-timeout 30000 
-&& npm ci
+RUN npm config set maxsockets 1 \
+    && npm config set fetch-retries 1 \
+    && npm config set fetch-timeout 30000 \
+    && npm ci
 
 COPY . .
 
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+ARG NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+
 RUN npm run build
+
 
 FROM node:22-alpine AS runner
 
