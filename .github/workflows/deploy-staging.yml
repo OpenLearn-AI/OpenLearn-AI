@@ -86,6 +86,24 @@ jobs:
             git checkout staging
             git pull origin staging
 
+            # إنشاء .env.runtime وحقن كافة السيكريتس والـ IMAGE_TAG
+            cat > infra/.env.runtime <<EOF
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            IMAGE_TAG=sha-${{ github.sha }}
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            LITELLM_MASTER_KEY=${{ secrets.LITELLM_MASTER_KEY }}
+            LITELLM_SALT_KEY=${{ secrets.LITELLM_SALT_KEY }}
+            GRAFANA_ADMIN_USER=${{ secrets.GRAFANA_ADMIN_USER }}
+            GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+            KEYCLOAK_ADMIN_USER=${{ secrets.KEYCLOAK_ADMIN_USER }}
+            KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+            ENVIRONMENT=staging
+            EOF
+
             chmod +x infra/deploy.sh
 
             ./infra/deploy.sh sha-${{ github.sha }}
