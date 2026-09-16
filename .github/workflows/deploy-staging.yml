@@ -106,4 +106,10 @@ jobs:
 
             chmod +x infra/deploy.sh
 
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io \
+              -u "${{ secrets.GHCR_USERNAME }}" \
+              --password-stdin
+
             ./infra/deploy.sh sha-${{ github.sha }}
+
+            docker logout ghcr.io
