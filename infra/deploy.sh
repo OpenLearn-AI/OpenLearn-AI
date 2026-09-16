@@ -36,6 +36,12 @@ docker compose \
   -f "$COMPOSE_FILE" \
   pull
 
+echo "==> Starting database..."
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  up -d db --wait
+
 echo "==> Running database migrations..."
 docker compose \
   --env-file "$ENV_FILE" \
