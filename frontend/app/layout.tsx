@@ -2,14 +2,13 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-
 import { ThemeProvider } from "@/components/theme-provider";
+import { Providers } from "@/components/providers";
 
+import { initSentry } from "../lib/sentry";
 
-//_____________________________________________________
-import { initSentry } from '../lib/sentry';
 initSentry();
-//_____________________________________________________
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -43,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps) {
           enableSystem={false}
           disableTransitionOnChange
         >
-          {children}
+          <Providers>{children}</Providers>
         </ThemeProvider>
       </body>
     </html>
