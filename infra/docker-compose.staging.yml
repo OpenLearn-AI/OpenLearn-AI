@@ -35,6 +35,7 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - SENTRY_DSN=${SENTRY_DSN}
     depends_on:
       - backend
     healthcheck:
@@ -89,6 +90,21 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
 
+  alloy:
+    image: grafana/alloy:latest
+    container_name: staging-alloy
+    restart: unless-stopped
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+    depends_on:
+      - loki
+
   grafana:
     image: grafana/grafana:latest
     container_name: staging-grafana
@@ -100,6 +116,7 @@ services:
     restart: unless-stopped
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
 
   redis:
     image: redis:7.4.11-alpine
@@ -166,3 +183,4 @@ volumes:
   postgres_staging_data:
   grafana_data:
   redis_staging_data:
+  alloy_data:
