@@ -64,12 +64,12 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     restart: unless-stopped
 
-  loki:
+ loki:
     image: grafana/loki:latest
     container_name: staging-loki
     ports:
       - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
+    command: "-config.file=/etc/loki/local-config.yaml"     
     restart: unless-stopped
 
   grafana:
