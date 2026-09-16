@@ -20,7 +20,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_OWNER: muhammadseyam
+  IMAGE_OWNER: openlearn-ai
 
 jobs:
   build-and-push:

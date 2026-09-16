@@ -71,8 +71,8 @@ echo "==> Cleaning old staging images..."
 docker image prune -f
 
 for IMAGE in \
-  ghcr.io/muhammadseyam/openlearn-backend \
-  ghcr.io/muhammadseyam/openlearn-frontend
+  ghcr.io/openlearn-ai/openlearn-backend \
+  ghcr.io/openlearn-ai/openlearn-frontend
 do
   echo "==> Removing old SHA-tagged images for $IMAGE..."
 

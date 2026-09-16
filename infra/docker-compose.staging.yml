@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -28,7 +28,7 @@ services:
       start_period: 20s
 
   frontend:
-    image: ghcr.io/muhammadseyam/openlearn-frontend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-frontend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -133,7 +133,7 @@ services:
       start_period: 5s
 
   celery_worker:
-    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     command: celery -A app.workers.celery_app worker --loglevel=info -E
     environment:
@@ -145,7 +145,7 @@ services:
         condition: service_healthy
 
   celery_beat:
-    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     command: celery -A app.workers.celery_app beat --loglevel=info
     environment:
@@ -155,7 +155,7 @@ services:
         condition: service_healthy
 
   flower:
-    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     command: celery -A app.workers.celery_app flower --port=5555
     environment:
