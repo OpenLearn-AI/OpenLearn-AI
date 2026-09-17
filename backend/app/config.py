@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     ai_reasoning_fallbacks: str = ""
     ai_vector_db_provider: str = "mock"
 
+    # Chunking (Week 6 P8)
+    chunk_size: int = 1200
+    chunk_overlap: int = 150
+
     # OmniRoute / External AI Gateway
     omniroute_api_base: str = "https://api.omniroute.ai/v1"
     omniroute_api_key: str = ""
