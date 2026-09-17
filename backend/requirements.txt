@@ -19,3 +19,7 @@ cryptography==45.0.4
 # Celery task queue with Redis support
 celery[redis]==5.6.3
 flower==2.0.1
+
+# Document ingestion / targeted OCR source extraction
+docling==2.127.0
+pypdfium2==5.13.0
