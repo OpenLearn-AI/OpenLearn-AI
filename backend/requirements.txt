@@ -23,3 +23,11 @@ flower==2.0.1
 # Document ingestion / targeted OCR source extraction
 docling==2.127.0
 pypdfium2==5.13.0
+
+# Gemini OCR provider (P7.2-B) — official google-genai SDK
+# (NOT the deprecated google-generativeai; no Files API usage)
+google-genai==1.24.0
+
+# Direct import in gemini_provider (transport timeout mapping). Also a
+# transitive dependency of google-genai — declared because we import it.
+requests==2.32.5

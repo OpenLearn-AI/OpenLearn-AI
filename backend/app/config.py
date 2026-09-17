@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # PAL / AI Settings
     ai_ocr_provider: str = "mock"
     ai_ocr_fallbacks: str = ""
+    ai_ocr_model: str = "gemini-2.5-flash"
+    gemini_api_key: str = ""
     ai_embedding_provider: str = "mock"
     ai_embedding_fallbacks: str = ""
     ai_embedding_model: str = "BAAI/bge-m3"

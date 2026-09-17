@@ -8,13 +8,15 @@ from app.pal.providers.embedding.mock_provider import MockEmbeddingProvider
 from app.pal.providers.ocr.mock_provider import MockOCRProvider
 from app.pal.providers.reasoning.mock_provider import MockReasoningProvider
 from app.pal.providers.vector_db.mock_provider import MockVectorDBProvider
-
+from app.pal.providers.ocr.gemini_provider import GeminiOCRProvider
 
 def get_ocr_provider(provider: str | None = None) -> OCRInterface:
     """Return the configured OCR provider."""
     provider_name = provider if provider is not None else settings.ai_ocr_provider
     if provider_name == "mock":
         return MockOCRProvider()
+    if provider_name == "gemini":
+        return GeminiOCRProvider()
 
     raise ConfigurationError(f"Unsupported OCR provider: {provider_name}")
 
