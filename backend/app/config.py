@@ -23,6 +23,22 @@ class Settings(BaseSettings):
     keycloak_audience: str = "openlearn-api"
     keycloak_client_id: str = "openlearn-frontend"
 
+    # PAL / AI Settings
+    ai_ocr_provider: str = "mock"
+    ai_ocr_fallbacks: str = ""
+    ai_embedding_provider: str = "mock"
+    ai_embedding_fallbacks: str = ""
+    ai_embedding_model: str = "BAAI/bge-m3"
+    ai_embedding_dimension: int = 1024
+    ai_reasoning_provider: str = "mock"
+    ai_reasoning_fallbacks: str = ""
+    ai_vector_db_provider: str = "mock"
+
+    # OmniRoute / External AI Gateway
+    omniroute_api_base: str = "https://api.omniroute.ai/v1"
+    omniroute_api_key: str = ""
+    ocr_min_text_chars: int = 50
+
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
@@ -36,6 +52,19 @@ class Settings(BaseSettings):
             for origin in self.cors_origins.split(",")
             if origin.strip()
         ]
+
+    @property
+    def ocr_fallback_list(self) -> list[str]:
+        return [f.strip() for f in self.ai_ocr_fallbacks.split(",") if f.strip()]
+
+    @property
+    def embedding_fallback_list(self) -> list[str]:
+        return [f.strip() for f in self.ai_embedding_fallbacks.split(",") if f.strip()]
+
+    @property
+    def reasoning_fallback_list(self) -> list[str]:
+        return [f.strip() for f in self.ai_reasoning_fallbacks.split(",") if f.strip()]
+
 
 
 settings = Settings()
