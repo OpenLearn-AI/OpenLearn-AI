@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -11,8 +11,6 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - LITELLM_API_BASE=http://litellm:4000
-    env_file:
-      - .env.runtime
     depends_on:
       db:
         condition: service_healthy
@@ -20,29 +18,42 @@ services:
         condition: service_healthy
       litellm:
         condition: service_started
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
-    image: ghcr.io/muhammadseyam/openlearn-frontend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-frontend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - SENTRY_DSN=${SENTRY_DSN}
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     volumes:
-      - ./litellm-config.yaml:/app/config.yaml
+      - ./litellm-config.yaml:/app/config.yaml:ro
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
     command: ["--config", "/app/config.yaml", "--port", "4000"]
 
   db:
@@ -65,18 +76,33 @@ services:
     image: prom/prometheus:latest
     container_name: staging-prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     restart: unless-stopped
 
   loki:
     image: grafana/loki:latest
     container_name: staging-loki
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: staging-alloy
+    restart: unless-stopped
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+    depends_on:
+      - loki
 
   grafana:
     image: grafana/grafana:latest
@@ -89,9 +115,10 @@ services:
     restart: unless-stopped
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
 
   redis:
-    image: redis:7.4.11-alpine
+    image: redis:7.4-alpine
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     environment:
@@ -106,30 +133,34 @@ services:
       start_period: 5s
 
   celery_worker:
-    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     command: celery -A app.workers.celery_app worker --loglevel=info -E
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-    env_file:
-      - .env.runtime
     depends_on:
       redis:
         condition: service_healthy
       db:
         condition: service_healthy
 
+  celery_beat:
+    image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+
   flower:
-    image: ghcr.io/muhammadseyam/openlearn-backend:${IMAGE_TAG:-staging}
+    image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     command: celery -A app.workers.celery_app flower --port=5555
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       FLOWER_UNAUTHENTICATED_API: "true"
-    env_file:
-      - .env.runtime
-    profiles:
-      - debug
     ports:
       - "127.0.0.1:5555:5555"
     depends_on:
@@ -149,9 +180,17 @@ services:
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
     command: start-dev --import-realm
     volumes:
-      - ./realm-export.json:/opt/keycloak/data/import/realm-export.json
+      - ./realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      - keycloak_staging_data:/opt/keycloak/data/h2
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_staging_data:
   grafana_data:
   redis_staging_data:
+  keycloak_staging_data:
+  alloy_data:

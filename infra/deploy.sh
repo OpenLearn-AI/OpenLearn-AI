@@ -36,6 +36,12 @@ docker compose \
   -f "$COMPOSE_FILE" \
   pull
 
+echo "==> Starting database..."
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  up -d db --wait
+
 echo "==> Running database migrations..."
 docker compose \
   --env-file "$ENV_FILE" \
@@ -63,5 +69,33 @@ echo "==> Frontend health check passed."
 echo "==> Cleaning old staging images..."
 
 docker image prune -f
+
+for IMAGE in \
+  ghcr.io/openlearn-ai/openlearn-backend \
+  ghcr.io/openlearn-ai/openlearn-frontend
+do
+  echo "==> Removing old SHA-tagged images for $IMAGE..."
+
+  mapfile -t SHA_TAGS < <(
+    docker images "$IMAGE" --format '{{.Tag}}' |
+      grep '^sha-' |
+      while read -r TAG; do
+        CREATED=$(docker image inspect "$IMAGE:$TAG" --format '{{.Created}}' 2>/dev/null || true)
+
+        if [[ -n "$CREATED" ]]; then
+          printf '%s %s\n' "$CREATED" "$TAG"
+        fi
+      done |
+      sort -r |
+      awk '{print $2}'
+  )
+
+  if (( ${#SHA_TAGS[@]} > 3 )); then
+    for TAG in "${SHA_TAGS[@]:3}"; do
+      echo "==> Removing old SHA-tagged image: $IMAGE:$TAG"
+      docker rmi "$IMAGE:$TAG" || true
+    done
+  fi
+done
 
 echo "==> Deployment completed successfully."
