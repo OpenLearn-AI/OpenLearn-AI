@@ -13,8 +13,8 @@ export async function getKeycloak() {
     }
 
     initPromise = (async () => {
-        const module = await import("keycloak-js");
-        const KeycloakConstructor = module.default;
+        const keycloakModule = await import("keycloak-js");
+        const KeycloakConstructor = keycloakModule.default;
 
         if (!keycloak) {
             keycloak = new KeycloakConstructor({
