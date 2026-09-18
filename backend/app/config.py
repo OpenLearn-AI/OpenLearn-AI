@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     ai_embedding_fallbacks: str = ""
     ai_embedding_model: str = "BAAI/bge-m3"
     ai_embedding_dimension: int = 1024
+    # Device for local embedding inference: "auto" (CUDA if available, else
+    # CPU), "cpu" (forced CPU), or "cuda" (requires an actual CUDA device).
+    ai_embedding_device: str = "auto"
     ai_reasoning_provider: str = "mock"
     ai_reasoning_fallbacks: str = ""
     ai_vector_db_provider: str = "mock"
