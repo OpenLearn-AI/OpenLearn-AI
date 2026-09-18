@@ -12,6 +12,8 @@ sqlalchemy==2.0.43
 # Database migrations
 alembic==1.16.5
 asyncpg==0.30.0
+# PostgreSQL pgvector integration for SQLAlchemy (P9-B)
+pgvector==0.4.1
 # Authentication / Keycloak OIDC access-token validation (JWKS/RS256)
 # (password hashing is owned by Keycloak, not the backend)
 PyJWT==2.13.0
@@ -23,3 +25,16 @@ flower==2.0.1
 # Document ingestion / targeted OCR source extraction
 docling==2.127.0
 pypdfium2==5.13.0
+
+# Gemini OCR provider (P7.2-B) — official google-genai SDK
+# (NOT the deprecated google-generativeai; no Files API usage)
+google-genai==1.24.0
+
+# Direct import in gemini_provider (transport timeout mapping). Also a
+# transitive dependency of google-genai — declared because we import it.
+requests==2.32.5
+
+# Local dense embeddings (P9): sentence-transformers running on the
+# torch/transformers stack already installed via docling. Dense-only
+# BAAI/bge-m3 inference; no FlagEmbedding/ONNX/TEI.
+sentence-transformers==3.3.1

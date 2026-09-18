@@ -6,7 +6,8 @@ from typing import Any
 from docling.exceptions import ConversionError as DoclingConversionError
 from docling.datamodel.base_models import ConversionStatus, InputFormat
 from docling.datamodel.document import ConversionResult as DoclingConversionResult
-from docling.document_converter import DocumentConverter
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.types.doc.document import DoclingDocument
 
 from app.documents import CanonicalDocument, DocumentConversionError, DocumentNotFoundError, Page
@@ -146,7 +147,21 @@ def ingest_document(source: str | Path) -> CanonicalDocument:
 
     fmt = _detect_format(source_path)
 
-    converter = DocumentConverter(allowed_formats=[fmt])
+    format_options = None
+
+    if fmt == InputFormat.PDF:
+        format_options = {
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_options=PdfPipelineOptions(
+                    do_ocr=False,
+                )
+            )
+        }
+
+    converter = DocumentConverter(
+        allowed_formats=[fmt],
+        format_options=format_options,
+    )
     try:
         result = converter.convert(
             source_path,

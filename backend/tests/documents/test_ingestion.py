@@ -27,6 +27,8 @@ from docling_core.types.doc.document import (
     Size,
     TextItem,
 )
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import PdfFormatOption
 from docling_core.types.doc.labels import DocItemLabel
 
 from app.documents import (
@@ -257,8 +259,35 @@ def test_converter_is_created_with_detected_allowed_format(
 
     ingest_document(source)
 
-    converter_cls.assert_called_once_with(allowed_formats=[expected_format])
+    kwargs = converter_cls.call_args.kwargs
+    assert kwargs["allowed_formats"] == [expected_format]
 
+    if expected_format == InputFormat.PDF:
+        pdf_option = kwargs["format_options"][InputFormat.PDF]
+        assert isinstance(pdf_option, PdfFormatOption)
+        assert isinstance(pdf_option.pipeline_options, PdfPipelineOptions)
+        assert pdf_option.pipeline_options.do_ocr is False
+    else:
+        assert kwargs["format_options"] is None
+
+
+def test_pdf_ingestion_disables_docling_builtin_ocr(
+    tmp_path: Path, converter_cls: MagicMock
+) -> None:
+    source = _make_source_file(tmp_path, "scanned.pdf")
+    converter_cls.return_value.convert.return_value = _conversion_result(
+        ConversionStatus.SUCCESS,
+        _docling_document(pages={1: _page_item(1)}),
+    )
+
+    ingest_document(source)
+
+    kwargs = converter_cls.call_args.kwargs
+    pdf_option = kwargs["format_options"][InputFormat.PDF]
+
+    assert isinstance(pdf_option, PdfFormatOption)
+    assert isinstance(pdf_option.pipeline_options, PdfPipelineOptions)
+    assert pdf_option.pipeline_options.do_ocr is False
 
 # ---------------------------------------------------------------------------
 # Conversion status handling
