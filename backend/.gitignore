@@ -1,0 +1,4 @@
+# Local Keycloak realm export snapshot. The canonical, version-controlled
+# realm export lives in infra/realm-export.json; this is a throwaway export
+# produced from a local Keycloak for testing and contains realm key material.
+openlearn-realm-export.json

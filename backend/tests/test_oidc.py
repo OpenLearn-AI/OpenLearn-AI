@@ -243,6 +243,11 @@ def test_extract_roles_returns_empty_for_malformed_realm_access() -> None:
     assert oidc.extract_roles({"realm_access": {"roles": "student"}}) == []
 
 
+@pytest.mark.parametrize("role", ["student", "instructor", "admin"])
+def test_extract_roles_returns_each_project_role(role: str) -> None:
+    assert oidc.extract_roles({"realm_access": {"roles": [role]}}) == [role]
+
+
 def test_extract_roles_filters_non_string_roles() -> None:
     roles = oidc.extract_roles(
         {
@@ -269,7 +274,6 @@ async def test_me_endpoint_with_valid_token(
         keycloak_issuer=ISSUER,
         keycloak_subject=subject,
         email="student1@openlearn.dev",
-        preferred_lang="en",
         settings={"theme": "dark"},
     )
 
@@ -302,9 +306,11 @@ async def test_me_endpoint_with_valid_token(
 
         assert payload["id"] == str(user.id)
         assert payload["email"] == "student1@openlearn.dev"
-        assert payload["preferred_lang"] == "en"
         assert payload["settings"] == {"theme": "dark"}
         assert payload["roles"] == ["student"]
+        # Preferred language moved to profiles (Phase 2 exposes it via
+        # GET /v1/users/me); /auth/me must not return the legacy field.
+        assert "preferred_lang" not in payload
 
         assert payload["keycloak"]["issuer"] == ISSUER
         assert payload["keycloak"]["subject"] == subject
@@ -354,9 +360,9 @@ async def test_me_endpoint_jit_creates_new_user(
         payload = response.json()
 
         assert payload["email"] == "student1@openlearn.dev"
-        assert payload["preferred_lang"] == "en"
         assert payload["settings"] == {}
         assert payload["roles"] == ["student"]
+        assert "preferred_lang" not in payload
         assert payload["keycloak"]["issuer"] == ISSUER
         assert payload["keycloak"]["subject"] == subject
 
@@ -490,6 +496,234 @@ async def test_missing_role_is_forbidden(
         require_student(claims)
 
     assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_absent_role_claim_is_forbidden_without_crashing(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """A valid token with no realm_access claim at all still resolves to 403."""
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(private_key, missing_claims=["realm_access"])
+    )
+
+    assert oidc.extract_roles(claims) == []
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_admin(claims)
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_multi_role_token_satisfies_each_matching_guard(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """Keycloak composite roles yield multiple entries; membership is per-role."""
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["student", "admin"],
+                },
+            },
+        )
+    )
+
+    assert require_student(claims)["sub"] == "123e4567-e89b-12d3-a456-426614174000"
+    assert require_admin(claims)["sub"] == "123e4567-e89b-12d3-a456-426614174000"
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_instructor(claims)
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_email_does_not_grant_authorization(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """Email is never an authorization identity; only token roles decide."""
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "email": "admin@openlearn.dev",
+                "realm_access": {"roles": ["student"]},
+            },
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_admin(claims)
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_forged_role_claims_with_invalid_signature_are_rejected(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """Roles asserted in a token that fails signature verification yield 401."""
+    _, public_pem = rsa_keypair
+
+    forger_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    ).private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+
+    forged_token = _build_token(
+        forger_key,
+        extra={
+            "realm_access": {"roles": ["admin", "instructor"]},
+        },
+    )
+
+    from fastapi import FastAPI
+
+    test_app = FastAPI()
+
+    @test_app.get("/admin")
+    async def admin_endpoint(
+        claims: dict = Depends(require_admin),
+    ):
+        return {"sub": claims["sub"]}
+
+    transport = ASGITransport(app=test_app)
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            "/admin",
+            headers={"Authorization": f"Bearer {forged_token}"},
+        )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_authorization_is_independent_of_database_state(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    """Token roles alone decide access: no users row is required or consulted,
+    and a local users row never grants a role the token does not carry."""
+    private_key, _ = rsa_keypair
+
+    subject = "rbac-db-independence-subject"
+
+    from fastapi import FastAPI
+
+    test_app = FastAPI()
+
+    @test_app.get("/admin")
+    async def admin_endpoint(
+        claims: dict = Depends(require_admin),
+    ):
+        return {"sub": claims["sub"]}
+
+    transport = ASGITransport(app=test_app)
+
+    # No local users row exists for this subject at all: an admin-role token
+    # is still authorized (RBAC never queries PostgreSQL).
+    admin_token = _build_token(
+        private_key,
+        sub=subject,
+        extra={"realm_access": {"roles": ["admin"]}},
+    )
+
+    student_token = _build_token(
+        private_key,
+        sub=subject,
+        extra={"realm_access": {"roles": ["student"]}},
+    )
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            "/admin",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 200
+
+        # Same subject, now WITH a local users row, but no admin role in the
+        # token: still forbidden. Database existence grants nothing.
+        user = User(
+            keycloak_issuer=ISSUER,
+            keycloak_subject=subject,
+            email="rbac-db-independence@example.com",
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        try:
+            response = await client.get(
+                "/admin",
+                headers={"Authorization": f"Bearer {student_token}"},
+            )
+            assert response.status_code == 403
+        finally:
+            await db_session.delete(user)
+            await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_request_body_cannot_override_token_roles(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """Role-looking fields in the request body are ignored by RBAC."""
+    private_key, _ = rsa_keypair
+
+    from fastapi import FastAPI
+
+    test_app = FastAPI()
+
+    @test_app.post("/instructor")
+    async def instructor_endpoint(
+        payload: dict,
+        claims: dict = Depends(require_instructor),
+    ):
+        return {"sub": claims["sub"]}
+
+    transport = ASGITransport(app=test_app)
+
+    student_token = _build_token(
+        private_key,
+        extra={"realm_access": {"roles": ["student"]}},
+    )
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/instructor",
+            json={"roles": ["instructor", "admin"]},
+            headers={"Authorization": f"Bearer {student_token}"},
+        )
+
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio

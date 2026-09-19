@@ -132,7 +132,6 @@ async def test_get_or_create_user_creates_new_user(db_session):
     assert result.keycloak_subject == "new-jit-subject"
     assert result.email == "new-jit@example.com"
     assert result.email_verified is True
-    assert result.preferred_lang == "en"
     assert result.settings == {}
 
     await db_session.delete(result)

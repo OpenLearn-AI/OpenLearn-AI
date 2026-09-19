@@ -23,3 +23,6 @@ flower==2.0.1
 # Document ingestion / targeted OCR source extraction
 docling==2.127.0
 pypdfium2==5.13.0
+
+# S3-compatible object storage (MinIO) for course materials
+boto3==1.35.36

@@ -21,7 +21,6 @@ async def read_current_user(
     return {
         "id": str(user.id),
         "email": user.email,
-        "preferred_lang": user.preferred_lang,
         "settings": user.settings,
         "roles": extract_roles(claims),
         "keycloak": {
