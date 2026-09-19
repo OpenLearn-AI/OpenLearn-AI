@@ -38,6 +38,12 @@ fi
 
 echo "Keycloak is ready."
 
+echo "Ensuring dev realm settings..."
+
+"$KCADM" update "realms/$KEYCLOAK_REALM" \
+    -s "registrationAllowed=true" \
+    -s "verifyEmail=false"
+
 USER_ID="$(
     "$KCADM" get users \
         -r "$KEYCLOAK_REALM" \
