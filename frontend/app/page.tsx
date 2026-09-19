@@ -1,3 +1,6 @@
+"use client";
+
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,8 +11,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/lib/auth-context";
 
 export default function Home() {
+  const { isAuthenticated, isLoading } = useAuth();
+
   return (
     <main className="min-h-screen bg-background p-8">
       <div className="mx-auto max-w-4xl">
@@ -27,6 +33,20 @@ export default function Home() {
           <p className="mt-2 text-muted-foreground">
             Testing our colors, typography, spacing, and UI components.
           </p>
+
+          {!isLoading && (
+            <div className="mt-4">
+              {isAuthenticated ? (
+                <Link href="/dashboard">
+                  <Button>Go to Dashboard</Button>
+                </Link>
+              ) : (
+                <Link href="/login">
+                  <Button variant="outline">Sign in</Button>
+                </Link>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Components */}
@@ -107,4 +127,4 @@ cd frontend
 npm run dev  
 Local: http://localhost:3000
 document.documentElement.classList.add("dark")
-*/ 
+*/

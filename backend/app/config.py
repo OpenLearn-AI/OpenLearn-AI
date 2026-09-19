@@ -26,13 +26,22 @@ class Settings(BaseSettings):
     # PAL / AI Settings
     ai_ocr_provider: str = "mock"
     ai_ocr_fallbacks: str = ""
+    ai_ocr_model: str = "gemini-2.5-flash"
+    gemini_api_key: str = ""
     ai_embedding_provider: str = "mock"
     ai_embedding_fallbacks: str = ""
     ai_embedding_model: str = "BAAI/bge-m3"
     ai_embedding_dimension: int = 1024
+    # Device for local embedding inference: "auto" (CUDA if available, else
+    # CPU), "cpu" (forced CPU), or "cuda" (requires an actual CUDA device).
+    ai_embedding_device: str = "auto"
     ai_reasoning_provider: str = "mock"
     ai_reasoning_fallbacks: str = ""
     ai_vector_db_provider: str = "mock"
+
+    # Chunking (Week 6 P8)
+    chunk_size: int = 1200
+    chunk_overlap: int = 150
 
     # OmniRoute / External AI Gateway
     omniroute_api_base: str = "https://api.omniroute.ai/v1"
