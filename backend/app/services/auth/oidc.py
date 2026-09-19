@@ -24,7 +24,9 @@ def _signing_key(token: str):
     try:
         return _JWK_CLIENT.get_signing_key_from_jwt(token).key
     except (PyJWKClientError, jwt.DecodeError) as exc:
-        raise ValueError("Could not resolve the token signing key.") from exc
+        raise ValueError(
+            "Could not resolve the token signing key."
+        ) from exc
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
@@ -62,11 +64,17 @@ def extract_roles(payload: dict[str, Any]) -> list[str]:
     ``roles`` values yield an empty list.
     """
     realm_access = payload.get("realm_access")
+
     if not isinstance(realm_access, dict):
         return []
 
     roles = realm_access.get("roles", [])
+
     if not isinstance(roles, list):
         return []
 
-    return [role for role in roles if isinstance(role, str) and role]
+    return [
+        role
+        for role in roles
+        if isinstance(role, str) and role
+    ]

@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createUserManager } from "@/lib/oidc";
 
 export default function LoginCallbackPage() {
   const router = useRouter();
+  const hasHandledCallback = useRef(false);
 
   useEffect(() => {
+    if (hasHandledCallback.current) {
+      return;
+    }
+
+    hasHandledCallback.current = true;
+
     const handleCallback = async () => {
       try {
         const userManager = createUserManager();
