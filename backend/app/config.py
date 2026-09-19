@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     omniroute_api_key: str = ""
     ocr_min_text_chars: int = 50
 
+    # S3-compatible object storage (MinIO) for course materials
+    # Credentials are deployment configuration and must never be hardcoded.
+    s3_endpoint_url: str = "http://localhost:9000"
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    s3_bucket_name: str = "openlearn-materials"
+    s3_region_name: str = "us-east-1"
+    s3_url_expiration_seconds: int = 3600
+
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",

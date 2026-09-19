@@ -40,13 +40,6 @@ class User(Base):
         nullable=False,
     )
 
-    preferred_lang: Mapped[str] = mapped_column(
-        String(10),
-        default="en",
-        server_default="en",
-        nullable=False,
-    )
-
     settings: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         default=dict,

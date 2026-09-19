@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import settings
 from app.db.base import Base
-from app.models import User  # noqa: F401
+from app.models import (  # noqa: F401
+    Course,
+    Enrollment,
+    Material,
+    Profile,
+    User,
+)
 
 
 config = context.config
