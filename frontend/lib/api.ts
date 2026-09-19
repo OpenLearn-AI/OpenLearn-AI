@@ -7,6 +7,16 @@ interface ApiRequestOptions extends RequestInit {
   auth?: boolean;
 }
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function apiRequest<T>(
   path: string,
   options: ApiRequestOptions = {},
@@ -44,12 +54,17 @@ export async function apiRequest<T>(
 
       if (typeof errorBody?.detail === "string") {
         message = errorBody.detail;
+      } else if (Array.isArray(errorBody?.detail)) {
+        message = errorBody.detail
+          .map((item: { msg?: string }) => item.msg)
+          .filter(Boolean)
+          .join(", ");
       }
     } catch {
       // Keep the default error message when the response is not JSON.
     }
 
-    throw new Error(message);
+    throw new ApiError(response.status, message);
   }
 
   if (response.status === 204) {

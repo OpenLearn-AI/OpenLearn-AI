@@ -1,14 +1,49 @@
-from typing import Any
+﻿from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_oidc_claims
 from app.db.session import get_db
+from app.schemas.auth import RegisterRequest, RegisterResponse
+from app.services.auth.keycloak_admin import (
+    KeycloakAdminError,
+    KeycloakUserExistsError,
+    keycloak_admin,
+)
 from app.services.auth.oidc import extract_roles
 from app.services.auth.user_service import get_or_create_user_from_keycloak
 
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post(
+    "/register",
+    response_model=RegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def register_user(payload: RegisterRequest) -> RegisterResponse:
+    try:
+        await keycloak_admin.create_user(
+            email=str(payload.email),
+            password=payload.password,
+        )
+    except KeycloakUserExistsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        ) from exc
+    except KeycloakAdminError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Registration service is temporarily unavailable.",
+        ) from exc
+
+    return RegisterResponse(
+        message="Registration successful.",
+        email=payload.email,
+    )
 
 
 @router.get("/me")

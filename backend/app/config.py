@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     )
     keycloak_audience: str = "openlearn-api"
     keycloak_client_id: str = "openlearn-frontend"
+
+    # Keycloak Admin API - local development
+    keycloak_admin_server_url: str = "http://localhost:8080"
+    keycloak_admin_realm: str = "master"
+    keycloak_admin_username: str = "admin"
+    keycloak_admin_password: str = "admin"
+    keycloak_user_realm: str = "openlearn"
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
