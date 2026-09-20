@@ -12,10 +12,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY --from=builder /wheels /wheels
+COPY requirements.txt /tmp/requirements.cachekey
 
-RUN pip install --no-cache-dir /wheels/* \
-    && rm -rf /wheels
+RUN --mount=type=bind,from=builder,source=/wheels,target=/wheels \
+    pip install --no-cache-dir /wheels/*
 
 COPY . .
 
