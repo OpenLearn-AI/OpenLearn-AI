@@ -95,7 +95,9 @@ cd experiments/OCR/ocr-benchmark
 uv sync
 
 # Full development stack
-docker compose -f infra/docker-compose.dev.yml up
+# First create .env.local with:
+# OPENLEARN_TEST_USER_PASSWORD=<shared password provided by the team>
+docker compose --env-file .env.local -f infra/docker-compose.dev.yml up
 ```
 
 CI runs the backend lint and test commands plus frontend lint, typecheck, and
