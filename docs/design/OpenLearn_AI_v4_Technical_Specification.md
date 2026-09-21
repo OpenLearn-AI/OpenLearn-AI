@@ -1,19 +1,29 @@
-# OpenLearn AI — Technical Specification v4.0
+# OpenLearn AI — Technical Specification v4.1
 
 **Open-Source Adaptive Educational Intelligence Platform**
 
-**Hybrid AI Architecture — Provider-Agnostic Design**
+**Modular Monolith · Provider Abstraction Layer (PAL) · Hybrid AI (target)**
 
 ---
 
 | Field | Value |
 |-------|-------|
-| **Version** | 4.0 |
-| **Status** | Official Technical Specification |
-| **Architecture** | Hybrid AI — Provider-Agnostic |
+| **Version** | 4.1 (modernization complete) |
+| **Status** | Technical source of truth — modernization complete. All sections §1–§31 verified against the `staging` baseline (`d293dca`); §25–§31 modernized in the final pass |
+| **Implementation baseline** | branch `staging` @ `d293dca306dce640adfc437d806455125a7f8ea8` |
+| **Verification date** | 2026-09-20 |
+| **Architecture** | Modular monolith (ADR-0001) with a Provider Abstraction Layer (ADR-0009) |
 | **License** | AGPL-3.0 |
-| **Document Type** | Software Design Document (SDD) + Architecture Document + AI System Design + Product Specification |
+| **Document Type** | Software Design Document (SDD) + Architecture Document + AI System Design |
 | **Primary Audience** | Graduation Committees, Software Engineers, AI Engineers, Researchers |
+
+**Implementation-claim legend.** This document distinguishes three states throughout:
+
+- **Implemented** — verified in the `staging` branch at the baseline commit above.
+- **Planned** — part of the intended architecture or roadmap; not currently built.
+- **Design principle** — architectural intent that may span current and future implementation.
+
+**ADR governance.** Per ADR-0002 (documentation authority hierarchy), the ADRs in `docs/adr/` override conflicting Technical Specification statements. Current-state implementation claims in this document must match the verified repository baseline. Current governing decisions: ADR-0001 (modular monolith), ADR-0002 (documentation authority), ADR-0003 (OCR benchmark location and evaluation sequencing), ADR-0004 (PostgreSQL + pgvector as the vector store; supersedes the earlier deferred ADR-0004 and this document's former ChromaDB default), ADR-0005 (LiteLLM LLM gateway), ADR-0006 (Keycloak/OIDC authentication), ADR-0009 (PAL, document ingestion, and RAG architecture). Sections §25–§31 contained v4.0 text that predated several of these ADRs; where such text conflicted with an ADR or with the verified baseline, it was corrected in this revision.
 
 ---
 
@@ -59,13 +69,29 @@
 
 ## 1. Executive Summary
 
-OpenLearn AI is an open-source Adaptive Educational Intelligence Platform designed to transform educational content into adaptive learning experiences. Unlike conventional tools that merely enable question-and-answer interactions with uploaded documents, OpenLearn AI constructs a comprehensive educational intelligence layer that understands the subject matter, understands the student, and makes informed pedagogical decisions about what to study, when to review, at what difficulty level, and through which learning modality.
+OpenLearn AI is an open-source (AGPL-3.0) adaptive educational intelligence platform that turns educational content into personalized, adaptive learning experiences, with an Arabic/English bilingual focus. Unlike document-chat tools, it is designed to build a subject knowledge base, model the learner's mastery per concept, maintain a dynamic educational profile, and drive pedagogical decisions — what to study next, when to review, at what difficulty, and in which modality. The full adaptive loop is the project's target architecture; the currently implemented foundation is summarized below.
 
-The defining architectural innovation of Version 4.0 is the **Hybrid AI Architecture** — a provider-agnostic design philosophy that ensures every AI component in the system is replaceable through abstraction. There is only one product, not two separate local and cloud versions. The system supports any combination of local and cloud providers: a local LLM with cloud embeddings, a cloud LLM with local vector storage, entirely local operation for privacy-sensitive environments, entirely cloud operation for resource-constrained deployments, or any hybrid configuration the user chooses. The architecture never depends on a single AI provider, and no component is hard-coded to a specific model or service.
+**Architectural approach.** A single deployable FastAPI **modular monolith** (ADR-0001): domain modules live as packages inside the backend process and communicate through in-process interfaces. Application data and vectors live in one PostgreSQL 16 database with the pgvector extension (ADR-0004). Asynchronous work runs on Celery + Redis. Authentication is centralized in Keycloak via OIDC (ADR-0006); the backend only validates Keycloak-issued access tokens. The frontend is Next.js 16 / React 19. All AI provider access is routed through the **Provider Abstraction Layer (PAL)** (ADR-0009): typed capability interfaces, a configuration-driven provider factory, and a router with ordered fallback and pre-first-chunk streaming-fallback semantics. An LLM gateway (LiteLLM, ADR-0005) is deployed in staging.
 
-The platform integrates eight interdependent layers: Content Ingestion, Knowledge Base (RAG), Knowledge Graph, Student Knowledge Model (BKT/IRT), Customized Student Profile, Adaptive Learning Engine, Generation & Simulation, and Learning Analytics. These layers form a closed feedback loop where each component feeds the others, creating genuine educational intelligence rather than a superficial chat interface. The Student Knowledge Model tracks mastery per concept using Bayesian Knowledge Tracing, while the Customized Student Profile captures learning preferences, goals, available time, and pace — together they enable the Adaptive Learning Engine to make contextually informed recommendations grounded in both cognitive science and individual learner characteristics.
+**Implemented today (verified against `staging`):**
 
-This document serves as the official technical specification for OpenLearn AI Version 4.0. It is structured as a Software Design Document combined with an Architecture Document, AI System Design, and Product Specification. Every architectural decision is justified, every tradeoff is explained, and every alternative is considered. The document is written for dual audiences: graduation committee members who evaluate theoretical depth and research rigor, and technical reviewers who assess engineering quality and design patterns.
+- FastAPI backend with async SQLAlchemy 2 + Alembic migrations on PostgreSQL 16 + pgvector (`vector_records`, `VECTOR(1024)`, cosine search).
+- PAL: five capability interfaces plus a shared base contract (`base`, `embedding`, `ocr`, `ranking`, `reasoning`, `vector_db`), provider factory, router with typed fallback/streaming semantics, and a typed exception hierarchy.
+- Providers: Gemini OCR (`gemini-2.5-flash`), BGE-M3 embeddings (1024-dim, sentence-transformers), PostgreSQL/pgvector vector store, and mock providers for all four provider-backed interfaces.
+- Docling-based document ingestion (PDF, DOCX, HTML, Markdown, images) and a custom deterministic structure-aware chunker (chunk size 1200 / overlap 150 characters).
+- LiteLLM gateway in staging (configured models: `gpt-4o-mini` primary, `gpt-3.5-turbo` fallback, budget cap).
+- Keycloak-backed authentication and RBAC (realm roles `student` / `instructor` / `admin`); course and material APIs with S3-compatible presigned uploads; student profile API (field subset).
+- Celery worker/beat + Flower; observability via structlog, Sentry, Prometheus, Grafana, Loki, and Alloy; development and staging Docker Compose environments; GitHub Actions CI/deployment workflows.
+- Backend testing (pytest + coverage) and a basic evaluation harness package (`backend/app/eval/`) with a CLI (`python -m app.eval`), an evaluator registry, JSON dataset loading/validation, and a seeded dummy evaluator (the complete ADR-0003 evaluation framework remains to be built on this mechanism); frontend quality infrastructure (Storybook, Vitest, Playwright, ESLint).
+
+**Planned (designed, not yet built):**
+
+- RAG retrieval service and citation-grounded answering; chat endpoints and WebSocket streaming transport (pipeline and protocol defined in ADR-0009).
+- Automated material-processing workflow wiring upload → ingestion → chunking → embeddings → pgvector (materials are registered as `pending` today).
+- Knowledge Graph and prerequisite-aware retrieval; no graph database is installed.
+- Student Knowledge Model (BKT/IRT), profile–model integration, Adaptive Learning Engine, SM-2/HLR review scheduling, adaptive exams (CAT) — research foundations are defined (§27); no implementation exists.
+- Analytics, recommendation, review, exam, and knowledge-graph API surfaces; WebSocket streaming API.
+- Deployable local/hybrid execution modes including a local LLM runtime (Ollama); ranking/reranking provider; speech and vision modalities.
 
 ---
 
@@ -73,11 +99,9 @@ This document serves as the official technical specification for OpenLearn AI Ve
 
 ### 2.1 What OpenLearn AI Is
 
-OpenLearn AI is an open-source Adaptive Educational Intelligence Platform — a system that transforms any educational content (PDF, DOCX, PPTX, images, notes) into a personalized, adaptive learning experience. The platform does not simply answer questions about uploaded documents. Instead, it builds a knowledge base for the subject, constructs a cognitive model of the student, maintains a dynamic educational profile, and then produces study plans, review schedules, and adaptive exam simulations tailored to each individual learner.
+OpenLearn AI is an open-source Adaptive Educational Intelligence Platform: a system that transforms educational content (PDF, DOCX, HTML, Markdown, images) into a personalized, adaptive learning experience. The design goal is not a chat-with-PDF tool. A chat tool answers questions and forgets; OpenLearn AI is designed to build a knowledge base for the subject, construct a cognitive model of the student, maintain a dynamic educational profile, and produce study plans, review schedules, and adaptive exam simulations tailored to each learner.
 
-The fundamental distinction between OpenLearn AI and conventional document-chat tools lies in the depth of intelligence. A chat-with-PDF tool establishes a monadic relationship: the student asks, the tool answers. There is no memory of the student, no tracking of conceptual understanding, no adaptation of difficulty, and no scientific scheduling of review sessions. OpenLearn AI, by contrast, builds a Student Knowledge Model that tracks mastery per concept using Bayesian Knowledge Tracing, maintains a Customized Student Profile that captures learning preferences and constraints, constructs a Knowledge Graph that maps prerequisite relationships between concepts, and employs an Adaptive Learning Engine that fuses all three to make pedagogically informed decisions.
-
-The vision is to enable any student — particularly those in under-served linguistic communities such as Arabic-speaking students — to access learning experiences comparable to premium global platforms, at no cost, with complete data privacy, through an open-source platform that builds a genuine cognitive model of the learner rather than a superficial page-read counter.
+The vision is to give any student — particularly under-served linguistic communities such as Arabic-speaking students — learning experiences comparable to premium commercial platforms, at no cost, with data privacy, through an open-source platform that builds a genuine cognitive model of the learner rather than a count of pages read. The adaptive behavior this vision requires is a target (see §2.3 for layer-by-layer status); the currently implemented foundation is listed in §1.
 
 ### 2.2 Strategic Vision Statement
 
@@ -85,7 +109,7 @@ To empower any student worldwide with adaptive learning experiences at the quali
 
 ### 2.3 The Eight System Layers
 
-The system is organized into eight interdependent layers, each building upon the outputs of the layers below it. This hierarchical structure ensures that intelligence accumulates progressively: raw content becomes searchable knowledge, searchable knowledge becomes structured understanding, structured understanding becomes measurable mastery, measurable mastery becomes personalized adaptation, and personalized adaptation becomes actionable learning paths.
+The system is organized into eight interdependent layers in which intelligence accumulates progressively: raw content becomes searchable knowledge, searchable knowledge becomes structured understanding, structured understanding becomes measurable mastery, measurable mastery becomes personalized adaptation, and personalized adaptation becomes actionable learning paths. Feedback loops are essential to the design: analytics updates the student models, the Knowledge Graph enriches retrieval through prerequisite chains, and mastery states annotate graph nodes.
 
 ```mermaid
 flowchart TD
@@ -105,41 +129,34 @@ flowchart TD
     L4 -.->|weights nodes| L3
 ```
 
-The feedback loops are critical: Learning Analytics updates the Student Knowledge Model and Customized Student Profile, the Knowledge Graph enriches Knowledge Base retrieval by expanding queries through prerequisite chains, and the Student Knowledge Model annotates Knowledge Graph nodes with mastery colors to guide visual navigation and path planning.
+The diagram is the **target** architecture. Current implementation status per layer:
+
+| # | Layer | Status |
+|---|-------|--------|
+| 1 | Content Ingestion | **Partially implemented** — Docling ingestion, structure-aware chunking, and PAL OCR/embedding providers exist as service modules; the automated upload-to-vectors workflow is not wired yet |
+| 2 | Knowledge Base (RAG) | **Partially implemented** — embedding generation and pgvector storage/search exist; the retrieval/RAG service and API are planned (ADR-0009) |
+| 3 | Knowledge Graph | **Planned** (§13) — no concept extraction or graph store exists |
+| 4 | Student Knowledge Model (BKT/IRT) | **Planned** — research basis defined (§27); no implementation |
+| 5 | Customized Student Profile | **Partially implemented** — profile model + GET/PUT profile API for a subset of the planned fields (education level, major, university, preferred language, VARK style, daily available minutes) |
+| 6 | Adaptive Learning Engine | **Planned** (§16) |
+| 7 | Generation & Simulation | **Planned** |
+| 8 | Learning Analytics | **Planned** |
 
 ---
 
 ## 3. Problem Statement
 
-Educational technology has advanced significantly in recent years, yet students continue to face fundamental problems that existing tools fail to address comprehensively. OpenLearn AI was designed to solve seven interconnected problems that collectively undermine effective learning.
+OpenLearn AI targets seven interconnected problems in self-directed learning. The responses below describe the designed system; implementation status per component follows §2.3.
 
-### 3.1 Content Overload
-
-Students routinely face hundreds of pages of educational material without clear guidance on priorities. A textbook of 400 pages contains perhaps 50 core concepts, yet the student has no tool to identify which concepts matter most, which are prerequisites for others, and which can be deferred. The result is indiscriminate reading — covering all content equally rather than focusing on areas of weakest understanding. OpenLearn AI addresses this through Knowledge Graph construction, which extracts concepts and their prerequisite relationships, enabling the system to prioritize study based on structural dependencies rather than arbitrary page order.
-
-### 3.2 Absence of Feedback
-
-In traditional study, a student does not discover what they misunderstood until the exam reveals it. This is a catastrophic feedback delay — weeks or months of study may be built on foundational misconceptions that propagate through prerequisite chains. OpenLearn AI provides immediate, granular feedback through the Student Knowledge Model, which updates mastery estimates after every learning activity (answering a question, reviewing a flashcard, completing an exam simulation), ensuring that misconceptions are detected and corrected before they compound.
-
-### 3.3 Random Review
-
-Most students review material in arbitrary order — re-reading chapters sequentially or reviewing whatever feels most urgent at the moment. This approach ignores decades of cognitive science research on spaced repetition and forgetting curves. The probability of remembering a concept decays exponentially over time unless review is scheduled at optimal intervals. OpenLearn AI implements the SM-2 spaced repetition algorithm, which schedules review sessions based on measured mastery and elapsed time since last study, ensuring that concepts approaching the forgetting threshold are reviewed before they are lost.
-
-### 3.4 Rapid Forgetting
-
-Without structured repetition, forgetting follows Ebbinghaus's curve — approximately 60% of newly learned material is lost within 24 hours, and 80% within a week. Students who study without spaced repetition systematically lose the gains they make, creating a treadmill effect where the same material must be re-learned repeatedly. OpenLearn AI implements Half-Life Regression to predict forgetting rates per concept, combined with SM-2 scheduling to ensure reviews occur before the predicted forgetting threshold.
-
-### 3.5 Paid and Closed Tools
-
-The existing tools that offer adaptive features — platforms like Quizgecko, RemNote, and Adapt — are commercial products with closed source code and subscription fees. Students who cannot afford these subscriptions have no access to adaptive learning technology. Furthermore, closed-source tools cannot be inspected, modified, or extended by the community, creating a dependency on single vendors whose priorities may diverge from educational needs. OpenLearn AI is fully open-source under AGPL-3.0, ensuring that the platform is free to use, free to modify, and free to extend by any individual or institution.
-
-### 3.6 Poor Linguistic Support
-
-Most educational AI tools are designed for English-speaking users and perform poorly with Arabic content — OCR quality is lower, embedding models capture less semantic nuance, and LLM generation produces less coherent output. Arabic-speaking students, who represent over 400 million potential users, are systematically underserved. OpenLearn AI prioritizes multilingual support from the architecture level, with explicit support for Arabic and English, automatic language detection, bilingual content processing, and selection of AI models that demonstrate strong performance across target languages.
-
-### 3.7 Data Privacy
-
-Current commercial educational platforms require students to upload sensitive academic content — personal notes, exam preparations, course materials — to cloud servers operated by third-party companies. This creates significant privacy risks: educational data reveals learning difficulties, academic performance, intellectual interests, and study habits, all of which are personally sensitive. OpenLearn AI's Local First architecture ensures that all processing can occur entirely on the student's own machine, with no data transmitted to any external service unless the student explicitly configures cloud providers. Even when cloud providers are used, the architecture processes only the minimum necessary data and never stores student content on remote servers persistently.
+| # | Problem | Today's Reality | OpenLearn AI Design Response |
+|---|---------|-----------------|------------------------------|
+| 1 | **Content overload** | Students face hundreds of pages with no guidance on what matters most or in which order. | Concept extraction with prerequisite relationships (Knowledge Graph) so study priority follows structural dependencies, not page order. **Planned.** |
+| 2 | **Absence of feedback** | Misconceptions surface only at the exam, after weeks of compounded study. | Immediate, per-activity mastery updates in the Student Knowledge Model so gaps are detected before they propagate. **Planned** (research basis §27). |
+| 3 | **Random review** | Review order ignores spaced-repetition research; students re-read arbitrarily. | SM-2 scheduling based on measured mastery and elapsed time since last study. **Planned** (research basis §27). |
+| 4 | **Rapid forgetting** | Without structured repetition, roughly 60% of new material is lost within 24 hours (Ebbinghaus curve). | Forgetting prediction (Half-Life Regression) combined with scheduling so review happens before the predicted forgetting threshold. **Planned** (research basis §27). |
+| 5 | **Paid and closed tools** | Comparable adaptive features are locked behind subscriptions and closed source. | Fully open-source under AGPL-3.0 — free to use, modify, and extend. **Current project stance.** |
+| 6 | **Poor Arabic support** | Most educational AI is English-first: Arabic OCR, embeddings, and generation underperform. | Arabic/English-first model selection and bilingual UX with RTL support. **Design principle**; language constraints (en/ar) are implemented in the profile model. |
+| 7 | **Data privacy** | Sensitive academic content is uploaded to third-party clouds. | Self-hostable stack, provider abstraction with local alternatives, minimum-data principle (§9.3), and credentials owned by a self-hosted IdP (ADR-0006). **Partially implemented** (architecture), **planned** (fully local processing). |
 
 ---
 
@@ -147,62 +164,66 @@ Current commercial educational platforms require students to upload sensitive ac
 
 ### 4.1 Educational Intelligence, Not Chatbots
 
-The foundational philosophy of OpenLearn AI is that educational technology should exhibit intelligence, not merely conversational capability. A chatbot answers questions — it provides information when prompted. An intelligent tutor, by contrast, understands what the student knows, understands what the student needs to know, understands the structural relationships between concepts, and makes active decisions about the optimal next learning step, the appropriate difficulty level, and the most effective review schedule.
+The foundational philosophy is that educational technology should exhibit intelligence, not merely conversational capability. A chatbot is a passive information-retrieval system: it answers when asked. An intelligent tutor is an active pedagogical agent: it identifies misconceptions, recommends study strategies, adjusts difficulty based on performance, and schedules review to prevent forgetting — the difference between a search engine and a personal teacher.
 
-This distinction is not incremental — it is qualitative. A chatbot is a passive information retrieval system. An intelligent tutor is an active pedagogical agent. The difference is analogous to the difference between a search engine and a personal teacher: the search engine returns relevant documents when queried, while the teacher identifies misconceptions, recommends study strategies, adjusts difficulty based on performance, and schedules review to prevent forgetting.
-
-OpenLearn AI implements this philosophy through the integration of three modeling components: the Knowledge Graph (what concepts exist and how they relate), the Student Knowledge Model (what the student currently understands and where gaps exist), and the Customized Student Profile (who the student is, what their goals are, and how they prefer to learn). The Adaptive Learning Engine fuses these three models to produce decisions that are simultaneously knowledge-structured, cognition-aware, and learner-personalized.
+OpenLearn AI implements this philosophy through three modeling components: the Knowledge Graph (what concepts exist and how they relate), the Student Knowledge Model (what the student currently understands), and the Customized Student Profile (who the student is, their goals, and how they prefer to learn). The Adaptive Learning Engine is designed to fuse all three so decisions are knowledge-structured, cognition-aware, and learner-personalized. This fusion is a **design principle**; the components themselves are planned (§2.3).
 
 ### 4.2 Eight Design Principles
 
-The architecture of OpenLearn AI is governed by eight design principles that are not merely aspirational guidelines but hard constraints on every architectural decision. When a design choice violates any of these principles, it is rejected regardless of its technical advantages.
+The architecture is governed by eight design principles. They are constraints on architectural decisions, not aspirations: a design choice that violates one is rejected regardless of its technical advantages.
 
 | # | Principle | Definition | Architectural Implication |
 |---|-----------|------------|--------------------------|
-| 1 | **Open Source First** | All core components must be open-source software with permissive or copyleft licenses. Proprietary dependencies are only acceptable as optional plugins, never as requirements. | No proprietary database, no proprietary LLM runtime, no proprietary cloud service as a hard dependency. Every component must have an open-source alternative. |
-| 2 | **Privacy First** | Student data must never leave the user's machine without explicit, informed consent. All processing must be possible entirely locally. | All AI providers accessed via abstraction — cloud calls are opt-in, never default. No telemetry, no tracking, no analytics that transmit data externally. |
-| 3 | **Local First** | The default deployment mode assumes no internet connectivity. All core features must work offline with locally available models and data. | Local LLM runtime (Ollama), local vector database, local object storage. Cloud providers enhance but never replace local capability. |
-| 4 | **Cloud Optional** | Cloud AI providers are optional enhancements, not requirements. The system must degrade gracefully when cloud services are unavailable. | Provider abstraction ensures cloud is a configuration choice, not a dependency. Feature parity between local and cloud modes for all core capabilities. |
-| 5 | **Modular Design** | Each system component must be an independent module with well-defined interfaces. Modules communicate through contracts, not through shared internals. | Every service (ingestion, embedding, retrieval, generation, KG, SKM, CSP, adaptive, analytics) is a separate module with its own API contract. |
-| 6 | **Provider Agnostic** | No AI component is hard-coded to a specific provider. All providers implement standardized interfaces and can be freely substituted. | Provider Abstraction Layer with interfaces for Reasoning, Embedding, OCR, Speech, Vector DB, Vision, and Ranking. Any implementation of any interface can be used. |
-| 7 | **Offline Friendly** | The system must maintain full functionality when disconnected from the internet. Offline mode is the baseline, not an edge case. | Local model caching, local database storage, local file processing. Cloud provider failures must not cascade to local components. |
-| 8 | **Research Driven** | All pedagogical algorithms must be grounded in published research. No heuristic is accepted without a theoretical basis or empirical validation. | BKT (Corbett & Anderson, 1995), IRT (Wainer et al.), SM-2 (Wozniak), Half-Life Regression (Settles & Meeder), VARK (Fleming). Every algorithm has a citation. |
+| 1 | **Open Source First** | All core components are open-source; proprietary dependencies are acceptable only as optional plugins, never requirements. | No proprietary database, LLM runtime, or cloud service as a hard dependency; every component must have an open-source alternative. |
+| 2 | **Privacy First** | Student data never leaves the user's control without explicit, informed consent. | Cloud providers are configuration choices, not defaults; no authentication secrets in the application database (ADR-0006); no external telemetry. |
+| 3 | **Local First** | All core features must be operable offline with local models and data. | **Target:** local providers for every capability as a configuration preset. Current staging mixes cloud (Gemini OCR, LiteLLM/OpenAI) and locally executed (BGE-M3, pgvector) components; a deployable all-local mode is planned (§9). |
+| 4 | **Cloud Optional** | Cloud providers are enhancements, not requirements; the system degrades gracefully when they are unavailable. | PAL fallback semantics (implemented, §8.3); provider substitution by configuration, not code. |
+| 5 | **Modular Design** | Components are independent modules communicating through contracts, not shared internals. | Domain modules as packages inside the backend process (ADR-0001); PAL as the enforced boundary between core services and AI providers (ADR-0009). |
+| 6 | **Provider Agnostic** | No AI component is hard-coded to a specific provider. | PAL typed interfaces — embedding, OCR, ranking, reasoning, vector DB — plus a shared base contract. Speech and vision interfaces are **planned** (§29); the current interface set is six files, not seven. |
+| 7 | **Offline Friendly** | Full functionality when disconnected; offline is a baseline, not an edge case. | Mock providers enable offline development and tests today; cloud failures must not cascade to local components. A deployable offline mode is **planned** (§9). |
+| 8 | **Research Driven** | Every pedagogical algorithm is grounded in published research. | BKT (Corbett & Anderson, 1995), IRT (Wainer et al.), SM-2 (Wozniak), Half-Life Regression (Settles & Meeder), VARK (Fleming). Research basis in §27; implementations **planned**. |
 
 ### 4.3 Principle Conflicts and Resolution
 
-These principles sometimes conflict, and the architecture must resolve such conflicts with clear precedence rules. When Privacy First and Cloud Optional conflict — for instance, when a cloud provider offers significantly better model quality — Privacy First wins: the system must always offer a local alternative, even if it is slower or less accurate. When Local First and Modular Design conflict — for instance, when bundling all components into a single process would simplify local deployment — Modular Design wins: the system maintains module boundaries even in local mode, using intra-process communication instead of network calls.
-
-The precedence hierarchy is: Privacy First > Local First > Provider Agnostic > Modular Design > Open Source First > Cloud Optional > Offline Friendly > Research Driven. This ordering ensures that privacy and local capability are never compromised, while research-driven improvements are always welcomed but never at the cost of the higher principles.
+When principles conflict, precedence is fixed: **Privacy First > Local First > Provider Agnostic > Modular Design > Open Source First > Cloud Optional > Offline Friendly > Research Driven**. Privacy and local capability are therefore never traded away for quality, while research-driven improvements are always welcome but never override a higher principle. Example: bundling modules to simplify local deployment would violate Modular Design, so module boundaries are kept and in-process communication is used instead of network calls.
 
 ---
 
 ## 5. Competitive Positioning
 
-### 5.1 Feature Comparison Matrix
+### 5.1 Positioning
 
-The following table compares OpenLearn AI against four representative competitors in the educational AI space. Each competitor addresses a subset of the capabilities that OpenLearn AI provides, but none integrates all eight layers into a cohesive educational intelligence system.
+Existing tools each solve one slice of the problem: document chat (ChatPDF-style products), quiz generation (Quizgecko), spaced repetition (RemNote), and course sequencing (Adapt). None integrates content understanding, learner modeling, and adaptive decision-making into one closed loop. OpenLearn AI's intended differentiation rests on four pillars:
 
-| Capability | ChatPDF | Quizgecko | RemNote | Adapt | OpenLearn AI |
-|------------|---------|-----------|---------|-------|--------------|
-| Document Upload & OCR | Basic | Basic | Basic | Limited | Full (PDF, DOCX, PPTX, Images, OCR) |
-| Knowledge Base (RAG) | Core feature | No | Limited | No | Full (Hybrid Search, Re-ranking, Citations) |
-| Knowledge Graph | No | No | Basic (manual) | No | Full (auto-extracted concepts, prerequisites, visual) |
-| Student Knowledge Model | No | No | No | Basic | Full (BKT + IRT + Mastery Scores + Weak Areas) |
-| Customized Student Profile | No | No | Basic | Basic | Full (13 fields, VARK, goals, pace) |
-| Adaptive Learning Engine | No | No | No | Core feature | Full (SKM + CSP + KG fusion) |
-| Spaced Repetition | No | No | SM-2 | No | SM-2 + Forgetting Prediction |
-| Adaptive Exam Simulator | No | Fixed quizzes | No | Limited | Full (CAT, adaptive difficulty) |
-| Learning Analytics | No | Basic | Basic | Basic | Full (Dashboard, Heatmap, Readiness) |
-| Open Source | No | No | Partial | No | Full (AGPL-3.0) |
-| Privacy / Local Operation | Cloud only | Cloud only | Cloud only | Cloud only | Local First, Cloud Optional |
-| Provider Agnostic | No | No | No | No | Full (Hybrid AI Architecture) |
-| Multilingual (Arabic) | Poor | Poor | Poor | No | Explicit support |
+1. **Closed-loop integration** of Knowledge Graph, Student Knowledge Model, and Student Profile into a single adaptive engine — **planned** (§2.3).
+2. **Provider-agnostic hybrid execution** — one codebase where every AI component is replaceable through the PAL, avoiding vendor lock-in — **partially implemented** (§7, §8); local execution modes are planned.
+3. **Arabic/English-first design** — model selection criteria, bilingual UX, and RTL support as first-class requirements — **design principle**; language constraints implemented in the data model.
+4. **Open source and self-hostable** — AGPL-3.0, no per-seat cost, privacy through self-hosting — **current project stance**.
 
-### 5.2 Differentiation Analysis
+### 5.2 Capability Status
 
-The key differentiators of OpenLearn AI are not individual features but the **integration** of features into a closed-loop intelligence system. In isolation, a Knowledge Graph is a visualization tool. In isolation, a Student Knowledge Model is a progress tracker. In isolation, Spaced Repetition is a scheduling algorithm. But when these components feed each other — when the Knowledge Graph determines which concepts are prerequisites for the concepts where the Student Knowledge Model detects weakness, and the Customized Student Profile adjusts the pacing and format of the recommended review — the system produces genuinely intelligent educational decisions that no single component could generate alone.
+The v4.0 feature-comparison matrix presented target capabilities as if shipped. The honest version:
 
-The Hybrid AI Architecture adds a further dimension of differentiation that no competitor offers. Existing platforms are either entirely cloud-based (ChatPDF, Quizgecko) or entirely local (some niche tools). None offer the flexibility to freely combine local and cloud providers based on the user's hardware capabilities, privacy requirements, and budget constraints. This architecture makes OpenLearn AI accessible to students with powerful GPU-equipped machines who want full local operation, students with modest hardware who want selective cloud augmentation, and institutions that require complete offline capability for regulatory compliance.
+| Capability | Status | Notes |
+|------------|--------|-------|
+| Document ingestion (Docling: PDF, DOCX, HTML, MD, images) | **Implemented** | Targeted-OCR policy per ADR-0009; pipeline details in §11 |
+| Structure-aware chunking (1200/150 chars, deterministic IDs) | **Implemented** | Custom chunker; details in §11.4 |
+| OCR — Gemini (`gemini-2.5-flash`) | **Implemented** | PaddleOCR/Surya remain benchmark candidates in `experiments/` only (ADR-0003) |
+| Embeddings — BGE-M3, 1024-dim dense | **Implemented** | sentence-transformers |
+| Vector storage + similarity search — PostgreSQL + pgvector | **Implemented** | ADR-0004; cosine similarity |
+| Provider abstraction, fallback, streaming semantics (PAL) | **Implemented** | §8 |
+| LLM gateway — LiteLLM (`gpt-4o-mini`, `gpt-3.5-turbo`) | **Implemented** | ADR-0005; staging deployment |
+| Authentication & RBAC — Keycloak/OIDC | **Implemented** | ADR-0006 |
+| Course/material APIs, S3-compatible presigned uploads | **Implemented** | §22 |
+| Student profile subset (6 fields) + profile API | **Implemented** | Full 13-field CSP and SKM integration planned |
+| RAG Q&A with citation grounding | **Planned** | Pipeline defined in ADR-0009 |
+| Chat endpoints & WebSocket streaming | **Planned** | Transport protocol defined in ADR-0009 |
+| Knowledge Graph (concepts, prerequisites, visualization) | **Planned** | §13 |
+| Student Knowledge Model (BKT/IRT) | **Planned** | Research basis §27 |
+| Adaptive engine, SM-2/HLR scheduling, CAT exams | **Planned** | Research basis §27 |
+| Learning analytics | **Planned** | — |
+| Local (fully offline) execution mode | **Planned** | §9; only mock/local abstractions exist today |
+| Speech / vision modalities | **Planned** | §29 |
 
 ---
 
@@ -212,29 +233,93 @@ The Hybrid AI Architecture adds a further dimension of differentiation that no c
 
 ## 6. System Overview
 
-### 6.1 Eight-Layer Architecture
+### 6.1 As-Built Architecture (staging)
 
-The OpenLearn AI system is structured as eight progressive layers, each building upon the outputs of the layers below and contributing to the layers above. This layered architecture ensures that intelligence accumulates incrementally: raw content becomes searchable knowledge, searchable knowledge becomes structured understanding, structured understanding becomes measurable mastery, measurable mastery becomes personalized adaptation, and personalized adaptation becomes actionable learning paths.
+The verified current system is a modular monolith with a single PostgreSQL database, async workers, a cloud LLM gateway, and a containerized observability stack:
 
-The layers are not independent modules that happen to be stacked — they are interdependent components that form a closed feedback loop. Learning Analytics feeds back into the Student Knowledge Model and Customized Student Profile, the Knowledge Graph enriches Knowledge Base retrieval, and the Student Knowledge Model annotates Knowledge Graph nodes with mastery information. This circular dependency is intentional and essential: it is what transforms the system from a pipeline into an intelligent agent.
+```mermaid
+flowchart TB
+    subgraph CLIENT["Client"]
+        FE["Next.js 16 Frontend — React 19 · Tailwind 4 · shadcn/ui · TanStack Query · keycloak-js · Sentry"]
+    end
 
-### 6.2 Layer Descriptions
+    subgraph BACKEND["FastAPI Backend — Modular Monolith (ADR-0001)"]
+        API["API Routers: auth · users · courses · materials · /health"]
+        SVC["Services: OIDC token validation · JIT user provisioning · ingestion · S3 presigned storage"]
+        PALN["Provider Abstraction Layer — factory · router · typed interfaces"]
+    end
 
-**Layer 1 — Content Ingestion:** Accepts educational content in multiple formats (PDF, DOCX, PPTX, TXT, images), extracts text through format-specific parsers and OCR, performs language detection, and applies semantic chunking to produce coherent text segments with metadata.
+    subgraph PROVIDERS["PAL Providers"]
+        GEM["Gemini OCR — gemini-2.5-flash"]
+        BGE["BGE-M3 Embeddings — 1024-dim, sentence-transformers"]
+        PGV["Postgres VectorDB Provider"]
+        MOCK["Mock Providers — OCR · embedding · reasoning · vector DB"]
+    end
 
-**Layer 2 — Knowledge Base:** Generates vector embeddings for each chunk using the configured embedding provider, stores embeddings in the configured vector database, and provides hybrid search (semantic + keyword) with optional re-ranking for retrieval augmentation.
+    subgraph INFRA["Data & Infrastructure"]
+        PG[("PostgreSQL 16 + pgvector — vector_records VECTOR 1024")]
+        RD[("Redis 7.4")]
+        S3["S3-compatible object storage — presigned upload URLs"]
+        KC["Keycloak — OIDC IdP, realm openlearn"]
+        LIT["LiteLLM Gateway — gpt-4o-mini · gpt-3.5-turbo"]
+    end
 
-**Layer 3 — Knowledge Graph:** Extracts concepts and relationships from chunked text using LLM-based extraction, stores the resulting graph (concepts, is-a relations, prerequisite-of relations, part-of relations) in the configured graph database, and provides visual navigation and prerequisite-aware query expansion.
+    subgraph WORKERS["Async Workers"]
+        CW["Celery worker + beat"]
+        FL["Flower"]
+    end
 
-**Layer 4 — Student Knowledge Model:** Tracks per-concept mastery using Bayesian Knowledge Tracing (four parameters: initial knowledge probability, learning transition probability, guess probability, slip probability), optionally augments with Item Response Theory for question difficulty estimation, and detects weak areas requiring attention.
+    subgraph OBS["Observability"]
+        MON["Prometheus · Grafana · Loki · Alloy · structlog · Sentry"]
+    end
 
-**Layer 5 — Customized Student Profile:** Maintains 13 profile fields capturing the student's educational level, major, goals, learning style (VARK), preferred language, learning speed, available study time, past test results, and academic interests. Feeds into every adaptive decision.
+    FE -->|"OIDC Authorization Code + PKCE"| KC
+    FE -->|"REST, bearer token"| API
+    API --> SVC
+    SVC --> PALN
+    PALN --> GEM
+    PALN --> BGE
+    PALN --> PGV
+    PALN --> MOCK
+    SVC --> S3
+    API --> PG
+    CW --> RD
+    CW --> PG
+    PALN -.->|"planned: LiteLLM reasoning adapter"| LIT
+    BACKEND -.->|"metrics + logs"| MON
+```
 
-**Layer 6 — Adaptive Learning Engine:** The central decision-maker. Fuses Student Knowledge Model (what the student knows), Customized Student Profile (who the student is and what constraints they have), and Knowledge Graph (what concepts exist and how they relate) to determine what to study next, at what difficulty, in what format, and when to review.
+**Component notes (all verified):**
 
-**Layer 7 — Generation & Simulation:** Produces concrete learning artifacts — adaptive questions (MCQ, True/False, Fill-in-Blank, Short Answer), flashcards, four types of summaries (quick, detailed, exam-focused, one-page), exam simulations with adaptive difficulty (CAT), and personalized learning paths.
+- **Frontend:** Next.js 16.3.1 / React 19 / TypeScript 5, Tailwind CSS 4 + shadcn/ui, TanStack Query, `keycloak-js` for OIDC, Sentry; Storybook + Vitest + Playwright + ESLint quality infrastructure. No client-state library beyond React/TanStack is currently in use.
+- **Backend:** FastAPI + uvicorn, async SQLAlchemy 2 + asyncpg + Alembic, Pydantic Settings, structlog, Sentry SDK, Prometheus instrumentator. API surface today: `auth`, `users` (profile GET/PUT), `courses` (CRUD), `materials` (course-scoped presigned upload-URL + registration), plus `/health` and a staging error probe. See §22 for the verified endpoint inventory and the planned surface.
+- **Authentication:** Keycloak is the identity authority (realm `openlearn`, public client `openlearn-frontend`, audience `openlearn-api`). The backend validates RS256 access tokens against the realm JWKS, maps `(issuer, subject)` to a local user with just-in-time provisioning, and enforces RBAC from realm roles. No password hashes or refresh tokens are stored in the application database (ADR-0006).
+- **Storage:** course materials live in S3-compatible object storage behind presigned upload URLs (server-generated object keys); material rows are registered with a `pending` status. Content scanning/processing is a future phase.
+- **Workers:** Celery workers + beat on Redis, monitored by Flower. The material-processing workflow that will connect uploads to ingestion/embeddings is **planned**.
+- **LLM gateway:** LiteLLM proxy deployed as its own staging service (`infra/litellm-config.yaml`): `gpt-4o-mini` (default) and `gpt-3.5-turbo` (fallback), request budget cap ($10 / 30 days), `drop_params`, and a Langfuse success callback configured (the Langfuse service itself is not deployed; log/metric observability is Prometheus/Grafana/Loki/Alloy).
 
-**Layer 8 — Learning Analytics:** Aggregates and visualizes all learning data — progress over time, concept mastery heatmap, study time distribution, exam readiness scores, weak area alerts, and goal tracking. Feeds back into Layers 4 and 5 to update models.
+**Deployment topology (verified from compose files):**
+
+| Environment | Compose file | Services |
+|-------------|--------------|----------|
+| Development | `infra/docker-compose.dev.yml` | `db` (pgvector/pgvector:pg16), `keycloak` 26.7.3 (realm import), `keycloak-bootstrap` (test user + `student` role) |
+| Staging | `infra/docker-compose.staging.yml` | `backend`, `frontend`, `litellm`, `db` (pgvector/pgvector:pg16), `redis`, `celery_worker`, `celery_beat`, `flower`, `keycloak`, `prometheus`, `grafana`, `loki`, `alloy` |
+
+CI/CD: GitHub Actions workflows (`ci.yml`, `deploy-staging.yml`, `storybook.yml`) build and publish GHCR images and deploy the staging compose stack. The backend image runs **Python 3.11** (`python:3.11-slim`); the frontend image runs Node 22. **No reverse proxy is deployed** (no Nginx); services are exposed on host ports directly.
+
+### 6.2 Target Architecture
+
+The eight-layer target architecture (§2.3) remains the project's direction and is intentionally preserved. Components not present in §6.1 are **planned**, not deployed:
+
+- RAG retrieval service (query embedding → pgvector search → context construction → reasoning call → source preservation) and citation-grounded answers (ADR-0009).
+- Chat application transport over WebSocket with the ADR-0009 event protocol (`retrieval_started`, `sources_found`, `reasoning_started`, `token`, `done`, `error`).
+- Knowledge Graph store and prerequisite-aware query expansion (§13).
+- Student Knowledge Model, profile–model integration, Adaptive Learning Engine, review scheduling (§14–§16).
+- Analytics, recommendation, review, exam, and knowledge-graph API surfaces (§22).
+- Local/hybrid deployment presets including a local LLM runtime (§9).
+- Speech and vision modalities (§29).
+
+The as-built diagram in §6.1 is the single architecture reference for what exists today; §17 (data flow) and §18–§24 (engineering sections) have been reconciled with it in Passes 2–3.
 
 ---
 
@@ -242,219 +327,159 @@ The layers are not independent modules that happen to be stacked — they are in
 
 ### 7.1 Core Philosophy
 
-The Hybrid AI Architecture is the central architectural innovation of OpenLearn AI Version 4.0. It is founded on a single principle: **there is only one product, not two**. The platform does not ship a "local edition" and a "cloud edition" as separate products. Instead, it ships a single unified system where every AI component is replaceable through abstraction, and the user configures which provider to use for each component based on their own requirements.
+The Hybrid AI Architecture rests on one principle: **there is only one product, not two**. The platform does not ship separate "local" and "cloud" editions. It ships one system in which every AI component is replaceable through abstraction, and the deployment chooses per component whether to use a local or cloud provider — trading privacy, quality, hardware cost, and latency explicitly. A student with a GPU workstation can run reasoning locally while using cloud OCR; an institution with privacy mandates can run everything on its own infrastructure; a student with modest hardware can run everything cloud. Same codebase, same deployment mechanics, different configuration.
 
-This philosophy directly addresses the fundamental tension in AI application design: local models offer privacy and offline capability but may lack quality or speed, while cloud models offer superior quality and speed but require internet connectivity and transmit data to external services. Rather than forcing the user to choose one side of this tradeoff permanently, the Hybrid AI Architecture allows the user to make per-component tradeoffs based on their context.
+This remains the governing philosophy. Its mechanism — the Provider Abstraction Layer — is implemented and described in §8; the deployable local configurations it enables are **planned** (§9).
 
-A student with a powerful GPU-equipped workstation might configure local LLM reasoning with cloud embedding generation, achieving high-quality semantic search without sacrificing local generation privacy. A student with a modest laptop might configure cloud LLM reasoning with local vector storage, achieving good generation quality while keeping their document corpus locally stored. An institution with regulatory privacy requirements might configure everything local, accepting slower performance in exchange for guaranteed data isolation. A student in a well-connected environment might configure everything cloud, maximizing quality and speed. All of these configurations use the same product, the same codebase, and the same deployment — only the configuration differs.
+### 7.2 Current Realization vs Target
 
-### 7.2 Architecture Diagram
+| Aspect | Current (staging, verified) | Target |
+|--------|-----------------------------|--------|
+| Provider selection | Configuration-driven factory (`settings.ai_*` knobs) constructing typed providers | Unchanged, extended to local providers |
+| Reasoning | PAL mock provider (deterministic, for tests/dev); LiteLLM gateway deployed as infrastructure (ADR-0005) | LiteLLM-backed PAL reasoning adapter; local LLM (e.g., Ollama) as development/fallback path per ADR-0005 |
+| Embeddings | BGE-M3 running in-process (sentence-transformers), 1024-dim | Unchanged; cloud embeddings remain an optional alternative |
+| OCR | Gemini (`gemini-2.5-flash`) via google-genai SDK | Unchanged; local engine adoption decided by the ADR-0003 benchmark process |
+| Vector DB | PostgreSQL + pgvector (ADR-0004) | Unchanged; a dedicated store only if evidence demands (ADR-0004) |
+| Ranking/reranking | Interface defined; no provider | BGE reranker or equivalent (planned; deferred in ADR-0009) |
+| Fallback | PAL router: ordered chain, fallback only on `ProviderError`, streaming fallback only before the first chunk (§8.3) | Unchanged — semantics are stable |
+| Local execution mode | Not deployable; mock providers cover offline development/tests | Deployable local/hybrid presets (§9) |
 
-```mermaid
-flowchart TB
-    subgraph PAL[Provider Abstraction Layer]
-        direction TB
-        RI[Reasoning Interface]
-        EI[Embedding Interface]
-        OI[OCR Interface]
-        SI[Speech Interface]
-        VI[Vector DB Interface]
-        V2I[Vision Interface]
-        RI2[Ranking Interface]
-    end
-
-    subgraph LP[Local Providers]
-        direction LR
-        LO[Ollama — Local LLMs<br/>Llama, Qwen, Gemma]
-        LB[Local Embeddings<br/>BGE-m3, E5]
-        LT[Tesseract / PaddleOCR / Surya]
-        LV[ChromaDB / FAISS]
-    end
-
-    subgraph CP[Cloud Providers]
-        direction LR
-        CO[Cloud LLMs<br/>OpenAI, Claude, Groq]
-        CB[Cloud Embeddings<br/>OpenAI, Cohere]
-        CT[Cloud OCR<br/>Google Vision, Azure]
-        CV[Pinecone / Weaviate]
-        CR[Cloud Re-rankers<br/>Cohere Rerank]
-    end
-
-    LP --> PAL
-    CP --> PAL
-
-    subgraph Core[Core Services]
-        direction TB
-        IS[Ingestion Service]
-        RS[Retrieval Service]
-        GS[Generation Service]
-        KS[KG Builder]
-        SK[SKM Service]
-        PS[Profile Service]
-        AE[Adaptive Engine]
-        AS[Analytics Service]
-    end
-
-    PAL --> Core
-```
+**What is not true (correcting v4.0):** no local LLM runtime (Ollama) is deployed; no ChromaDB, Neo4j, or MinIO-required services exist; speech/vision providers do not exist; the reasoning path through LiteLLM is not yet wired into PAL. Claims to the contrary in §11–§31 were stale and have been corrected in this revision.
 
 ### 7.3 Design Rationale
 
-The decision to implement a Hybrid AI Architecture rather than two separate products (a local-only edition and a cloud-only edition) is driven by three considerations.
-
-First, **maintenance burden**: two separate products would require maintaining two codebases, two testing pipelines, two deployment configurations, and two documentation sets. The divergence between local and cloud codepaths would compound over time, making it increasingly difficult to keep both editions at feature parity. A single codebase with provider abstraction eliminates this divergence entirely.
-
-Second, **user flexibility**: a student's hardware capabilities, connectivity, and privacy requirements change over time. A student who starts with cloud providers during development may switch to local providers before a privacy-sensitive exam period. A student who upgrades their GPU may switch from cloud reasoning to local reasoning. With two separate products, such transitions would require migrating data, reconfiguring workflows, and potentially losing model-specific optimizations. With a single product and provider abstraction, the transition is a configuration change — no data migration, no workflow disruption.
-
-Third, **architectural purity**: the provider abstraction layer ensures that no core service ever directly depends on a specific provider implementation. This enforced separation prevents the creeping dependency that occurs when developers optimize for a specific provider's quirks — a common failure mode in systems that nominally support multiple providers but practically depend on one. The abstraction layer is not a convenience wrapper; it is an architectural boundary that the codebase enforces through interface contracts and dependency injection.
+- **Maintenance:** one codebase with provider abstraction avoids the diverging local/cloud codepaths of a two-product strategy; provider changes are configuration, not code.
+- **User flexibility:** hardware, connectivity, and privacy requirements change over time; per-component provider choice lets a deployment adapt without data migration or workflow changes.
+- **Architectural purity:** PAL is an enforced boundary, not a convenience wrapper — no core service references a provider SDK directly, which prevents creeping single-provider dependencies (enforced via interface contracts, ADR-0009).
 
 ---
 
 ## 8. Provider Abstraction Layer
 
-### 8.1 Interface Definitions
+The PAL is the architectural boundary between the application and AI providers. Per ADR-0009, **PAL is a provider abstraction layer and nothing else**: it owns capability interfaces, normalized result models, provider adapters, a typed exception hierarchy, provider configuration, provider construction (factory), and ordered fallback. It does not own ingestion, chunking, retrieval, RAG context construction, WebSocket transport, or business logic — those belong to application services. There is no plugin framework, provider marketplace, or dynamic discovery; provider selection is explicit configuration.
 
-The Provider Abstraction Layer (PAL) defines seven core interfaces that every AI component must implement. Each interface specifies a contract that includes input types, output types, error handling behavior, and capability metadata. Any provider — local or cloud, open-source or commercial — that implements an interface can be used by the system without modifying any core service code.
+### 8.1 Interfaces (Implemented)
 
-| Interface | Purpose | Core Methods | Configuration Key |
-|-----------|---------|-------------|-------------------|
-| **ReasoningInterface** | Text generation, question answering, concept extraction | `generate(prompt, context)`, `extract_concepts(text)`, `generate_questions(text, params)` | `provider.reasoning` |
-| **EmbeddingInterface** | Vector embedding generation for text chunks | `embed(text)`, `embed_batch(texts)` | `provider.embedding` |
-| **OCRInterface** | Optical character recognition for scanned documents and images | `extract_text(image)`, `extract_text_batch(images)` | `provider.ocr` |
-| **SpeechInterface** | Text-to-speech and speech-to-text for audio learning modalities | `synthesize(text)`, `transcribe(audio)` | `provider.speech` |
-| **VectorDBInterface** | Vector storage, similarity search, and metadata filtering | `store(vectors, metadata)`, `search(query_vector, top_k, filters)`, `delete(ids)` | `provider.vector_db` |
-| **VisionInterface** | Image understanding for visual content processing | `analyze(image, prompt)` | `provider.vision` |
-| **RankingInterface** | Re-ranking retrieved documents for improved relevance | `rank(query, documents, top_k)` | `provider.ranking` |
+The implemented PAL defines **five capability interfaces plus a shared base contract** — six interface files total. There are no speech or vision interfaces (planned, §29).
 
-### 8.2 Provider Configuration
+| Interface (file) | Purpose | Contract | Providers (status) |
+|------------------|---------|----------|--------------------|
+| `BasePALInterface` (`interfaces/base.py`) | Shared contract | `health_check() -> HealthStatus` | Required of every provider |
+| `EmbeddingInterface` (`interfaces/embedding.py`) | Vector embeddings | `dimension` property; `embed(text)`; `embed_batch(texts)`; `EmbeddingResult` enforces `len(vector) == dimension` | **BGE-M3** (1024-dim); **mock** (configurable dimension, default 1024) |
+| `OCRInterface` (`interfaces/ocr.py`) | Text extraction | `extract_text(source)`; `extract_text_batch(sources)` → `OCRResult` | **Gemini** (`gemini-2.5-flash`, google-genai SDK, PDF-page input); **mock** |
+| `ReasoningInterface` (`interfaces/reasoning.py`) | LLM reasoning | `reason(messages, ...) -> ReasoningResult`; `reason_stream(messages, ...) -> AsyncIterator[ReasoningChunk]`; `generate(prompt, ...)` compatibility wrapper | **Mock only** — LiteLLM-backed adapter **planned** (ADR-0005) |
+| `VectorDBInterface` (`interfaces/vector_db.py`) | Vector storage | `upsert(records)`; `search(vector, top_k, filters)`; `get(id)`; `delete(ids and/or filters)` → count | **PostgreSQL + pgvector** (session-backed); **mock** |
+| `RankingInterface` (`interfaces/ranking.py`) | Re-ranking | `rank(query, candidates, top_k)` | **None yet** — deferred (ADR-0009); BGE reranker is the candidate |
 
-Each interface is bound to a specific provider implementation through configuration, not through code. The configuration file ( YAML or environment variables) specifies which provider class to instantiate for each interface, along with provider-specific parameters such as model names, API endpoints, and authentication tokens.
+Provider adapter inventory (`backend/app/pal/providers/`): embedding — `bge_m3_provider`, `mock_provider`; OCR — `gemini_provider`, `mock_provider`; reasoning — `mock_provider`; vector DB — `postgres_provider`, `mock_provider`.
 
-```yaml
-# Example: Hybrid configuration — Local LLM + Cloud Embeddings
-provider:
-  reasoning:
-    class: ollama
-    model: qwen2.5:7b
-    base_url: http://localhost:11434
-  embedding:
-    class: openai
-    model: text-embedding-3-large
-    api_key: ${OPENAI_API_KEY}
-  ocr:
-    class: paddleocr
-    language: ar+en
-  vector_db:
-    class: chromadb
-    path: ./data/chromadb
-  ranking:
-    class: bge_reranker
-    model: bge-reranker-v2-m3
+### 8.2 Factory and Configuration
+
+Configuration flows **env → Pydantic Settings → PAL factory → provider instance** (ADR-0009). The factory functions (`backend/app/pal/factory.py`) select providers from settings:
+
+- OCR: `ai_ocr_provider` (`mock` | `gemini`), model from `ai_ocr_model`, key from `GEMINI_API_KEY`.
+- Embedding: `ai_embedding_provider` (`mock` | `bge-m3`) and `ai_embedding_dimension`.
+- Reasoning: `ai_reasoning_provider` (`mock`; further options as adapters land).
+- Vector DB: `ai_vector_db_provider` (`mock` | `postgres`); the postgres provider is session-backed — callers pass their request-scoped `AsyncSession`.
+
+Unknown provider names raise `ConfigurationError` immediately (no silent fallback). Mock providers implement every contract so the full stack runs in tests and offline development.
+
+### 8.3 Router and Fallback Semantics (Implemented)
+
+`PALRouter` (`backend/app/pal/router.py`) executes operations against an ordered provider chain:
+
+1. **Ordered fallback** — first provider success wins. No load balancing, scoring, or dynamic discovery.
+2. **Fallback only on `ProviderError`** (timeout, unavailability, rate limit, 5xx). `InvalidInputError`, `ConfigurationError`, and programming errors fail immediately — no masking of caller bugs.
+3. **Streaming** (`execute_stream`): fallback is allowed only **before the first chunk** is emitted; after that, a failure is terminal. No mid-stream provider switching.
+4. **Observability:** every fallback is logged via structlog (provider, error class, latency); `health_check()` aggregates all configured providers concurrently and never raises.
+
+### 8.4 Exception Hierarchy
+
+```text
+PALError
+├── ProviderError                    # fallback-eligible
+│   ├── ProviderUnavailableError
+│   ├── ProviderTimeoutError
+│   ├── ProviderRateLimitError
+│   └── ProviderServerError
+├── InvalidInputError                # no fallback
+├── ConfigurationError               # no fallback
+└── UnsupportedOperationError        # no fallback
 ```
-
-```yaml
-# Example: Full local configuration — Everything runs on the user's machine
-provider:
-  reasoning:
-    class: ollama
-    model: qwen2.5:7b
-    base_url: http://localhost:11434
-  embedding:
-    class: sentence_transformers
-    model: BAAI/bge-m3
-  ocr:
-    class: paddleocr
-    language: ar+en
-  vector_db:
-    class: chromadb
-    path: ./data/chromadb
-  ranking:
-    class: sentence_transformers
-    model: BAAI/bge-reranker-v2-m3
-```
-
-### 8.3 Provider Swapping at Runtime
-
-The provider configuration is read at service startup, but the architecture also supports runtime provider switching for scenarios where connectivity changes during operation. When a cloud provider becomes unreachable — due to network interruption, API rate limits, or service outages — the system gracefully degrades to the configured fallback provider rather than failing the entire operation.
-
-The degradation strategy follows a configurable priority chain per interface. For example, the reasoning interface might be configured with `ollama` as primary and `openai` as fallback, meaning that if the local Ollama service is unavailable (perhaps because the model is still loading), the system routes reasoning requests to the OpenAI API. Conversely, if the configuration specifies `openai` as primary and `ollama` as fallback, cloud connectivity loss routes requests to the local model, accepting potential quality reduction in exchange for continued operation.
-
-Each provider implementation also exposes a `health_check()` method that the Provider Abstraction Layer calls periodically to verify availability. When a provider fails its health check, the PAL automatically routes subsequent requests to the next provider in the priority chain and logs the transition for observability. When the failed provider recovers, the PAL resumes routing to it, ensuring that the system always uses the highest-quality available provider.
 
 ---
 
 ## 9. Local vs Cloud Execution Model
 
-### 9.1 Three Execution Modes
+> **Status: design principle / target model.** The three-mode model describes configuration presets the product is intended to support. They are **not currently deployable**: there are no Compose profiles for local/hybrid/cloud execution, no local model runtime (Ollama) ships, and no ChromaDB/FAISS-style embedded stores exist. The current deployment (§6.1) mixes cloud providers (Gemini OCR, LiteLLM/OpenAI) with locally executed components (BGE-M3 in-process, pgvector, Keycloak, Redis) and uses mock providers for offline development and tests.
 
-The system supports three execution modes that correspond to common deployment scenarios. Each mode is a configuration preset that sets all provider interfaces to appropriate defaults, while still allowing individual overrides for specific components.
+### 9.1 Three Execution Modes (Target)
 
-**Local Mode (Default):** All providers are local. The system requires no internet connectivity. The student's machine hosts the LLM runtime (Ollama), embedding model (Sentence Transformers), OCR engine (PaddleOCR or Surya), vector database (ChromaDB), and all other components. This mode prioritizes privacy and offline capability at the cost of higher hardware requirements (minimum 8GB RAM, recommended 16GB with GPU for LLM inference).
+| Mode | Intent (design) | Current Reality |
+|------|-----------------|-----------------|
+| **Local** | All providers local: local LLM runtime, local embeddings, local OCR, local storage. No internet required; maximal privacy; highest hardware demand. Target hardware guidance: minimum 8 GB RAM; 16 GB RAM with a GPU recommended for local LLM inference. | **Planned.** Only mock/local abstractions exist; BGE-M3 and pgvector already run locally, but no deployable all-local preset exists and no local LLM runtime ships. |
+| **Hybrid** | Per-component choice: e.g., local reasoning with cloud OCR, or cloud reasoning with local storage. The default product philosophy. | **Partially realized by configuration** — staging already mixes cloud and local components; explicit hybrid presets are planned. |
+| **Cloud** | All AI providers cloud-hosted; minimal hardware (a browser-capable device suffices); requires connectivity. | Closest to today's staging (cloud OCR + LiteLLM/OpenAI), though not packaged as a distinct preset. |
 
-**Hybrid Mode (Recommended for most users):** Core reasoning and data storage remain local, while computationally intensive or quality-sensitive components optionally use cloud providers. The typical hybrid configuration uses a local LLM for generation (privacy-preserving), cloud embeddings for superior semantic search quality, local vector database for data sovereignty, and local OCR for document processing. This mode balances privacy, quality, and hardware requirements.
+Target hardware sizing per mode is additionally elaborated in `docs/design/OpenLearn_AI_System_Requirements_and_Deployment_Profiles.md`, a supporting deployment requirements/profiles document. It complements this specification; it is not designated as a higher authority by the ADR-0002 documentation hierarchy.
 
-**Cloud Mode (For constrained environments):** All providers are cloud-based. The system requires persistent internet connectivity but can run on minimal hardware (a browser-capable device). This mode sacrifices privacy and offline capability in exchange for minimal hardware requirements and access to the highest-quality models. It is appropriate for students with older hardware, shared computer lab environments, or situations where local deployment is impractical.
+### 9.2 Graceful Degradation
 
-### 9.2 Graceful Degradation Strategy
+- **Implemented:** the PAL router's degradation rules (§8.3) — ordered chain, `ProviderError`-only fallback, pre-first-chunk streaming fallback, structured logging. Degradation behavior is explicit configuration, not implicit behavior, and is unit-tested.
+- **Design intent (planned):** a third degradation tier of minimal "safe fallbacks" (e.g., template-based generation, hash-based pseudo-embeddings) that always work at reduced quality. Today's mock providers serve tests and offline development; they are **not** production safe-fallbacks.
 
-When a configured cloud provider becomes unavailable, the system does not fail the request. Instead, it follows a degradation strategy defined per interface in the configuration. The strategy has three levels:
+### 9.3 Data Flow and the Minimum-Data Principle
 
-1. **Primary provider** — the configured first-choice provider for the interface.
-2. **Fallback provider** — the configured second-choice provider, used when the primary is unavailable.
-3. **Safe fallback** — a minimal local implementation that always works but may produce lower-quality results. For the reasoning interface, this might be a simple template-based generator. For the embedding interface, this might be a hash-based pseudo-embedding that enables approximate search. Safe fallbacks are never desirable but ensure that the system never completely fails.
+**Design principle:** the system transmits only the minimum data an operation requires, and sensitivity-aware routing should steer sensitive data to local providers where configured.
 
-The degradation strategy is explicitly configured rather than implicit. The system administrator defines the priority chain for each interface, and the Provider Abstraction Layer enforces it. This explicit configuration ensures that degradation behavior is predictable, testable, and auditable — critical requirements for an educational platform where unexpected failures during exam simulations or review sessions could undermine student trust.
+Current data-flow reality (verified):
 
-### 9.3 Data Flow Considerations
+- **Cloud OCR:** single-page PDF bytes are transmitted to the Gemini API per OCR request.
+- **LLM usage (planned path):** once the LiteLLM reasoning adapter is wired, prompts and retrieved context chunks — not whole documents or histories — are the intended payload; LiteLLM routes them to the configured OpenAI models.
+- **Embeddings and vectors:** BGE-M3 runs in-process; vectors stay in the project's PostgreSQL database.
+- **Authentication:** credentials and identity data are held by the self-hosted Keycloak (ADR-0006), not the application database.
 
-The choice between local and cloud providers affects data flow in ways that the architecture must address explicitly. When a cloud reasoning provider is used, the student's prompt and retrieved context passages are transmitted to the cloud API. When a cloud embedding provider is used, the text chunks from the student's documents are transmitted for embedding generation. When a cloud OCR provider is used, the document images are transmitted for text extraction.
-
-The architecture addresses these data flow implications through two mechanisms. First, a **data sensitivity classifier** tags each piece of data with a sensitivity level (public, personal, sensitive) based on its source and content. When a cloud provider is configured for an interface that will process sensitive data, the system warns the user and offers to route the request to a local provider instead, even if the local provider is slower or less accurate. Second, a **minimum data principle** ensures that only the minimum necessary data is transmitted to cloud providers — for example, when using a cloud reasoning provider for question generation, the system sends only the relevant context chunks rather than the entire document corpus.
+A data-sensitivity classifier (tagging data public/personal/sensitive and warning on cloud routing) is **design intent, not implemented**.
 
 ---
 
 ## 10. AI Model Selection Strategy
 
-### 10.1 Model Categories
+### 10.1 Model Categories and Current Choices
 
-OpenLearn AI does not hard-code specific AI models into the architecture. Instead, it defines recommended model categories with selection criteria, and the Provider Abstraction Layer allows any model that satisfies the criteria for its category to be used. This approach ensures that the system remains current as models evolve — when a new LLM demonstrates superior Arabic language performance, it can be adopted by changing the configuration, not by modifying the code.
+The architecture does not hard-code models; categories have selection criteria, and concrete models are configuration (§8.2). The table reflects verified current choices and their governed status:
 
-| Category | Purpose | Selection Criteria | Key Alternatives |
-|----------|---------|--------------------|-----------------|
-| **Reasoning Models** | Text generation, concept extraction, question generation, summary generation | Language quality (especially Arabic/English), JSON structured output support, instruction-following accuracy, context window length, latency, VRAM requirements | Local: Qwen 2.5 (7B/14B), Llama 3.1 (8B), Gemma 2 (9B), Phi-3.5 Mini. Cloud: GPT-4o, Claude 3.5 Sonnet, Groq (Llama/Qwen). |
-| **Embedding Models** | Vector embedding generation for semantic search | Multilingual support (Arabic + English), embedding dimension, retrieval accuracy (MTEB benchmark), batch processing speed | Local: BGE-m3, multilingual-e5-large, sentence-transformers models. Cloud: OpenAI text-embedding-3-large, Cohere embed-v3. |
-| **OCR Models** | Optical character recognition for scanned documents and images | Arabic character accuracy, layout preservation, speed, language detection capability | Local: PaddleOCR, Surya, Tesseract (with Arabic training data). Cloud: Google Vision API, Azure Computer Vision. |
-| **Vision Models** | Image understanding, diagram interpretation, visual content analysis | Multimodal reasoning quality, Arabic text-in-image recognition, diagram structure extraction | Local: LLaVA, Qwen-VL. Cloud: GPT-4o Vision, Claude Vision. |
-| **Speech Models** | Text-to-speech synthesis, speech-to-text transcription | Arabic voice quality, naturalness, speed, accent options | Local: Whisper (transcription), Piper TTS (synthesis). Cloud: OpenAI TTS, Google Speech-to-Text. |
-| **Ranking Models** | Re-ranking retrieved documents for improved relevance | Cross-encoder accuracy, multilingual support, latency | Local: bge-reranker-v2-m3. Cloud: Cohere Rerank. |
+| Category | Current Choice (verified) | Planned / Alternatives | Governing ADR |
+|----------|---------------------------|------------------------|---------------|
+| Reasoning (LLM) | Via **LiteLLM** gateway: `gpt-4o-mini` (default), `gpt-3.5-turbo` (fallback); budget cap; `drop_params` | LiteLLM-backed PAL adapter; local development path via Ollama (e.g., Qwen) per ADR-0005 intent; other providers (Anthropic, GLM) routable through the gateway | ADR-0005 |
+| Embeddings | **BGE-M3** (`BAAI/bge-m3`) via sentence-transformers — dense, 1024-dim, multilingual (Arabic/English), in-process | Changing embedding models later requires an explicit dimension migration (ADR-0009) | ADR-0009 |
+| OCR | **Gemini `gemini-2.5-flash`** via the official google-genai SDK (PDF-page input) | Local engines (PaddleOCR, Surya) remain **benchmark candidates** in `experiments/OCR/ocr-benchmark/` only; a winning engine would be reimplemented in the backend per ADR-0003 | ADR-0003 |
+| Vector store | **PostgreSQL + pgvector** — `vector_records` table, `VECTOR(1024)`, cosine similarity | Qdrant/ChromaDB only if measured evidence demands a dedicated store | ADR-0004 |
+| Ranking / reranking | Interface defined; no provider | BGE reranker (or equivalent cross-encoder) | ADR-0009 (deferred) |
+| Speech / Vision | None | Future modalities (interfaces to be added when first needed) | §29 |
 
-### 10.2 Selection Decision Framework
+### 10.2 Selection Criteria
 
-When choosing a model for a specific category, the architect evaluates four dimensions:
+Model choices in each category are evaluated on four dimensions:
 
-**Quality:** How well does the model perform on the target task? For reasoning models, this includes Arabic generation quality, instruction following, and structured output accuracy. For embedding models, this includes MTEB benchmark scores and multilingual retrieval performance. Quality is measured through standardized benchmarks and task-specific evaluation sets.
+- **Quality** — task performance with emphasis on Arabic/English multilingual behavior: generation quality and instruction-following for reasoning; retrieval accuracy (e.g., MTEB-class benchmarks) for embeddings; Arabic character accuracy and layout preservation for OCR. Measurement is to follow the ADR-0003 methodology (hand-verified ground truth → metrics → engines). The implemented `backend/app/eval/` package provides the harness mechanism (CLI, evaluator registry, dataset loading) — not yet the completed evaluation framework, and no comprehensive benchmark results exist in the baseline.
+- **Resource requirements** — VRAM/RAM must fit the target deployment profile; local model sizing is evaluated against the deployment-profiles document (§9.1).
+- **Privacy impact** — does the choice transmit data externally? Sensitive-data routing follows §9.3.
+- **Latency** — reasoning latency targets (NFR-1: RAG response < 3 s) and streaming behavior; local inference trades throughput for privacy.
 
-**Resource Requirements:** What hardware does the model require? Local models have VRAM and RAM requirements that must match the target deployment environment. A 7B parameter model requires approximately 6GB VRAM for inference, while a 14B model requires approximately 12GB. The selection must account for the minimum hardware configuration targeted by the deployment mode.
+### 10.3 Current Default Configuration (Verified)
 
-**Privacy Impact:** Does using the model transmit data externally? Cloud models always transmit data, while local models never do. The privacy impact is evaluated against the data sensitivity classifier — sensitive data should not be processed by cloud providers unless the student explicitly consents.
+| Component | Current Default (staging baseline) | Notes |
+|-----------|------------------------------------|-------|
+| LLM gateway | **LiteLLM proxy** — `gpt-4o-mini` default, `gpt-3.5-turbo` fallback, master-key auth, $10/30-day budget cap | ADR-0005; `infra/litellm-config.yaml` |
+| PAL reasoning provider | **Mock** (deterministic) | LiteLLM-backed adapter **planned** |
+| Embeddings | **BGE-M3** (sentence-transformers), 1024-dim dense | Mock provider with configurable dimension for tests |
+| OCR | **Gemini** `gemini-2.5-flash` (google-genai SDK) | Key via `GEMINI_API_KEY`; model via `ai_ocr_model` |
+| Vector DB | **PostgreSQL + pgvector** — `vector_records`, `VECTOR(1024)`, cosine | Session-backed provider; ADR-0004 |
+| Ranking | None (interface only) | Deferred — ADR-0009 |
+| Chunking (pipeline default) | Custom structure-aware chunker — `chunk_size=1200`, `chunk_overlap=150` characters | Application-level config (`chunk_size`/`chunk_overlap`) |
 
-**Latency:** How quickly does the model respond? For reasoning models, local inference on consumer hardware typically produces 5-20 tokens per second, while cloud APIs produce 50-100+ tokens per second. For embedding models, local generation is typically faster per-query but slower for batch processing. Latency requirements are defined by the non-functional requirements (NFR-1: RAG response under 3 seconds).
-
-### 10.3 Recommended Default Configuration
-
-The following configuration represents the recommended defaults for a student with a machine meeting the minimum hardware requirements (16GB RAM, NVIDIA GPU with 8GB+ VRAM). These defaults prioritize local operation for privacy, with cloud options available for quality augmentation.
-
-| Component | Default Provider | Default Model | Rationale |
-|-----------|-----------------|---------------|-----------|
-| Reasoning | Ollama (local) | Qwen 2.5 (7B) | Excellent Arabic quality, reasonable size, supports JSON mode, freely available via Ollama |
-| Embedding | Sentence Transformers (local) | BAAI/bge-m3 | Strong multilingual performance, supports Arabic, 1024-dim vectors, open-source |
-| OCR | PaddleOCR (local) | PaddleOCR v4 | Superior Arabic OCR quality, open-source, supports mixed Arabic-English text |
-| Vector DB | ChromaDB (local) | ChromaDB | Lightweight, embedded mode, no external dependencies, open-source |
-| Ranking | Sentence Transformers (local) | BAAI/bge-reranker-v2-m3 | Matches embedding model, open-source, good cross-encoder performance |
-| Speech (TTS) | Piper (local) | Piper Arabic voice | Lightweight, local, adequate quality |
-| Speech (STT) | Whisper (local) | Whisper medium | Good Arabic transcription, local, open-source |
-
-These defaults are not hard-coded — they are configuration presets that the user can override. The architecture makes no assumptions about which specific models are available, and all model references in the codebase go through the Provider Abstraction Layer rather than directly importing model-specific libraries.
+**Superseded defaults removed.** The v4.0 defaults — Ollama + Qwen 2.5 reasoning, PaddleOCR, ChromaDB vector store — are **no longer accurate** and are superseded by the implementation and by ADR-0004/ADR-0005/ADR-0009. ChromaDB and Ollama remain *possible future options* (a dedicated vector store if evidence demands; a local LLM path per ADR-0005's development intent), but neither is deployed. All defaults above are configuration presets (`settings.ai_*` knobs) and can be changed without code modifications.
 
 ---
 
@@ -464,138 +489,193 @@ These defaults are not hard-coded — they are configuration presets that the us
 
 ## 11. Document Processing Pipeline
 
-### 11.1 Pipeline Overview
+The Document Processing Pipeline is the first layer of the system — it transforms raw educational content into structured, chunked text with provenance, preparing it for embedding and downstream knowledge processing. It is the foundation upon which all subsequent layers operate: without properly extracted, segmented, and traceable text, the Knowledge Base cannot generate meaningful embeddings, the Knowledge Graph cannot extract coherent concepts, and the Student Knowledge Model cannot track mastery of identifiable learning objectives.
 
-The Document Processing Pipeline is the first layer of the system — it transforms raw educational content (PDFs, DOCX files, PPTX presentations, images, plain text) into structured, searchable, and analytically useful chunks of text with associated metadata. This pipeline is the foundation upon which all subsequent layers operate: without properly extracted, segmented, and annotated text, the Knowledge Base cannot generate meaningful embeddings, the Knowledge Graph cannot extract coherent concepts, and the Student Knowledge Model cannot track mastery of identifiable learning objectives.
+**Status summary.** The ingestion and chunking core is implemented; the automated workflow that connects an uploaded material to stored vectors is not wired yet. Per ADR-0009 the target flow is Docling extraction → targeted OCR (only pages with insufficient text) → canonical document → structure-aware chunks → batch embeddings → PostgreSQL + pgvector. Of these stages, extraction, chunking, the OCR/embedding/vector-store providers, and the upload-registration entry point exist as verified modules; the targeted-OCR orchestration loop, the automated batch-embedding step, and the worker tasks that would chain them are planned.
 
-The pipeline is designed as a sequential process with parallel branches where computationally independent steps can execute concurrently. The overall flow proceeds through six stages: file upload and validation, text extraction, OCR processing, semantic chunking, metadata enrichment, and storage. Each stage is implemented as an independent service module that communicates through the Provider Abstraction Layer, ensuring that the specific extraction engine, OCR engine, and storage backend can all be configured independently.
+### 11.1 Current Implemented Pipeline (Verified)
 
-### 11.2 Sequence Diagram — PDF Upload Flow
+| Stage | Status | Implementation (staging baseline) |
+|-------|--------|-----------------------------------|
+| Upload & registration | **Implemented** | Course-scoped presigned upload URL against S3-compatible storage; server-generated object keys; `materials` row created with status `pending`. There is deliberately no status state machine yet — the status vocabulary is owned by the future processing phase. |
+| Text extraction | **Implemented** (service module) | `backend/app/services/ingestion.py`: Docling 2.127.0 conversion → application-level `CanonicalDocument`; deterministic `document_id`; per-page text with page-size metadata; source metadata (filename, mimetype, binary hash, URI); conversion status preserved, including `PARTIAL_SUCCESS` with per-error details (§11.3). |
+| Targeted OCR | **Provider implemented; orchestration planned** | `GeminiOCRProvider` (`gemini-2.5-flash`, official google-genai SDK): local PDF path → validated bytes → Gemini request → `OCRResult`; batch extraction is sequential (§11.5). The per-page triggering loop is ADR-0009 design; the application-side orchestration service is not demonstrated in the current baseline. |
+| Structure-aware chunking | **Implemented** | `backend/app/documents/chunking.py`: deterministic, dependency-free chunker (§11.4). |
+| Embedding | **Provider implemented; automated step planned** | BGE-M3 provider (1024-dim, sentence-transformers) constructible through the PAL factory; the automated chunk → embedding → storage wiring is planned. |
+| Vector persistence | **Provider + table implemented; write path planned** | PostgreSQL + pgvector `vector_records` table (§12.1) with a session-backed PAL provider; automated ingestion-time writes are planned. |
+| Worker execution | **Infrastructure implemented; tasks planned** | Celery worker/beat + Flower are deployed, but no material-processing tasks are registered in the baseline. |
+| Metadata enrichment | **Planned** | §11.6. |
+| KG extraction / RAG | **Planned** | §13, §12.2. |
+
+### 11.2 Implemented Flow (As-Is)
 
 ```mermaid
-sequenceDiagram
-    participant Student
-    participant Frontend
-    participant API
-    participant Worker as Celery Worker
-    participant Extractor as Text Extractor
-    participant OCR as OCR Engine (PAL)
-    participant Chunker as Semantic Chunker
-    participant Embedder as Embedding Service (PAL)
-    participant VDB as Vector DB (PAL)
-    participant KG as KG Builder (PAL)
-
-    Student->>Frontend: Upload PDF
-    Frontend->>API: POST /materials/upload
-    API->>API: Save file to MinIO/Local + material_id
-    API-->>Frontend: 202 Accepted (job_id)
-    API->>Worker: enqueue(material_id)
-    Worker->>Extractor: Extract text (PyMuPDF)
-    alt Text not extractable (scanned pages)
-        Worker->>OCR: OCR on scanned pages
-        OCR-->>Worker: Extracted text
-    else Text extractable
-        Extractor-->>Worker: Raw text
-    end
-    Worker->>Chunker: Semantic Chunking (~500 words avg)
-    Chunker-->>Worker: chunks[]
-    par Parallel processing
-        Worker->>Embedder: Generate embeddings
-        Embedder-->>Worker: vectors[]
-    and
-        Worker->>KG: Extract concepts + relations
-        KG-->>Worker: triples[]
-    end
-    Worker->>VDB: Store(chunks, vectors, metadata)
-    Worker->>API: Update status=ready
-    API-->>Frontend: WebSocket push "Material ready"
+flowchart LR
+    UP["Course material upload<br/>presigned URL (S3-compatible)"] --> REG["Material row<br/>status = pending"]
+    DOC["Local document file"] --> ING["ingestion.py<br/>Docling to CanonicalDocument"]
+    ING --> CHK["chunking.py<br/>chunk_id = document_id:seq"]
+    CHK -.->|"wiring planned"| EMB["BGE-M3 embeddings<br/>1024-dim"]
+    EMB -.->|"wiring planned"| PGV[("vector_records (pgvector)")]
+    DOC -.->|"targeted OCR per ADR-0009<br/>orchestration planned"| GEM["GeminiOCRProvider<br/>PDF page bytes to OCRResult"]
 ```
 
-### 11.3 Text Extraction
+Solid edges are verified implemented paths; dotted edges are planned wiring. The enabled input formats (verified against the installed Docling environment and the ingestion service's explicit allow-list) are **PDF, DOCX, HTML, Markdown, and images** (PNG, JPG/JPEG, TIFF, BMP, GIF). Docling also recognizes DOC and MHTML, but the ingestion service rejects them ("supported by Docling but not enabled for ingestion at this step") rather than processing them untested. PPTX and plain text — listed as supported in v4.0 — are **not** part of the enabled format set.
 
-Text extraction is format-specific and implemented through dedicated libraries for each supported format. PDF files use PyMuPDF (fitz) for native text extraction, which preserves page structure, font information, and positional metadata. DOCX files use python-docx to extract paragraph-level text with heading hierarchy. PPTX files use python-pptx to extract slide content with speaker notes. Plain text files are read directly with encoding detection.
+### 11.3 Text Extraction and the Canonical Document (Implemented)
 
-The extraction process produces raw text per page or per section, along with positional metadata (page number, section title, paragraph index) that enables the chunking stage to produce semantically coherent segments rather than arbitrarily splitting text at character boundaries.
+Extraction is delegated to Docling rather than to per-format libraries; the v4.0 description of PyMuPDF/python-docx/python-pptx extraction is superseded. The ingestion service converts a local file and normalizes the result into `CanonicalDocument` — an application-level Pydantic model, deliberately outside the PAL (ADR-0009). It carries: `document_id` (deterministic, derived from the source file stem), `source`, `title` (file stem — never invented), `language` (only when derivable; otherwise `None`), `pages` (each with `page_number`, extracted `text`, and page-size metadata), and source-level `metadata` (filename, mimetype, binary hash, URI, conversion status, page count, and any conversion errors). Page text preserves Docling's reading order, and empty pages are preserved explicitly.
 
-### 11.4 OCR Processing
+Determinism is a design requirement: because `document_id` is derived from the source and chunk IDs are derived from `document_id` plus sequence (§11.4), re-ingesting the same document produces the same identifiers, making ingestion idempotent. Conversion failures raise typed application errors (`DocumentNotFoundError`, `UnsupportedDocumentTypeError`, `DocumentConversionError`); partial conversion success keeps the content and makes the errors visible in metadata.
 
-When native text extraction fails — typically because the PDF contains scanned images rather than embedded text — the pipeline activates OCR processing through the configured OCR provider (via the Provider Abstraction Layer). The OCR stage processes each page image through the OCR engine, which produces text with positional bounding boxes. The OCR results are merged with any native text extraction results, and the combined text is passed to the chunking stage.
+ADR-0009 adds a downstream rule that the RAG service must honor: retrieval never reduces retrieved content to bare strings — `chunk_id`, `document_id`, and page references must survive into the answer's sources.
 
-The choice of OCR provider significantly affects quality, particularly for Arabic text. PaddleOCR has demonstrated substantially better Arabic character recognition than Tesseract with Arabic training data, producing cleaner text with fewer character substitutions and better layout preservation. Surya OCR offers an intermediate option with modern deep learning models that handle mixed-language content effectively. The Provider Abstraction Layer allows the user to configure the OCR engine that best matches their content language and quality requirements without modifying the pipeline code.
+### 11.4 Structure-Aware Chunking (Implemented)
 
-### 11.5 Semantic Chunking
+Chunking is implemented by a custom, dependency-free module rather than a third-party chunking library. The Week 6 plan named Chonkie with an explicit fallback clause; inspection showed its chunkers operate on a single plain string and expose only text/offsets/token_count — page boundaries, section metadata, ID assignment, and overlap bookkeeping would all have remained in this codebase anyway, while pulling in the HuggingFace tokenizers stack across an API-version boundary. The plan's authorized fallback — "simple structure-aware chunking" — is what this module implements. (The v4.0 description of LangChain-based ~500-word chunking is superseded: no LangChain chunker exists in the codebase, and the actual defaults are 1200/150 characters.)
 
-Semantic chunking is the process of dividing extracted text into coherent segments that preserve semantic completeness. The chunking strategy avoids arbitrary character-count splitting, which frequently breaks text mid-sentence, mid-paragraph, or mid-concept. Instead, it uses a hierarchical splitting approach that first divides by structural boundaries (chapters, sections, paragraphs), then by semantic boundaries (topic shifts, concept transitions), and finally by size constraints (chunks that exceed the target size of approximately 500 words are split at the nearest semantic boundary).
+The algorithm is deterministic — no randomness, no clocks, no locale dependence:
 
-The chunker produces a list of Chunk objects, each containing: the text content, the chunk index within the material, the source page range, the source section title, an automatically detected language tag, and a difficulty hint (estimated from vocabulary complexity and sentence structure). These metadata fields are stored alongside the text in the database and used by the Knowledge Base, Knowledge Graph, and Adaptive Engine for filtering, navigation, and difficulty adjustment.
+1. Each page's text is split into paragraphs on blank lines; each paragraph keeps its page number and the page's `section` metadata when present. Paragraphs longer than `chunk_size` are split at sentence boundaries; a sentence still longer than `chunk_size` is hard-split at whitespace. Atomic pieces therefore always satisfy `len ≤ chunk_size`.
+2. Pieces are packed greedily into chunks of at most `chunk_size` characters, deliberately ignoring page boundaries so obvious structure stays intact; up to `chunk_overlap` characters worth of trailing pieces of the previous chunk are carried into the next chunk when they fit.
+3. Each chunk records: `chunk_id` (`{document_id}:{seq}`, zero-based, deterministic), `document_id`, `text`, `pages` (sorted unique page numbers of its pieces), `section` (from the first contributing piece that has one), `language` (the document language — never invented per chunk), and `metadata` (`char_count`, `page_count`).
 
-### 11.6 Metadata Enrichment
+Sizing is configuration, not code: `chunk_document()` accepts `chunk_size`/`chunk_overlap` explicitly or falls back to the application settings (1200 / 150 characters in the current configuration), and validates `1 ≤ chunk_size` and `0 ≤ chunk_overlap < chunk_size` (`ValueError` otherwise). Empty or whitespace-only pages produce no chunks, and a document with no usable text yields an empty list — no meaningless empty chunks are created.
 
-After chunking, each chunk is enriched with additional metadata that supports downstream processing. Language detection identifies whether the chunk contains primarily Arabic, English, or mixed content, enabling the embedding provider to select appropriate models and the generation provider to match output language. Difficulty estimation uses vocabulary frequency analysis and sentence complexity metrics to assign a preliminary difficulty level, which is later refined by the Knowledge Graph and Student Knowledge Model. Content type classification identifies whether the chunk contains definitions, explanations, examples, proofs, or problem descriptions, enabling the generation service to produce appropriate question types for each content category.
+### 11.5 OCR Processing (Provider Implemented; Orchestration Planned)
+
+Two layers must be distinguished. The **OCR provider** is implemented: `GeminiOCRProvider` implements the PAL `OCRInterface` using the official google-genai SDK (explicitly not the deprecated google-generativeai package; no Files API usage). Its contract is deliberately narrow — local PDF path → bytes (validated `%PDF-` header) → Gemini request → `OCRResult` — and it knows nothing about documents, pages, quality thresholds, or fallback orchestration; the model comes from configuration (`ai_ocr_model`, currently `gemini-2.5-flash`) and the key from `GEMINI_API_KEY`. Batch extraction is a sequential loop over single-file requests. Each request transmits one PDF page to the Gemini API — see §9.3 for the data-flow implication. The backend also declares pypdfium2 for targeted-OCR source extraction (page-level PDF handling), consistent with this single-page contract.
+
+The **targeted-OCR policy** is ADR-0009 design: OCR is a fallback, never the default path. Per page, OCR runs only when the extracted text is insufficient (`len(text) < OCR_MIN_TEXT_CHARS`, configurable); OCR text replaces the extracted text, OCR region metadata is attached when available, Docling's document structure is preserved, and OCR coordinates are never realigned. A known limitation is accepted for now: a garbage but non-empty text layer passes the threshold, and there is no OCR-quality detection system. The application service that would execute this loop (`services/ocr.py` per ADR-0009) is not demonstrated in the current baseline — the trigger loop is planned wiring even though the extraction side (which runs with Docling's internal OCR disabled, `do_ocr=False`) and the provider side both exist.
+
+Provider selection, corrected: the shipped OCR provider is **Gemini**. PaddleOCR and Surya are **benchmark candidates** inside `experiments/OCR/ocr-benchmark/` only — per ADR-0003 they are never imported by product code, and a winning local engine would be reimplemented in the backend after the benchmark process (ground truth → metrics → engines) selects it. The v4.0 claim that PaddleOCR was the configured local OCR default is superseded.
+
+### 11.6 Metadata Enrichment (Planned)
+
+The implemented chunk metadata today is structural: `section`, page provenance, character count, page count, and document-level language. The richer enrichment described in v4.0 — automatic language detection per chunk, difficulty estimation from vocabulary frequency and sentence complexity, and content-type classification (definitions, explanations, examples, proofs, problems) — is **planned design**, not implemented. These remain valuable targets: language tags would let generation match output language; difficulty hints would seed adaptive difficulty calibration (§16) and be refined by the Knowledge Graph and Student Knowledge Model; content-type labels would enable question types appropriate to each content category. They should be built on top of the deterministic chunk model without breaking its determinism guarantees.
+
+### 11.7 Target Pipeline (Planned)
+
+The full pipeline chains the implemented modules into the ADR-0009 flow:
+
+```mermaid
+flowchart TD
+    UP["Upload (presigned URL)"] --> WK["Worker task (planned)"]
+    WK --> EXT["Docling extraction"]
+    EXT --> TOR["Targeted OCR:<br/>pages with insufficient text"]
+    TOR --> CD["CanonicalDocument"]
+    CD --> CHK["Structure-aware chunking"]
+    CHK --> EMB["Batch embeddings (BGE-M3)"]
+    EMB --> VDB[("pgvector")]
+    VDB --> RET["Retrieval (top_k, filters)"]
+    RET --> CTX["Context construction"]
+    CTX --> RSN["Reasoning via PAL"]
+    RSN --> ANS["Answer + sources"]
+    ANS -.->|"WebSocket events: retrieval_started, sources_found,<br/>reasoning_started, token, done, error"| CHAT["Chat transport (planned)"]
+```
+
+The worker task, the automated chaining, and everything from retrieval onward are planned (ADR-0009). WebSocket is an application transport — PAL knows nothing about it — and the event list above is the complete ADR-0009 protocol. Knowledge-graph extraction (§13) is a parallel planned branch, not part of the v1 pipeline.
 
 ---
 
 ## 12. Knowledge Pipeline
 
-### 12.1 RAG Architecture
+**Status summary.** The vector infrastructure — embedding provider, vector store, storage schema, and the PAL contracts that abstract them — is implemented. The retrieval and generation pipeline that turns stored vectors into citation-grounded answers is planned: the pipeline shape and service ownership are defined in ADR-0009, and no retrieval API, RAG service, or chat endpoint exists in the baseline.
 
-The Knowledge Pipeline implements a Retrieval-Augmented Generation (RAG) architecture that combines semantic search, keyword search, optional re-ranking, and LLM-grounded generation to produce accurate, citation-backed responses to student queries. The pipeline is designed to minimize hallucination — a critical concern in educational contexts where factual accuracy is paramount — through three mechanisms: citation grounding (every generated response includes references to specific source chunks), structured output enforcement (the LLM is instructed to produce responses in a structured format with explicit claim-source mappings), and confidence scoring (the retrieval stage estimates how well the retrieved context covers the query, and low-confidence retrievals trigger a clarification prompt rather than a potentially inaccurate answer).
+### 12.1 Current Vector Infrastructure (Implemented)
 
-### 12.2 Retrieval Process
+**Embeddings.** The embedding provider is BGE-M3 (`BAAI/bge-m3`) via sentence-transformers — dense, 1024-dimensional, multilingual (Arabic/English), running in-process. `EmbeddingResult` enforces `len(vector) == dimension` at the PAL boundary, and the mock embedding provider (configurable dimension, default 1024) mirrors the contract for tests and offline development. Per ADR-0009, heavy local models are to be lazy-loaded and instantiated once. Changing the embedding model later is not a drop-in swap: it requires an explicit dimension migration (ADR-0009), and the storage layer's dimension is intentionally fixed (1024) rather than read from embedding settings, so configuration drift surfaces as an error instead of silent truncation.
 
-The retrieval process follows a four-stage pipeline: query embedding, hybrid search, re-ranking, and context assembly.
+**Vector storage.** PostgreSQL + pgvector is the vector-store decision (ADR-0004), implemented as the `vector_records` table: a text primary key (the vector/chunk identifier), an `embedding` column of type `VECTOR(1024)`, nullable `content`, a JSONB `metadata` column carrying document/chunk provenance (`document_id`, `chunk_id`, page references — mirroring the PAL `VectorRecord` DTO contract), and timestamps. Cosine similarity is the similarity operator. The PAL `VectorDBInterface` contract is `upsert`, `search(vector, top_k, filters)`, `get`, and `delete` — including deleting all vectors of a document (delete-by-document/filter, not only by ID). `top_k` is configurable (default ≈ 5); no fixed range is frozen into the architecture. The postgres provider is session-backed (callers pass their request-scoped `AsyncSession`); a mock provider covers tests.
 
-**Query Embedding:** The student's question is embedded using the configured embedding provider, producing a vector that captures the semantic intent of the query. The embedding dimension and model must match those used for document chunk embedding — mismatches produce meaningless similarity scores. The Provider Abstraction Layer ensures that the same embedding configuration is used for both indexing and querying.
+**Search today.** Vector similarity search with filters exists as a PAL contract and a pgvector implementation. Keyword/BM25 search, re-ranking, query expansion, and retrieval APIs do not exist.
 
-**Hybrid Search:** The query vector is used for semantic search in the configured vector database, while the raw query text is used for keyword search (BM25) against the chunk text. The results from both searches are merged using a configurable weighting factor (default: 70% semantic, 30% keyword). Semantic search captures conceptual similarity — a query about "logistic regression prerequisites" retrieves chunks about "linear regression" even if the exact phrase "logistic regression prerequisites" never appears. Keyword search captures exact terminology — a query about "Bayes' theorem" retrieves chunks that contain the exact term, which semantic search might miss if the embedding model under-represents mathematical notation.
+### 12.2 Target RAG Pipeline (Planned)
 
-**Re-ranking:** The merged results are optionally re-ranked using the configured ranking provider, which applies a cross-encoder model to jointly process the query and each candidate chunk, producing a relevance score that is more accurate than the bi-encoder similarity score used in the initial search. Re-ranking is computationally expensive (each query-chunk pair requires a separate model inference), so it is applied only to the top-K candidates (default K=20) from the hybrid search stage.
+The conceptual pipeline remains:
 
-**Context Assembly:** The re-ranked results are assembled into a context window that respects the LLM's maximum context length. If the total retrieved text exceeds the context window, the assembly process truncates the lowest-ranked chunks while preserving a minimum number of chunks (default: 3) to ensure that the generation always has some grounding material.
+```text
+document
+→ extraction                   (implemented module)
+→ chunking                     (implemented module)
+→ embedding                    (implemented provider; automated step planned)
+→ vector storage               (implemented store; automated write planned)
+→ retrieval                    (planned — RAG service)
+→ reranking / context assembly (planned — ranking deferred per ADR-0009)
+→ reasoning                    (planned — LiteLLM-backed PAL adapter)
+→ grounded answer              (planned)
+```
 
-### 12.3 Provider Abstraction in the Knowledge Pipeline
+The RAG service owns query embedding → search → context construction → reasoning call → source preservation (ADR-0009). Its educational rationale is unchanged and remains the design's center of gravity: minimize hallucination in educational contexts, where factual accuracy is paramount. Three mechanisms are specified: **citation grounding** (every generated response includes references to specific source chunks), **structured output enforcement** (the LLM produces responses in a structured format with explicit claim-source mappings), and **confidence scoring** (the retrieval stage estimates how well the retrieved context covers the query; low-confidence retrievals trigger a clarification prompt rather than a potentially inaccurate answer). None of these is implemented today; all are design requirements for the planned service.
 
-The Knowledge Pipeline is one of the primary beneficiaries of the Provider Abstraction Layer. The embedding stage uses the Embedding Interface (local Sentence Transformers or cloud OpenAI/Cohere), the vector storage stage uses the Vector DB Interface (local ChromaDB/FAISS or cloud Pinecone/Weaviate), and the ranking stage uses the Ranking Interface (local BGE reranker or cloud Cohere Rerank). The student can freely combine these providers based on their requirements — a configuration with local embeddings, local vector DB, and cloud ranking is perfectly valid, as is any other combination.
+### 12.3 Retrieval Process Design (Planned)
+
+The four-stage retrieval design from v4.0 is preserved as the target. The v1 ADR-0009 contract is narrower — pgvector similarity search with filters — so the later stages are design extensions to be introduced after the v1 loop works.
+
+**Query embedding (planned).** The student's question is embedded with the same configured embedding provider used for document chunks; dimension and model must match, because mismatches produce meaningless similarity scores. The PAL makes one shared embedding configuration the natural path for both indexing and querying.
+
+**Hybrid search (design extension).** The v4.0 design combines semantic search (the query vector against stored embeddings) with keyword search (BM25 over chunk text), merged with a configurable weighting (default: 70% semantic / 30% keyword). The rationale stands: semantic search captures conceptual similarity — a query about "logistic regression prerequisites" retrieves chunks about "linear regression" even when the exact phrase never appears; keyword search captures exact terminology — a query about "Bayes' theorem" retrieves chunks containing the exact term, which embeddings may under-represent for mathematical notation. The current pgvector contract implements the semantic half; the keyword stage and merge weighting are not implemented and are not part of the ADR-0009 v1 contract.
+
+**Re-ranking (planned; deferred).** The `RankingInterface` exists — `rank(query, candidates, top_k)` — but no provider is bound. A cross-encoder re-ranker (BGE reranker or equivalent) remains the candidate: jointly processing the query and each candidate chunk yields a more accurate relevance score than the bi-encoder similarity used in the initial search, at the cost of one model inference per query-chunk pair — hence applying it only to the top-K candidates (design default K = 20) from the first stage. ADR-0009 explicitly defers ranking/reranking to a later roadmap phase.
+
+**Context assembly (planned).** Re-ranked results are assembled into a context window that respects the LLM's maximum context length, truncating the lowest-ranked chunks while preserving a minimum number of chunks (design default: 3) so generation always has grounding material. Whatever assembly does, ADR-0009's rule applies: `chunk_id`, `document_id`, and page references must survive into the answer's sources.
+
+### 12.4 Provider Abstraction in the Knowledge Pipeline
+
+The knowledge pipeline is a primary beneficiary of the PAL. Implemented today: the embedding stage binds to `EmbeddingInterface` (BGE-M3 local; cloud alternatives remain an optional configuration), and vector storage binds to `VectorDBInterface` (PostgreSQL + pgvector; Qdrant/ChromaDB only if measured evidence demands a dedicated store — ADR-0004). Planned bindings: retrieval and context assembly live in application services (not PAL — ADR-0009 assigns them to the application), reasoning through the LiteLLM-backed adapter, and ranking once a provider is selected. Local/cloud combination freedom — e.g., local embeddings with a cloud reranker — remains a configuration-level property of the architecture, not a current deployment fact.
+
+### 12.5 Automatic Knowledge-Base Population (Planned)
+
+Today, uploaded materials are registered as `pending` and nothing processes them automatically. The planned workflow wires upload → ingestion → chunking → batch embedding → pgvector writes (§11.7), turning the implemented modules into an automatically populated knowledge base. Until that wiring lands, there is no demonstrated production path from an uploaded material to stored vectors, and no retrieval endpoint exists to consume them.
 
 ---
 
 ## 13. Knowledge Graph Architecture
 
-### 13.1 Concept and Relation Extraction
+**Status: planned capability.** No component of the Knowledge Graph exists in the baseline: no graph store is deployed (staging runs PostgreSQL + pgvector only, ADR-0004), the PAL has no graph-store interface (the interface set is the six capability files of §8.1), and no concept-extraction service exists. This section is preserved as target architecture and design rationale — the KG vision is a load-bearing part of the eight-layer loop (§2.3), not an optional extra.
 
-The Knowledge Graph is constructed by extracting concepts and their relationships from the chunked text produced by the Document Processing Pipeline. Concept extraction uses the configured reasoning provider (via the Reasoning Interface) to identify named concepts, technical terms, and key ideas in the educational material. The extraction process is prompt-driven: each chunk is processed through an LLM prompt that instructs the model to identify concepts as named entities and to classify their relationships into three categories: `is-a` (hierarchical classification, e.g., "Logistic Regression is-a Classification Algorithm"), `prerequisite-of` (learning dependency, e.g., "Linear Algebra prerequisite-of Principal Component Analysis"), and `part-of` (structural composition, e.g., "Backpropagation part-of Neural Network Training").
+### 13.1 Purpose and Rationale (Design)
 
-The extraction quality depends heavily on the reasoning provider's instruction-following capability and structured output support. LLMs that support JSON mode produce more consistently structured triples, reducing post-processing errors. Few-shot prompting with example triples from the same domain improves extraction accuracy by demonstrating the expected format and granularity.
+The Knowledge Graph gives the system a structural map of the subject: which concepts exist, how they relate, and in what order they can meaningfully be learned. Three downstream capabilities depend on it. First, **study ordering** that follows structural dependencies rather than page order (§3, problem 1). Second, **prerequisite-aware retrieval** that expands queries to foundational material when prerequisite mastery is weak (§13.4). Third, **explainable adaptation**: mastery states can annotate graph nodes, and recommendations can cite the prerequisite chain that motivated them — the "enriches retrieval" and "weights nodes" feedback edges of the eight-layer loop.
 
-### 13.2 Storage Architecture
+### 13.2 Concept and Relation Extraction (Planned)
 
-The Knowledge Graph storage is configurable through the Provider Abstraction Layer, supporting three storage backends with different tradeoffs:
+Concept and relation extraction will use the configured reasoning provider through the PAL `ReasoningInterface` to identify named concepts, technical terms, and key ideas in chunked text. The extraction is prompt-driven: each chunk is processed with a prompt that instructs the model to identify concepts and classify their relationships into `is-a` (hierarchical classification — "Logistic Regression is-a Classification Algorithm"), `prerequisite-of` (learning dependency — "Linear Algebra prerequisite-of Principal Component Analysis"), and `part-of` (structural composition — "Backpropagation part-of Neural Network Training").
 
-| Backend | Type | Strengths | Weaknesses | Recommended For |
-|---------|------|-----------|------------|-----------------|
-| Neo4j | Dedicated graph database | Native Cypher queries, efficient graph traversal, visual exploration, scalable to large graphs | Requires separate server, higher memory overhead, learning curve for Cypher | Production deployments with complex graphs and interactive visualization |
-| NetworkX | In-memory Python library | Zero external dependencies, fast for small graphs, easy programmatic access, Python-native | Not persistent (must serialize), limited scalability, no native visualization | Development, testing, small-scale deployments, offline environments |
-| PostgreSQL JSONB | Relational database with graph storage | No additional infrastructure, persistent, leverages existing PostgreSQL, query via SQL with JSON functions | Less efficient for complex graph traversals, no native visualization, manual query construction | Minimal deployments, resource-constrained environments, when Neo4j overhead is unacceptable |
+Extraction quality will depend heavily on the reasoning provider's instruction-following capability and structured output support: LLMs that support JSON mode produce more consistently structured triples, reducing post-processing errors, and few-shot prompting with example triples from the same domain improves extraction accuracy by demonstrating the expected format and granularity. Because the LiteLLM-backed reasoning adapter is itself planned (§8.1, §10.1), extraction necessarily follows it in the roadmap.
 
-The default configuration uses NetworkX for development and testing, with Neo4j recommended for production deployments that require interactive graph visualization and complex prerequisite-chain queries. The Provider Abstraction Layer allows the user to switch between these backends through configuration without modifying the Knowledge Graph service code.
+### 13.3 Storage Architecture (Planned — Corrected)
 
-### 13.3 Knowledge Graph Enrichment of RAG
+The v4.0 text presented three PAL-configurable graph backends — Neo4j, NetworkX, and PostgreSQL JSONB — with Neo4j "recommended for production". **Corrected status:** no graph backend exists; the PAL has no graph-store interface; and the only deployed datastore is PostgreSQL + pgvector (ADR-0004). Introducing a graph store would be a future architecture decision — most naturally a new PAL capability interface plus a new ADR — not a configuration switch in the current codebase. No Neo4j service is deployed, and none is planned for the current milestone.
 
-The Knowledge Graph enriches RAG retrieval through prerequisite-aware query expansion. When a student asks about "Principal Component Analysis," the retrieval service first queries the Knowledge Graph for all concepts that are prerequisites of PCA (Linear Algebra, Variance, Eigenvalues, Covariance). It then expands the semantic search to include chunks related to these prerequisite concepts, ensuring that the retrieved context provides not only direct information about PCA but also foundational knowledge that the student may need if their mastery of prerequisites is weak.
+The option space remains useful design material:
 
-This enrichment is controlled by the Adaptive Learning Engine, which determines whether prerequisite expansion is beneficial based on the student's current mastery profile. If the Student Knowledge Model indicates strong mastery of Linear Algebra and Variance, the Adaptive Engine instructs the retrieval service to skip prerequisite expansion and focus only on PCA-related chunks. If the Student Knowledge Model indicates weak mastery of prerequisites, the Adaptive Engine instructs the retrieval service to expand the query broadly, ensuring comprehensive foundational context.
+| Option | Type | Strengths | Trade-offs | Fit |
+|--------|------|-----------|------------|-----|
+| PostgreSQL (relational/JSONB edges) | Reuse of the existing database | No new infrastructure; persistent; transactional with application data; adequate for moderate graph queries | Less ergonomic traversal; no native graph visualization | Minimal deployments; lowest-friction first implementation |
+| Neo4j (or a similar dedicated graph DB) | Dedicated graph database | Native graph queries and traversal; visualization ecosystem; scales to large graphs | Separate service to operate; higher memory overhead; requires a new PAL interface and an ADR | Production deployments with complex graphs and interactive visualization |
+| NetworkX (in-memory) | Python library | Zero external dependencies; fast for small graphs; Python-native | Not persistent (must serialize); limited scalability; no concurrent access | Development, testing, offline experimentation |
+
+Read against the current baseline, the PostgreSQL option aligns with ADR-0004's one-database philosophy and is the natural starting point if prerequisite data is needed before a dedicated store is justified; a dedicated graph DB remains a deliberate, evidence-driven future decision — mirroring how the vector-store decision was made (deferral → ADR-0004).
+
+### 13.4 Knowledge Graph Enrichment of RAG (Planned)
+
+The Knowledge Graph is designed to enrich RAG retrieval through prerequisite-aware query expansion. When a student asks about "Principal Component Analysis," the retrieval service would first query the graph for all prerequisites of PCA (Linear Algebra, Variance, Eigenvalues, Covariance), then expand the semantic search to include chunks related to those prerequisite concepts — ensuring that the retrieved context provides not only direct information about PCA but also foundational knowledge the student may need when prerequisite mastery is weak.
+
+This enrichment is to be controlled by the Adaptive Learning Engine: if the Student Knowledge Model indicates strong mastery of Linear Algebra and Variance, the engine instructs retrieval to skip prerequisite expansion and focus on PCA-related chunks; if prerequisite mastery is weak, it instructs retrieval to expand the query broadly for comprehensive foundational context. Both the KG and the adaptive engine are planned (§16), so this control loop is a design of the target system, not current behavior.
 
 ---
 
 ## 14. Student Knowledge Model
 
-### 14.1 Purpose and Philosophy
+**Status: conceptual model and planned implementation.** The design below — mastery estimation, the evolution strategy, BKT and IRT — is preserved in full as research-grounded architecture. In the verified baseline, no SKM data model exists (the database contains `users`, `profiles`, `courses`, `enrollments`, `materials`, and `vector_records` only), no mastery estimates are computed or stored, and no learning interactions are captured. What exists on the student side today is identity and declared profile data (§14.5, §15.1).
 
-The Student Knowledge Model (SKM) is the cognitive component of the system — it tracks what the student knows, how well they know it, and where their understanding is incomplete. The SKM answers the question "What does the student understand?" which is distinct from the Customized Student Profile's question "Who is the student?" Both questions are necessary for adaptive learning: knowing that a student struggles with a concept is insufficient if you do not also know whether they have the prerequisite knowledge to benefit from remediation, whether they prefer visual explanations, and whether they have 15 minutes or 2 hours available for study.
+### 14.1 Purpose and Philosophy (Design)
 
-The SKM is implemented through an incremental evolution strategy that starts with simple heuristics and progressively incorporates more sophisticated models as data accumulates. This strategy avoids the cold-start problem that afflicts complex models deployed before sufficient student interaction data is available.
+The Student Knowledge Model (SKM) is the cognitive component of the system — it tracks what the student knows, how well they know it, and where their understanding is incomplete. The SKM answers the question "What does the student understand?", which is distinct from the Customized Student Profile's question "Who is the student?" Both are necessary for adaptive learning: knowing that a student struggles with a concept is insufficient if you do not also know whether they have the prerequisite knowledge to benefit from remediation, whether they prefer visual explanations, and whether they have 15 minutes or 2 hours available for study.
 
-### 14.2 Evolution Strategy
+The SKM follows an incremental evolution strategy that starts with simple heuristics and progressively incorporates more sophisticated models as data accumulates. This strategy avoids the cold-start problem that afflicts complex models deployed before sufficient student interaction data is available.
+
+### 14.2 Evolution Strategy (Planned)
 
 | Stage | Formula | When Used | Justification |
 |-------|---------|-----------|---------------|
@@ -603,11 +683,11 @@ The SKM is implemented through an incremental evolution strategy that starts wit
 | v0.5.1 — Weighted Moving Average | `Mastery = weighted_avg(recent_answers, decay=0.9)` | After 10+ interactions per concept | Incorporates recency bias — recent answers are more indicative of current mastery than older answers. More responsive to learning and forgetting. |
 | v0.5.2 — Bayesian Knowledge Tracing | `Mastery = BKT.update(P(L), answer)` | After sufficient data for parameter estimation | Research-grounded model (Corbett & Anderson, 1995) that estimates four knowledge parameters per concept. Provides principled mastery estimation with explicit handling of guess and slip probabilities. |
 
-This evolution strategy ensures that the SKM produces useful mastery estimates from the very first student interaction, rather than requiring hundreds of data points before producing its first recommendation. The initial heuristic is crude but functional, enabling the Adaptive Engine to make preliminary decisions. As the student interacts more, the model upgrades automatically, producing increasingly accurate estimates.
+This evolution strategy ensures that the SKM produces useful mastery estimates from the very first student interaction, rather than requiring hundreds of data points before producing its first recommendation. The initial heuristic is crude but functional, enabling the Adaptive Engine to make preliminary decisions; as the student interacts more, the model upgrades, producing increasingly accurate estimates. This ladder is the planned implementation sequence — none of its stages is built today.
 
-### 14.3 Bayesian Knowledge Tracing (BKT)
+### 14.3 Bayesian Knowledge Tracing (Planned)
 
-Bayesian Knowledge Tracing is the recommended model for the SKM's final stage. BKT models student knowledge as a binary latent variable (the student either knows the concept or does not) that transitions from unknown to known through learning. The model estimates four parameters per concept:
+Bayesian Knowledge Tracing is the target model for the SKM's mature stage. BKT models student knowledge as a binary latent variable (the student either knows the concept or does not) that transitions from unknown to known through learning. The model estimates four parameters per concept:
 
 | Parameter | Symbol | Meaning | Typical Range |
 |-----------|--------|---------|---------------|
@@ -616,43 +696,64 @@ Bayesian Knowledge Tracing is the recommended model for the SKM's final stage. B
 | Guess Probability | P(G) | Probability that the student answers correctly without actually knowing the concept | 0.1–0.25 (for MCQ) |
 | Slip Probability | P(S) | Probability that the student answers incorrectly despite actually knowing the concept | 0.05–0.15 |
 
-BKT updates the mastery estimate after each student interaction using Bayesian inference: if the student answers correctly, the probability of knowledge increases (but accounts for the possibility of a guess). If the student answers incorrectly, the probability of knowledge decreases (but accounts for the possibility of a slip). The resulting mastery estimate is a probability between 0 and 1 that can be thresholded (e.g., mastery > 0.85 indicates the concept is sufficiently learned) to produce binary mastery decisions.
+BKT updates the mastery estimate after each student interaction using Bayesian inference: if the student answers correctly, the probability of knowledge increases (but accounts for the possibility of a guess); if the student answers incorrectly, the probability of knowledge decreases (but accounts for the possibility of a slip). The resulting mastery estimate is a probability between 0 and 1 that can be thresholded (e.g., mastery > 0.85 indicates the concept is sufficiently learned) to produce binary mastery decisions.
 
-The initial knowledge probability P(L0) is set by the Customized Student Profile — a student with advanced background in a domain receives higher P(L0) values for domain concepts, reducing the number of interactions needed to confirm existing knowledge. This integration between CSP and SKM is one of the key feedback loops that makes the system adaptive: the profile informs the model's initial assumptions, and the model's subsequent updates refine the profile's auto-estimated fields (learning speed, overall mastery level).
+The initial knowledge probability P(L0) is to be set by the Customized Student Profile — a student with an advanced background in a domain receives higher P(L0) values for domain concepts, reducing the number of interactions needed to confirm existing knowledge. This integration between CSP and SKM is one of the key feedback loops that makes the system adaptive: the profile informs the model's initial assumptions, and the model's subsequent updates refine the profile's auto-estimated fields (learning speed, overall mastery level). Both directions are planned (§15.4).
 
-### 14.4 Item Response Theory (IRT)
+### 14.4 Item Response Theory (Planned)
 
 Item Response Theory complements BKT by estimating question difficulty rather than student knowledge. IRT models the probability of a correct answer as a function of student ability and question difficulty. The one-parameter logistic model (1PL, also known as the Rasch model) uses only a difficulty parameter per question, while the two-parameter logistic model (2PL) adds a discrimination parameter that captures how sharply the question distinguishes between students of different ability levels.
 
-IRT is particularly valuable for the Adaptive Exam Simulator (CAT), where question selection depends on accurate difficulty estimates. BKT tells the system whether a student knows a concept; IRT tells the system whether a specific question is appropriate for a student at that knowledge level. The combination of BKT (concept-level mastery) and IRT (question-level difficulty) enables the exam simulator to select questions that are neither too easy (uninformative) nor too hard (frustrating), optimizing the information gained per question and minimizing exam duration.
+IRT is particularly valuable for the Adaptive Exam Simulator (CAT), where question selection depends on accurate difficulty estimates. BKT tells the system whether a student knows a concept; IRT tells the system whether a specific question is appropriate for a student at that knowledge level. The combination of BKT (concept-level mastery) and IRT (question-level difficulty) enables the exam simulator to select questions that are neither too easy (uninformative) nor too hard (frustrating), optimizing the information gained per question and minimizing exam duration. Research bases for both models are catalogued in §27.
+
+### 14.5 Currently Implemented Student Data (Verified)
+
+The implemented student-side data model is identity plus declared profile, not cognition. `users` maps a Keycloak identity — the pair `(keycloak_issuer, keycloak_subject)` — to a local application user with just-in-time provisioning and `email_verified` synchronization (ADR-0006); `profiles` stores the six-field subset described in §15.1; realm roles (`student`, `instructor`, `admin`) drive RBAC. No mastery, attempt, response, or review tables exist. When the SKM is built, it will extend this schema (and its migrations) rather than reuse unrelated tables.
 
 ---
 
 ## 15. Customized Student Profile
 
-### 15.1 Profile Fields
+### 15.1 Current Implementation (Verified)
 
-The Customized Student Profile (CSP) captures thirteen fields that represent the "personal" side of the adaptive equation. While the SKM answers "what does the student know?", the CSP answers "who is the student?" — their goals, preferences, constraints, and context. Without the CSP, the system would be able to identify weak concepts but unable to determine the appropriate remediation format, pacing, or scheduling.
+The implemented profile is a deliberate Week-6 subset of the designed CSP, stored in the `profiles` table (one row per user, enforced by a unique constraint):
 
-| # | Field | Type | Collection Method | Used By |
-|---|-------|------|-------------------|---------|
-| 1 | Education Level | Enum | Manual (onboarding) | Learning Path, Exam difficulty, Question Generation |
-| 2 | Major / Field of Study | String | Manual | Learning Path recommendations, Concept prioritization |
-| 3 | University / Institution | String | Manual | Analytics, Community features |
-| 4 | Current Courses | Array | Auto (when creating materials) | Learning Path, Dashboard |
-| 5 | Short-term Goals | Text | Manual + editable | Learning Path, Analytics goal tracking |
-| 6 | Long-term Goals | Text | Manual | Learning Path, Analytics |
-| 7 | Learning Style (VARK) | Enum | Short quiz onboarding | Content format selection, Question Generation format |
-| 8 | Preferred Language | Enum | Manual + auto-detect | All output generation |
-| 9 | Learning Speed | Enum | Auto (from answer timing) | Spaced Repetition scheduling, Exam pacing, Path duration |
-| 10 | Daily Available Minutes | Integer | Manual + periodic update | Spaced Repetition, Learning Path scheduling |
-| 11 | Past Test Results | JSON | Manual / import | SKM initialization, Analytics, Difficulty calibration |
-| 12 | Per-Concept Mastery | Float[0-1] | Auto (from SKM) | Learning Path, Analytics heatmap |
-| 13 | Academic Interests | Array of Tags | Manual + auto-suggest | Learning Path recommendations, Content suggestions |
+| Column | Implemented Type | Notes |
+|--------|------------------|-------|
+| `education_level` | string, nullable | The spec designs this as an enum, but enum members are not yet defined, so Phase 1 stores strings |
+| `major` | string, nullable | Free text |
+| `university` | string, nullable | Free text |
+| `preferred_language` | string, non-null, default `en` | CHECK constraint `preferred_language IN ('en', 'ar')` — the en/ar bilingual focus is enforced at the data level |
+| `learning_style_vark` | string, nullable | Same enum-pending situation as education level |
+| `daily_available_minutes` | integer, nullable | CHECK constraint: NULL, or 1–1440 (physical minutes-per-day ceiling); NULL allowed until onboarding supplies a value |
 
-### 15.2 CSP Integration Points
+Identity and access context (verified): profiles belong to users provisioned just-in-time from Keycloak identities (ADR-0006); API access uses bearer tokens validated by the backend; RBAC comes from realm roles; profile read/update endpoints are exposed through the users router (§6.1). No settings surface, no fields beyond the six, no sensitivity metadata, and no mastery fields exist yet.
 
-The CSP feeds into six system components, each using different subsets of the profile fields to make contextually appropriate decisions:
+### 15.2 The Designed 13-Field Profile (Design)
+
+The full CSP design captures thirteen fields — the "personal" side of the adaptive equation. While the SKM answers "what does the student know?", the CSP answers "who is the student?" — their goals, preferences, constraints, and context. Without it, the system could identify weak concepts but could not choose the appropriate remediation format, pacing, or scheduling. The table preserves the original design and states each field's implementation status:
+
+| # | Field | Type (design) | Collection Method (design) | Used By (design) | Status |
+|---|-------|---------------|----------------------------|------------------|--------|
+| 1 | Education Level | Enum | Manual (onboarding) | Learning Path, Exam difficulty, Question Generation | **Implemented** (as string, pending enum members) |
+| 2 | Major / Field of Study | String | Manual | Learning Path recommendations, Concept prioritization | **Implemented** |
+| 3 | University / Institution | String | Manual | Analytics, Community features | **Implemented** |
+| 4 | Current Courses | Array | Auto (when creating materials) | Learning Path, Dashboard | Planned |
+| 5 | Short-term Goals | Text | Manual + editable | Learning Path, Analytics goal tracking | Planned |
+| 6 | Long-term Goals | Text | Manual | Learning Path, Analytics | Planned |
+| 7 | Learning Style (VARK) | Enum | Short quiz onboarding | Content format selection, Question Generation format | **Implemented** (as string, pending enum members; quiz onboarding itself planned) |
+| 8 | Preferred Language | Enum | Manual + auto-detect | All output generation | **Implemented** (as string with en/ar CHECK; auto-detect planned) |
+| 9 | Learning Speed | Enum | Auto (from answer timing) | Spaced Repetition scheduling, Exam pacing, Path duration | Planned |
+| 10 | Daily Available Minutes | Integer | Manual + periodic update | Spaced Repetition, Learning Path scheduling | **Implemented** |
+| 11 | Past Test Results | JSON | Manual / import | SKM initialization, Analytics, Difficulty calibration | Planned |
+| 12 | Per-Concept Mastery | Float [0–1] | Auto (from SKM) | Learning Path, Analytics heatmap | Planned (depends on the SKM, §14) |
+| 13 | Academic Interests | Array of Tags | Manual + auto-suggest | Learning Path recommendations, Content suggestions | Planned |
+
+The collection methods — "short quiz onboarding", auto-detection, auto-suggestion — are design descriptions of intended product behavior, not implemented flows. Fields 4, 9, 11, and 12 are also depended on by planned components (SKM, adaptive engine), so their delivery order follows those components.
+
+### 15.3 CSP Integration Points (Planned Design)
+
+The CSP is designed to feed six system components, each using a different subset of the fields. These integrations activate as their consuming components are built (adaptive engine §16, SKM §14, analytics surfaces §22); today only the data entry points exist.
 
 **Personalized Learning Path:** Uses education level, major, goals, available time, and learning speed to construct a study plan that covers prerequisite concepts first, prioritizes weak areas, respects time constraints, and targets the student's stated goals. A student with 30 minutes daily and a short-term goal of exam preparation receives a compressed, exam-focused path; a student with 2 hours daily and a long-term goal of comprehensive understanding receives a broader, deeper path.
 
@@ -666,31 +767,35 @@ The CSP feeds into six system components, each using different subsets of the pr
 
 **Analytics & Goal Tracking:** Uses stated goals and per-concept mastery to visualize progress toward goals, showing how much of each goal's prerequisite knowledge has been mastered and what remains.
 
-### 15.3 Bidirectional SKM-CSP Integration
+### 15.4 Bidirectional SKM–CSP Integration (Planned Design)
 
-The SKM and CSP are not independent — they form a bidirectional feedback loop that continuously enriches both models. The SKM updates the CSP's auto-estimated fields: learning speed is calculated from average answer timing across all concepts, overall mastery level is derived from the mean mastery score across all tracked concepts, and academic interest tags are auto-suggested based on the concepts where the student demonstrates highest engagement (most questions asked, longest study sessions, highest accuracy).
+The SKM and CSP are designed as a bidirectional feedback loop that continuously enriches both models. The SKM would update the CSP's auto-estimated fields: learning speed is calculated from average answer timing across all concepts, overall mastery level is derived from the mean mastery score across all tracked concepts, and academic interest tags are auto-suggested based on the concepts where the student demonstrates highest engagement (most questions asked, longest study sessions, highest accuracy).
 
-Conversely, the CSP initializes the SKM's parameters. When a new student registers, their education level and past test results determine the initial P(L0) values for all concepts in the student's materials. An advanced student receives higher initial knowledge probabilities, reducing the number of confirmation interactions needed. A student with poor past results receives lower initial probabilities, ensuring that the system does not prematurely assume mastery where it likely does not exist.
+Conversely, the CSP initializes the SKM's parameters. When a new student registers, their education level and past test results would determine the initial P(L0) values for all concepts in the student's materials. An advanced student receives higher initial knowledge probabilities, reducing the number of confirmation interactions needed; a student with poor past results receives lower initial probabilities, ensuring that the system does not prematurely assume mastery where it likely does not exist. Both directions require the SKM (§14) and are therefore planned.
+
+Privacy note: profile data is application data in the project's PostgreSQL database; authentication material lives in Keycloak (ADR-0006); transmission of profile-derived data to cloud providers is governed by the minimum-data principle (§9.3). Fine-grained sensitivity tagging of profile fields remains design intent (§9.3).
 
 ---
 
 ## 16. Adaptive Learning Engine
 
-### 16.1 Fusion Architecture
+**Status: planned architecture.** No adaptive engine, recommendation service, scheduling code, or exam simulator exists in the baseline. BKT, IRT, CAT, SM-2, and Half-Life Regression are research foundations (§27) with no implementation; no recommendation is generated anywhere in the current system. This section preserves the full design so the intended behavior is not lost.
 
-The Adaptive Learning Engine is the central decision-making component of the system — it is the component that transforms raw data (knowledge states, preferences, structural relationships) into actionable pedagogical recommendations. The engine fuses three information sources:
+### 16.1 Fusion Architecture (Planned)
+
+The Adaptive Learning Engine is designed as the central decision-making component of the system — the component that transforms raw data (knowledge states, preferences, structural relationships) into actionable pedagogical recommendations. It fuses three information sources:
 
 - **SKM — Cognitive State:** Where is the student cognitively? What concepts have they mastered, what concepts are they struggling with, and what concepts have they never encountered?
 - **CSP — Personal Context:** Who is the student and what constraints shape their learning? What are their goals, how much time do they have, what format do they prefer, and what pace suits them?
 - **KG — Knowledge Structure:** What concepts exist and how are they related? What are the prerequisite chains that must be followed, and what are the parallel branches that can be studied independently?
 
-The engine produces four types of decisions: what to study next (concept selection), at what difficulty (content calibration), in what format (modality selection), and when to review (scheduling optimization). Each decision is made by combining inputs from all three sources rather than relying on any single source.
+The engine produces four types of decisions: what to study next (concept selection), at what difficulty (content calibration), in what format (modality selection), and when to review (scheduling optimization). Each decision combines inputs from all three sources rather than relying on any single one.
 
-### 16.2 Decision Process
+### 16.2 Decision Process (Planned Design)
 
 The decision process follows a structured algorithm that evaluates candidate concepts through multiple filters before producing a final recommendation:
 
-**Step 1 — Candidate Generation:** The engine generates a list of candidate concepts from the student's active materials, filtering out concepts where mastery exceeds the mastery threshold (default: 0.85, indicating the concept is sufficiently learned and does not require immediate study).
+**Step 1 — Candidate Generation:** The engine generates a list of candidate concepts from the student's active materials, filtering out concepts where mastery exceeds the mastery threshold (design default: 0.85 — the concept is sufficiently learned and does not require immediate study).
 
 **Step 2 — Prerequisite Check:** For each candidate concept, the engine queries the Knowledge Graph to verify that the student has mastered (or at least partially mastered, threshold > 0.5) the prerequisite concepts. Concepts whose prerequisites are unmet are deprioritized — studying PCA without understanding Variance is inefficient regardless of the student's interest.
 
@@ -698,7 +803,9 @@ The decision process follows a structured algorithm that evaluates candidate con
 
 **Step 4 — Recommendation Production:** The top-scored candidates are formatted into a recommendation that includes: the concept name, a brief rationale (why this concept now), prerequisite status, suggested study duration, recommended format (based on CSP learning style), and review scheduling (based on SM-2 and forgetting predictions).
 
-### 16.3 Component Diagram
+The thresholds (0.85 mastery, > 0.5 prerequisite readiness) and the priority-scoring weights are design defaults to be calibrated during implementation — they are stated here to make the intended behavior concrete, not because any of them runs today.
+
+### 16.3 Component Diagram (Planned)
 
 ```mermaid
 flowchart LR
@@ -708,7 +815,7 @@ flowchart LR
         KG[Knowledge Graph<br/>Prerequisites, Relations]
     end
 
-    subgraph Engine[Adaptive Learning Engine]
+    subgraph Engine[Adaptive Learning Engine - planned]
         CG[Candidate Generator]
         PC[Prerequisite Checker]
         PS[Priority Scorer]
@@ -735,25 +842,44 @@ flowchart LR
     CS -.->|study activity| SKM
 ```
 
-### 16.4 Spaced Repetition (SM-2)
+### 16.4 Spaced Repetition — SM-2 (Planned)
 
-The Spaced Repetition component implements the SM-2 algorithm, which schedules review sessions based on the student's demonstrated recall performance. Each concept has a review record that tracks: the date of the last review, the interval in days until the next scheduled review, and an ease factor that determines how the interval grows after successful recall.
+The Spaced Repetition component implements the SM-2 algorithm (Wozniak), which schedules review sessions based on the student's demonstrated recall performance. Each concept has a review record that tracks: the date of the last review, the interval in days until the next scheduled review, and an ease factor that determines how the interval grows after successful recall.
 
-The algorithm operates as follows: when a student reviews a concept and recalls it successfully (quality rating >= 4 on a 0-5 scale), the interval is multiplied by the ease factor (default: 2.5), increasing the spacing between reviews. When recall fails (quality rating < 3), the interval is reset to 1 day, and the ease factor is decreased by 0.2, ensuring that difficult concepts are reviewed more frequently. This mechanism produces a review schedule that automatically focuses attention on concepts approaching the forgetting threshold while spacing out reviews of well-learned concepts to maximize study efficiency.
+The algorithm operates as follows: when a student reviews a concept and recalls it successfully (quality rating ≥ 4 on a 0–5 scale), the interval is multiplied by the ease factor (default: 2.5), increasing the spacing between reviews. When recall fails (quality rating < 3), the interval is reset to 1 day, and the ease factor is decreased by 0.2, ensuring that difficult concepts are reviewed more frequently. This mechanism produces a review schedule that automatically focuses attention on concepts approaching the forgetting threshold while spacing out reviews of well-learned concepts to maximize study efficiency. Half-Life Regression (Settles & Meeder) is the planned complement for predicting per-concept forgetting rates, so that reviews can be triggered before the predicted forgetting threshold rather than on a fixed calendar (research basis in §27). Neither is implemented.
 
-### 16.5 Adaptive Exam Simulator (CAT)
+### 16.5 Adaptive Exam Simulator — CAT (Planned)
 
-The Computerized Adaptive Testing (CAT) simulator constructs exam sessions that adapt question difficulty based on the student's real-time performance. The simulator starts with a question at medium difficulty (estimated from the student's current mastery and IRT difficulty parameters). After each answer, the simulator updates the student's estimated ability and selects the next question at a difficulty level that maximizes information gain — a question that the student has approximately 50% probability of answering correctly provides the most information about their true ability level.
+The Computerized Adaptive Testing (CAT) simulator is designed to construct exam sessions that adapt question difficulty based on the student's real-time performance. The simulator starts with a question at medium difficulty (estimated from the student's current mastery and IRT difficulty parameters). After each answer, the simulator updates the student's estimated ability and selects the next question at a difficulty level that maximizes information gain — a question that the student has approximately 50% probability of answering correctly provides the most information about their true ability level.
 
-The CAT simulator terminates when the ability estimate stabilizes within a confidence interval (indicating that further questions would not significantly change the estimate) or when a maximum question count is reached (preventing excessively long exams). After termination, the simulator produces an exam report that includes: estimated ability level, per-concept mastery updates (from BKT), identified weak areas, and recommended follow-up study activities.
+The CAT simulator terminates when the ability estimate stabilizes within a confidence interval (indicating that further questions would not significantly change the estimate) or when a maximum question count is reached (preventing excessively long exams). After termination, it produces an exam report that includes: estimated ability level, per-concept mastery updates (from BKT), identified weak areas, and recommended follow-up study activities. CAT depends on the SKM (§14) and IRT parameter estimation, and is therefore planned behind them.
 
 ---
 
 ## 17. Learning Workflow & End-to-End Data Flow
 
-### 17.1 Complete Data Flow
+### 17.1 Current Verified Flow (Implemented)
 
-The following diagram illustrates the complete end-to-end data flow from content upload through learning activity to feedback-driven model updates. The closed feedback loop is the system's most important architectural feature — it ensures that every learning activity updates the cognitive models (SKM and CSP), which in turn update the adaptive decisions, which produce new learning activities, which again update the models. This continuous cycle is what distinguishes an intelligent tutor from a static tool.
+The end-to-end flow that exists today is the content-and-identity foundation, not the learning loop:
+
+1. **Sign-in.** The student authenticates at Keycloak (OIDC Authorization Code + PKCE); the frontend presents the access token as a bearer token; the backend validates it (RS256 against the realm JWKS, issuer, audience, lifetime), maps `(issuer, subject)` to a local user with just-in-time provisioning, and enforces RBAC from realm roles (ADR-0006).
+2. **Course setup.** Authenticated CRUD on courses, with enrollment records (unique per user–course pair) tracking membership.
+3. **Material upload.** For a course, the student requests a presigned upload URL, uploads directly to S3-compatible storage, and the material is registered with a server-generated object key and status `pending`. Nothing processes the file automatically yet (§11.1, §12.5).
+4. **Profile.** The student reads and updates the six-field profile subset (§15.1).
+5. **Vector foundation.** The ingestion, chunking, and embedding/vector modules exist as services (§11, §12.1) but are not wired into the upload flow; no automatic path leads from an uploaded material to stored vectors.
+
+```mermaid
+flowchart LR
+    S["Student"] -->|"OIDC Authorization Code + PKCE"| KC["Keycloak"]
+    S -->|"REST + bearer token"| API["FastAPI routers:<br/>auth / users / courses / materials"]
+    API --> PG[("PostgreSQL 16: users, profiles,<br/>courses, enrollments,<br/>materials, vector_records")]
+    API -->|"issues presigned URL"| S3["S3-compatible storage"]
+    API -->|"registers pending"| M["Material row"]
+```
+
+### 17.2 Target Learning Loop (Planned)
+
+The closed feedback loop remains the system's most important architectural feature — it ensures that every learning activity updates the cognitive models (SKM and CSP), which in turn update the adaptive decisions, which produce new learning activities, which again update the models. This continuous cycle is what distinguishes an intelligent tutor from a static tool. **The following diagram is the target architecture; only the §17.1 subset is implemented today.** No chat/RAG exchange, no question answering, no mastery updates, and no adaptive recommendations exist in the current baseline.
 
 ```mermaid
 flowchart TD
@@ -764,7 +890,7 @@ flowchart TD
     Chunking --> KGExtract[KG Concept/Relation Extraction]
     KGExtract --> Graph[Knowledge Graph]
 
-    subgraph Learning[Learning Activity]
+    subgraph Learning[Learning Activity - planned]
         Ask[Student asks question]
         Study[Student studies concept]
         Quiz[Student answers quiz]
@@ -800,13 +926,13 @@ flowchart TD
     ReviewSchedule --> Learning
 ```
 
-### 17.2 Feedback Loop Dynamics
+### 17.3 Feedback Loop Dynamics (Target Design)
 
-The feedback loop operates at two time scales: immediate (within a single learning session) and cumulative (across multiple sessions over days and weeks).
+The feedback loop is designed to operate at two time scales: immediate (within a single learning session) and cumulative (across multiple sessions over days and weeks).
 
-**Immediate feedback:** When a student answers a quiz question incorrectly, the SKM immediately decreases the mastery estimate for the relevant concept, the Adaptive Engine immediately adjusts the next recommendation (perhaps suggesting a prerequisite review instead of advancing to a new concept), and the review schedule immediately prioritizes the concept for the next study session. This immediate responsiveness ensures that the system reacts to misconceptions before they compound.
+**Immediate feedback:** When a student answers a quiz question incorrectly, the SKM would immediately decrease the mastery estimate for the relevant concept, the Adaptive Engine would immediately adjust the next recommendation (perhaps suggesting a prerequisite review instead of advancing to a new concept), and the review schedule would immediately prioritize the concept for the next study session. This immediate responsiveness ensures that the system reacts to misconceptions before they compound.
 
-**Cumulative feedback:** Over days and weeks, the accumulated interaction data enables the SKM to upgrade from heuristics to BKT, the CSP to refine auto-estimated fields (learning speed, academic interests), and the Adaptive Engine to identify long-term patterns (which concepts consistently require multiple review cycles, which study formats consistently produce better outcomes for this student). This cumulative intelligence is what makes the system increasingly personalized over time — a student who has used OpenLearn AI for a month receives recommendations that are substantially more tailored than those received on the first day.
+**Cumulative feedback:** Over days and weeks, the accumulated interaction data enables the SKM to upgrade from heuristics to BKT, the CSP to refine auto-estimated fields (learning speed, academic interests), and the Adaptive Engine to identify long-term patterns (which concepts consistently require multiple review cycles, which study formats consistently produce better outcomes for this student). This cumulative intelligence is what makes the system increasingly personalized over time — a student who has used OpenLearn AI for a month receives recommendations that are substantially more tailored than those received on the first day. Both time scales are properties of the target loop (§17.2); neither operates today.
 
 ---
 
@@ -816,135 +942,286 @@ The feedback loop operates at two time scales: immediate (within a single learni
 
 ## 18. Software Architecture
 
-### 18.1 Modular Monolith
+### 18.1 Modular Monolith (ADR-0001)
 
 The system follows a Modular Monolith architecture — a single unified application that is internally divided into independent modules with well-defined boundaries and interface contracts. Each module encapsulates a specific domain (ingestion, embedding, retrieval, generation, knowledge graph, student knowledge model, profile, adaptive engine, analytics) and communicates with other modules through service interfaces rather than shared database tables or direct code calls.
 
+**Current state of the monolith.** The verified baseline implements the skeleton of this design, not yet all of its domains. What exists today inside the single FastAPI application: API routing (`auth`, `users`, `courses`, `materials`), identity and user provisioning, course/material management with presigned uploads, document ingestion and chunking, the Provider Abstraction Layer with its six interface contracts, vector persistence, Celery worker infrastructure, configuration, observability, and a basic evaluation harness. The remaining domain modules — retrieval/RAG, generation, knowledge graph, student knowledge model, adaptive engine, analytics — are **planned** (§12–§16, §22.4). They are described in this specification as target architecture and must not be read as deployed code.
+
 The Modular Monolith architecture is chosen over a microservices architecture for three reasons. First, a graduation project must be deployable on a single machine without orchestrating multiple services across a cluster — microservices introduce deployment complexity that exceeds the project's operational scope. Second, the modules in OpenLearn AI have high data coupling (SKM reads from KG, Adaptive Engine reads from SKM and CSP), which would require extensive inter-service communication in a microservices architecture, increasing latency and reducing reliability. Third, a Modular Monolith preserves the option to extract any module into an independent service in the future — the module boundaries and interface contracts are identical to what microservices would require, making future extraction a deployment change rather than an architectural rewrite.
 
-### 18.2 C4 Container Diagram
+### 18.2 Current Container View (As-Is — Verified)
+
+The following diagram shows only what is deployed and verified at the staging baseline (§6.1 is the authoritative as-built reference; this view adds the container/module perspective).
 
 ```mermaid
 flowchart TB
-    subgraph User[Student / Teacher]
-        Browser[Web Browser]
+    subgraph CLIENT["Student / Instructor"]
+        B["Web Browser"]
     end
 
-    subgraph Frontend[Frontend Container — Next.js 16]
-        UI[React 19 + shadcn/ui]
-        Chat[WebSocket Chat Client]
-        KGVis[KG Visualizer — D3.js/Cytoscape]
-        Analytics[Analytics Dashboard — Recharts]
-        Profile[Profile Management UI]
+    subgraph FE["Frontend — Next.js 16"]
+        UI["React 19 · Tailwind 4 · shadcn/ui · TanStack Query · keycloak-js · Sentry"]
     end
 
-    subgraph Backend[Backend Container — FastAPI]
-        APIGW[API Gateway + Auth Middleware]
-        Ingestion[Ingestion Module]
-        Retrieval[Retrieval Module]
-        Generation[Generation Module]
-        KGBuild[KG Builder Module]
-        SKM[SKM Module]
-        CSPModule[CSP Module]
-        Adaptive[Adaptive Module]
-        AnalyticsModule[Analytics Module]
+    subgraph APP["Backend — FastAPI (single deployable, ADR-0001)"]
+        R["API routers: auth · users · courses · materials · /health"]
+        S["Services: OIDC validation · JIT provisioning · ingestion · presigned storage"]
+        P["PAL — factory · router · six interface contracts"]
     end
 
-    subgraph Workers[Async Workers — Celery]
-        DocWorker[Document Processing Worker]
-        EmbedWorker[Embedding Worker]
+    subgraph PROV["PAL Providers (configured)"]
+        OCR["Gemini OCR — gemini-2.5-flash"]
+        EMB["BGE-M3 embeddings — 1024-dim, local"]
+        VDB["PostgreSQL vector provider"]
+        MOCK["Mock reasoning / OCR / embedding / vector providers"]
     end
 
-    subgraph PAL[Provider Abstraction Layer]
-        Providers[Reasoning · Embedding · OCR · Speech · VectorDB · Vision · Ranking]
+    subgraph DATA["Data Stores"]
+        PG[("PostgreSQL 16 + pgvector — VECTOR(1024)")]
+        RD[("Redis 7.4 — Celery broker")]
+        S3["S3-compatible object storage — presigned uploads"]
+        KC["Keycloak — realm openlearn"]
     end
 
-    subgraph Data[Data Layer]
-        PG[PostgreSQL 16]
-        VDB[Vector DB — ChromaDB]
-        Redis[Redis — Cache + Queue]
-        MinIO[MinIO — Object Storage]
-        Neo4j[Neo4j — Knowledge Graph]
+    subgraph WRK["Async Workers — infrastructure only; tasks planned"]
+        CW["Celery worker + beat"]
+        FL["Flower"]
     end
 
-    Browser --> Frontend
-    Frontend --> APIGW
-    APIGW --> Backend
-    Backend --> PAL
-    PAL --> Providers
-    Backend --> Data
-    Workers --> Data
-    Workers --> PAL
+    subgraph OBS["Observability"]
+        OB["Prometheus · Grafana · Loki · Alloy · structlog · Sentry"]
+    end
+
+    LIT["LiteLLM Gateway (deployed; PAL adapter planned)"]
+
+    B --> FE
+    FE -->|"REST + bearer token"| R
+    FE -->|"OIDC Authorization Code + PKCE"| KC
+    R --> S
+    S --> P
+    P --> OCR
+    P --> EMB
+    P --> VDB
+    P --> MOCK
+    S --> S3
+    R --> PG
+    CW --> RD
+    CW --> PG
+    P -.->|"planned reasoning adapter"| LIT
+    APP -.->|"metrics + logs"| OBS
 ```
 
-### 18.3 Module Boundaries
+### 18.3 Target Container View (Planned)
 
-Each module is defined by three artifacts: a service interface (Python abstract class defining the module's public API), a repository interface (abstract class defining data access operations), and a domain model (Pydantic models defining the module's data structures). Modules never import each other's internal implementations — they interact only through the published service interfaces, which are registered in a dependency injection container and resolved at runtime.
+The target container set adds the modules that carry the learning experience. Everything marked **planned** below is design intent (§12–§16, §22.4, §13), not deployed infrastructure:
 
-The Provider Abstraction Layer is itself a module that sits between the core service modules and the external AI providers. Core modules call PAL interfaces (e.g., `ReasoningInterface.generate()`), and the PAL routes the call to the configured provider implementation. This architectural boundary ensures that no core module ever contains a direct reference to an AI provider library — all provider-specific code lives in the PAL module's provider implementations, isolated from the core business logic.
+```mermaid
+flowchart TB
+    subgraph FET["Frontend — Next.js 16 (target)"]
+        UIT["Existing shell + OIDC login"]
+        CHAT["RAG Chat UI (planned)"]
+        KGV["KG Visualizer (planned)"]
+        AN["Analytics dashboard (planned)"]
+        PRF["Profile management UI (planned)"]
+    end
+
+    subgraph BE["Backend — FastAPI modular monolith (target)"]
+        CORE["Existing routers + services + PAL"]
+        RAGM["RAG retrieval module (planned, ADR-0009)"]
+        KGM["KG builder module (planned)"]
+        SKMM["SKM · CSP integration · Adaptive Engine (planned)"]
+        ANM["Analytics module (planned)"]
+    end
+
+    subgraph DT["Data layer (target)"]
+        PGT[("PostgreSQL 16 + pgvector — deployed")]
+        KGD[("Graph store — future decision (§13)")]
+        RDT[("Redis — deployed")]
+        S3T["S3-compatible object storage — deployed"]
+    end
+
+    LLMT["LLM runtime — LiteLLM gateway (deployed) · local runtime option (planned, §9)"]
+
+    UIT --> CORE
+    CHAT -->|"WebSocket, ADR-0009 events (planned)"| RAGM
+    RAGM --> CORE
+    KGV --> KGM
+    AN --> ANM
+    PRF --> CORE
+    CORE --> PGT
+    CORE --> RDT
+    CORE --> S3T
+    RAGM -.-> PGT
+    KGM -.-> KGD
+    SKMM -.-> PGT
+    CORE -.-> LLMT
+```
+
+### 18.4 Module Boundaries
+
+The implemented boundary discipline has three verified anchors. First, route handlers are thin: FastAPI routers in `app/api/` delegate to services in `app/services/` and never embed business logic or SQL. Second, provider isolation: no core module imports an AI-provider library directly — all provider-specific code lives behind the PAL's six interface contracts, with provider selection by explicit configuration (factory settings), no plugin framework and no dynamic discovery (ADR-0009). Third, a single persistence vocabulary: all database access goes through the SQLAlchemy models in `app/models/`, and document/chunk provenance travels as Pydantic domain models (`CanonicalDocument`, `Chunk`) rather than ad-hoc dictionaries.
+
+The original v4.0 boundary doctrine — every module defined by a service interface (Python abstract class), a repository interface, and a domain model, with interfaces registered in a dependency-injection container and modules never importing each other's internals — is preserved as the **target maturity bar** for the planned domain modules. The dependency-injection container and per-module repository interfaces are not verified in the current baseline; as modules are added, this discipline is what keeps the monolith extractable (§18.1).
 
 ---
 
 ## 19. Backend Architecture
 
-### 19.1 Technology and Structure
+### 19.1 Technology Stack (Verified)
 
-The backend is implemented in Python 3.12 using FastAPI as the web framework, Pydantic v2 for data validation and serialization, SQLAlchemy 2 for database ORM, and Celery with Redis for asynchronous task processing. The choice of FastAPI is justified by its native async support, automatic OpenAPI documentation generation, type-safe request/response validation through Pydantic, and WebSocket support for streaming chat responses — all of which are critical requirements for an educational platform that handles file uploads, long-running AI generation tasks, and real-time chat interactions.
+The backend is implemented in **Python 3.11** (Docker runtime `python:3.11-slim`) using FastAPI as the web framework, Pydantic (v2, via `pydantic-settings`) for validation and configuration, SQLAlchemy 2 in async mode for database ORM, and Celery with Redis for asynchronous task infrastructure. The choice of FastAPI is justified by its native async support, automatic OpenAPI documentation generation, and type-safe request/response validation through Pydantic — critical requirements for an educational platform that handles file uploads and long-running AI generation tasks. FastAPI's framework-level WebSocket support is the reserved transport for the planned streaming chat interface (§22.4, ADR-0009); no WebSocket endpoint ships today.
 
-The backend follows a layered architecture within each module: controller layer (FastAPI route handlers), service layer (business logic implementing the module's service interface), repository layer (database access through SQLAlchemy), and domain model layer (Pydantic models). This layering ensures that route handlers never contain business logic, business logic never contains SQL queries, and database operations never contain application logic — violations of this separation are detected through code review and linting rules.
+| Concern | Technology (pinned in `backend/requirements.txt`) |
+|---------|---------------------------------------------------|
+| Runtime | Python 3.11 (`python:3.11-slim`) |
+| Web framework | `fastapi==0.138.1`, `uvicorn==0.49.0` |
+| Validation / configuration | Pydantic v2 (`pydantic-settings==2.15.0`) |
+| ORM / driver | `sqlalchemy==2.0.43` (async), `asyncpg==0.30.0` |
+| Migrations | `alembic==1.16.5` (12 applied migration files) |
+| Vector storage | `pgvector==0.4.1` — `VECTOR(1024)` (ADR-0004) |
+| Authentication | `PyJWT==2.13.0` + `cryptography==45.0.4` — RS256/JWKS validation of Keycloak tokens; password hashing is owned by Keycloak, not the backend (ADR-0006) |
+| Task queue | `celery[redis]==5.6.3`, `flower==2.0.1` |
+| Ingestion | `docling==2.127.0`, `pypdfium2==5.13.0` |
+| OCR provider | `google-genai==1.24.0` (Gemini `gemini-2.5-flash`) |
+| Embeddings | `sentence-transformers==3.3.1` (BAAI/bge-m3, 1024-dim, local) |
+| Object storage | `boto3==1.35.36` (S3-compatible API, presigned URLs) |
+| Observability | `structlog==25.5.0`, `sentry-sdk==2.35.0`, `prometheus-fastapi-instrumentator==7.1.0` |
 
-### 19.2 Async Processing
+The dependency list is deliberately minimal — dependencies are added only when code requires them, not preemptively. Notably absent by design: LangChain, ChromaDB, bcrypt, and any local-LLM runtime (superseded defaults are recorded in §10).
 
-Long-running operations — document processing (OCR, chunking, embedding), knowledge graph construction, and batch question generation — are handled asynchronously through Celery workers that consume tasks from Redis queues. When the API receives a file upload request, it immediately returns a 202 Accepted response with a job ID, enqueues the processing task, and the Celery worker processes the task in the background. The frontend receives progress updates through WebSocket messages pushed by the API when the worker reports status changes.
+### 19.2 Application Layout (Verified)
 
-This async pattern is essential for maintaining responsive user interactions. OCR processing on a 100-page PDF can take 30-60 seconds, and embedding generation for hundreds of chunks can take additional time. If these operations were handled synchronously, the API would block for minutes, making the platform unusable during processing. The async pattern decouples user-facing response time from background processing time, ensuring that the frontend remains interactive while heavy computation proceeds in the background.
+The verified backend package layout:
+
+```text
+backend/app/
+├── api/             # FastAPI routers: auth, users, courses, materials (registered in main.py)
+├── services/        # ingestion.py (Docling extraction); auth/ (oidc.py, user_service.py)
+├── models/          # User, Profile, Course, Enrollment, Material, VectorRecordModel
+├── pal/             # factory.py, router.py, exceptions.py,
+│                    #   interfaces/ (base, embedding, ocr, ranking, reasoning, vector_db),
+│                    #   providers/ocr/gemini_provider.py
+├── documents/       # chunking.py — deterministic structure-aware chunker
+├── workers/         # celery_app (referenced by staging compose); task definitions not in baseline
+├── config           # Pydantic Settings: app name, CORS origins, Keycloak URLs,
+│                    #   provider selection knobs, chunk_size/chunk_overlap, GEMINI_API_KEY
+├── db/              # Base declarative layer
+├── observability/   # setup_observability(), setup_metrics() — structlog, Sentry, Prometheus
+└── eval/            # basic evaluation harness: python -m app.eval CLI, evaluator registry,
+                     #   JSON dataset loading/validation, pass/fail counting, seeded dummy evaluator
+```
+
+Packages beyond this list were not part of this pass's evidence bundle and are not claimed here. The `app/eval/` package is the basic harness described in §1 and §10.2 — the ADR-0003 evaluation framework (methodology, ground-truth datasets, benchmark engines) remains to be built on top of it.
+
+### 19.3 Layering and Request Path (Implemented, with a Design Principle)
+
+The implemented request path is: HTTP request → CORS middleware (settings-driven allow-list) → FastAPI route handler (thin) → service layer (OIDC validation, JIT user provisioning, ingestion, presigned storage) → SQLAlchemy models or PAL providers → response. Structured logging (structlog) and Sentry instrumentation wrap the request lifecycle; Prometheus instruments the app; `/health` returns a plain liveness probe.
+
+The v4.0 layering doctrine — controller layer (route handlers), service layer (business logic), repository layer (database access), and domain-model layer, with route handlers never containing business logic and business logic never containing SQL — is preserved as the **design principle** for the planned domain modules. In the verified baseline the service/model boundary is real and enforced, while a formally separate repository layer is not: services query SQLAlchemy models directly. The doctrine remains the target discipline as retrieval, RAG, SKM, and adaptive modules are added.
+
+### 19.4 Asynchronous Processing (Infrastructure Implemented; Workflow Planned)
+
+**Verified current state.** Celery worker and beat containers run in staging against Redis (compose commands target `app.workers.celery_app`), and Flower exposes worker visibility on the staging host. However, **no material-processing tasks are registered in the baseline** — the workers are infrastructure awaiting a workload. The upload path today is synchronous and deliberately minimal: the API issues a presigned upload URL, registers the material row with status `pending`, and returns; no processing follows yet (§11.1).
+
+**Target pattern (preserved design).** Long-running operations — targeted OCR, embedding generation, RAG context construction, knowledge-graph extraction, and batch question generation — are to be handled asynchronously through Celery tasks: the API returns `202 Accepted` with a job reference, the worker processes in the background, and the frontend receives progress updates via WebSocket messages (ADR-0009 event protocol) when the worker reports status changes. This pattern is essential for responsive interaction: OCR on a 100-page PDF can take 30–60 seconds, and embedding generation for hundreds of chunks adds further time. If these operations were synchronous, the API would block for minutes and the platform would be unusable during processing. The async pattern decouples user-facing response time from background processing time.
+
+At the provider level, the PAL router already implements streaming semantics (first-chunk passthrough) and ordered fallback for reasoning providers, but no product traffic streams today — the configured reasoning provider is the mock, and the LiteLLM-backed adapter is planned (§8.1, ADR-0005).
 
 ---
 
 ## 20. Frontend Architecture
 
-### 20.1 Technology and Structure
+### 20.1 Technology and Structure (Verified)
 
-The frontend is implemented using Next.js 16 with the App Router pattern, React 19 for component rendering, TypeScript 5 for type safety, Tailwind CSS 4 with shadcn/ui for styling and component library, Zustand for client-side state management, and TanStack Query for server state management (API data fetching, caching, and synchronization).
+The frontend is implemented using **Next.js 16.3.1** with the App Router pattern, **React 19.2.8** for component rendering, **TypeScript 5** for type safety, and **Tailwind CSS 4** with the shadcn/ui toolchain for styling and components (component dependencies: `shadcn` CLI, `@baseui/react`, `lucide-react`, `class-variance-authority`, `clsx`, `tailwind-merge`, `tw-animate-css`, `next-themes`). Server state is managed with **TanStack Query 5** (API data fetching, caching, and synchronization), authentication uses **`keycloak-js` 26.2.4**, and error monitoring uses **`@sentry/nextjs`**. There is **no additional client-state library** (no Zustand or Redux) — React state plus TanStack Query covers current needs, matching §6.1.
 
-The choice of Next.js is justified by its server-side rendering capability (which improves initial page load performance and SEO), its App Router pattern (which provides clean route organization with nested layouts), its built-in API route support (which enables the frontend to proxy backend requests, avoiding CORS issues), and its native WebSocket support (which enables real-time chat and progress updates without additional libraries).
+The choice of Next.js is justified by its server-side rendering capability (which improves initial page load performance and SEO), its App Router pattern (which provides clean route organization with nested layouts), and its API-route capability (which can proxy backend requests where needed). The v4.0 claim that the frontend already uses native WebSocket support for real-time chat and progress updates is **corrected**: WebSocket transport is planned (§22.4, ADR-0009) and no WebSocket client code or dependency exists in the verified baseline.
 
-### 20.2 Key Frontend Modules
+The production image (`frontend/Dockerfile`) is a multi-stage build on `node:22-alpine` producing a Next.js standalone output, running as a non-root `nextjs` user on port 3000, with `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SENTRY_DSN` injected as build arguments.
 
-The frontend contains five primary modules that correspond to the five main user-facing features:
+### 20.2 Tooling and Quality Infrastructure (Verified)
 
-**Material Management UI:** Handles file upload, processing progress display, material listing, and document viewing. Uses TanStack Query for material state management and WebSocket listeners for real-time processing progress.
+The frontend ships a quality-infrastructure suite that is itself an implemented deliverable: **Storybook 10** with accessibility, docs, and Vitest addons plus Chromatic visual-review publishing; **Vitest** (browser-mode runner via Playwright, coverage via v8); **Playwright** for end-to-end testing; **ESLint 9** with `eslint-config-next`; and dedicated CI workflows (`ci.yml`, `deploy-staging.yml`, `storybook.yml`) that build GHCR images and run the Storybook pipeline. The verified evidence base for the frontend is the dependency manifest, Dockerfile, and CI configuration; a page-level route inventory was not part of this pass's evidence bundle.
 
-**RAG Chat Interface:** Implements the conversational interface where students ask questions and receive citation-backed answers. Uses WebSocket for streaming token generation and TanStack Query for chat history management. Includes multiple explanation modes (Socratic, direct, exam-focused) selectable from the CSP's preferred learning approach.
+### 20.3 Key Frontend Modules (Planned / In Progress — Preserved Design)
 
-**Knowledge Graph Visualizer:** Renders the concept-relation graph interactively using Cytoscape.js or D3.js. Nodes are color-coded by mastery level (green = mastered, yellow = partial, red = weak), and edges display relationship types. The visualizer supports zoom, filter, and navigation to concept-related content.
+The five feature modules below are the intended user-facing experience. **None of them is a complete, shipped learning surface today** — the verified baseline establishes the stack, the auth integration path, and the tooling, not a finished dashboard, chat, exam, adaptive, or WebSocket UI. The module designs are preserved in full so the intended experience is not lost:
 
-**Analytics Dashboard:** Displays learning progress, concept mastery heatmap, study time distribution, exam readiness scores, and goal tracking. Uses Recharts for data visualization and TanStack Query for analytics data fetching. Includes both overview views (all materials) and detail views (single material/concept).
+**Material Management UI (planned; most immediately unblocked):** Handles file upload, processing progress display, material listing, and document viewing against the already-implemented course/material API (presigned upload URL + registration, §22.3). TanStack Query manages material state; the real-time processing progress display depends on the planned worker phase and status surface (§11.1, §22.4).
 
-**Profile Management UI:** Implements the onboarding wizard (VARK quiz, goals setting, time preferences), profile editing, and auto-updated field display. Uses Zustand for local profile state and TanStack Query for server synchronization.
+**RAG Chat Interface (planned):** The conversational interface where students ask questions and receive citation-backed answers. Requires the planned RAG retrieval module and WebSocket transport (ADR-0009 event protocol: `retrieval_started`, `sources_found`, `reasoning_started`, `token`, `done`, `error`) — none of which exist in the baseline. Explanation modes (Socratic, direct, exam-focused) selectable from the CSP's preferred learning approach remain the design.
+
+**Knowledge Graph Visualizer (planned):** Renders the concept-relation graph interactively. Depends on the knowledge-graph store and builder (§13) and on a graph-rendering library (Cytoscape.js or D3.js were the intended choices; neither is currently a dependency). Node color-coding by mastery level (green = mastered, yellow = partial, red = weak) assumes the planned SKM (§14).
+
+**Analytics Dashboard (planned):** Learning progress, concept mastery heatmap, study time distribution, exam readiness scores, and goal tracking. Depends on the planned analytics API surface (§22.4) and on a charting library (Recharts was the intended choice; not currently a dependency). Overview and detail views remain the design.
+
+**Profile Management UI (planned; partially unblocked):** Onboarding wizard (VARK quiz, goals setting, time preferences), profile editing, and auto-updated field display. The backend already exposes the verified six-field profile with read/update endpoints (§15.1), so profile editing can be built against real endpoints today; the designed 13-field extension (§15.2), goals, and auto-estimated fields await their planned data model and adaptive engine.
+
+### 20.4 Frontend–Backend Integration
+
+Current integration path (verified): the frontend authenticates the user in the browser via `keycloak-js` against Keycloak (Authorization Code + PKCE, §6.1), attaches bearer access tokens to REST calls, and targets the backend at the configured `NEXT_PUBLIC_API_URL`. Planned integration additions: WebSocket connections for streaming chat and processing progress (ADR-0009), and consumption of the planned analytics/recommendation/review/KG surfaces (§22.4). The v4.0 sequence combining MinIO uploads with WebSocket status pushes is superseded by the verified presigned-upload flow (§11.1) until the processing phase lands.
 
 ---
 
 ## 21. Database Design
 
-### 21.1 Multi-Store Architecture
+### 21.1 Data Stores: Current Reality (Verified)
 
-The system uses a multi-store database architecture where different data types are stored in databases optimized for their access patterns. This architecture is a direct consequence of the Hybrid AI philosophy: each data store is accessed through the Provider Abstraction Layer, enabling the user to choose local or cloud implementations based on their requirements.
+The verified system runs **one relational database for all application data** — PostgreSQL 16 with the pgvector extension — plus three supporting stores. The v4.0 multi-store table (ChromaDB as default vector store, MinIO as deployed object storage, NetworkX/Neo4j as knowledge-graph stores) described target aspirations as current fact and is corrected here:
 
-| Store | Purpose | Default Provider | Cloud Alternative | Access Pattern |
-|-------|---------|-----------------|-------------------|---------------|
-| PostgreSQL | Relational data (users, materials, CSP, SKM records, quiz attempts, exam sessions, review items) | PostgreSQL 16 (local) | Supabase / managed PostgreSQL | CRUD with complex joins |
-| Vector DB | Embedding vectors and similarity search | ChromaDB (embedded mode) | Pinecone / Weaviate | Vector similarity + metadata filter |
-| Redis | Task queue, cache, session data | Redis (local) | Redis Cloud | Key-value, pub/sub |
-| Object Storage | Original files, extracted text, generated artifacts | MinIO (local) | AWS S3 / Azure Blob | Large binary objects |
-| Knowledge Graph | Concepts, relations, prerequisites | NetworkX (serialized) / Neo4j | Neo4j Aura | Graph traversal, pattern matching |
+| Store | Engine (verified) | Purpose today | Access path |
+|-------|-------------------|---------------|-------------|
+| Relational + vector | `pgvector/pgvector:pg16` | All relational data (`users`, `profiles`, `courses`, `enrollments`, `materials`) and embeddings (`vector_records`, `VECTOR(1024)`) — ADR-0004 | SQLAlchemy 2 (async) + PAL `VectorDBInterface` |
+| Queue | Redis 7.4 (AOF, password auth) | Celery broker/result backend — infrastructure only, no tasks yet | Celery |
+| Object storage | S3-compatible endpoint (by configuration; no storage service in compose) | Original course-material binaries behind presigned upload URLs | `boto3` S3 API |
+| Identity | Keycloak (dev: Postgres-backed; staging: H2 file store) | Identity provider, credentials, realm roles | OIDC / JWKS (ADR-0006) |
 
-### 21.2 Entity-Relationship Diagram
+Corrections to record explicitly: **ChromaDB** is no longer any part of the current architecture (ADR-0004 superseded it; an alternative vector store would be a new PAL provider implementation, not a configuration switch to an embedded ChromaDB). **Neo4j/NetworkX** are future graph-store options evaluated in §13 — no graph store is deployed and the PAL has no graph interface. **MinIO** is not a deployed service; the S3 API is consumed from a configured endpoint (self-hosted MinIO remains a valid target-mode choice, §23.3).
+
+### 21.2 Implemented Schema (Verified)
+
+Six ORM models exist (`app/models/__init__.py`): `User`, `Profile`, `Course`, `Enrollment`, `Material`, `VectorRecordModel`. There are no mastery, adaptive, chat, exam, question, review, goal, or concept tables.
+
+| Table | Key columns and constraints (verified) |
+|-------|----------------------------------------|
+| `users` | UUID PK; `keycloak_issuer` (String 512) + `keycloak_subject` (String 255) — the identity pair; `email` unique + indexed; `email_verified` (bool); `settings` JSONB. **No password hash, no role column** (removed by migration; ADR-0006) |
+| `profiles` | 1:1 with `users` (unique `user_id`, FK CASCADE); Week-6 CSP subset: `education_level` (String 50), `major`, `university` (String 255), `preferred_language` (default `en`, CHECK `en`/`ar`), `learning_style_vark` (String 20), `daily_available_minutes` (CHECK 1–1440, NULL until onboarding) |
+| `courses` | UUID PK; `owner_id` FK → `users` CASCADE + indexed; `title` (String 255); `description` (Text, nullable); `created_at` |
+| `enrollments` | `course_id` + `user_id` FKs, both CASCADE; unique constraint `(course_id, user_id)`; `created_at` |
+| `materials` | `course_id` FK CASCADE + indexed; `title`; `s3_key` — **server-generated**, unique, never taken from a client-supplied path; `status` default `pending` with deliberately **no CHECK constraint** (status vocabulary owned by the future processing phase); `uploaded_by` FK → `users` CASCADE |
+| `vector_records` | Text PK; `embedding` `VECTOR(1024)` — every write validated against the `EMBEDDING_DIMENSION = 1024` constant, deliberately decoupled from `settings.ai_embedding_dimension` so configuration drift fails loudly instead of silently; `content` (nullable Text); `metadata` JSONB (NOT NULL) carrying document/chunk provenance (`document_id`, `chunk_id`, pages, filename, mimetype, hash) per the PAL `VectorRecord` DTO; `created_at`/`updated_at`. **No FKs by design**: `CanonicalDocument`/`Chunk` are Pydantic domain models, not database entities |
+
+Two deliberate design policies are visible in the model comments and preserved: user-owned rows cascade on deletion (no orphaned courses, enrollments, or materials), and enum-style vocabularies (material status, profile enums) are kept open until their owning feature phase defines them.
+
+### 21.3 Migrations (Verified)
+
+The schema is managed by Alembic with twelve migration files, whose history also records the authentication migration mandated by ADR-0006:
+
+```text
+bf5c36537834  create users table
+7f4ffd64a291  add keycloak identity fields
+a21491100d85  add auth fields and refresh tokens
+c8103d7a5b42  drop role column
+fbdb3885535f  remove legacy authentication storage
+  — from here on, identity lives entirely in Keycloak (ADR-0006) —
+0c4a02b4b578  create profiles table
+6bee296ddce1  restrict preferred_language to supported values
+75d18b9eb2fe  drop users.preferred_lang (language lives in profiles)
+128458792565  create courses and enrollments
+4f402fda7122  create materials table
+f3a1b7c9d4e2  add vector_records table
+c462e4812d07  merge migration heads
+```
+
+### 21.4 Target Schema (Planned — ERD Preserved)
+
+The entity-relationship design below is the **target schema**: it shows the implemented entities alongside the planned ones so the full data model remains visible as one design. Implemented today: `USER`, `PROFILE` (as the CSP subset), `COURSE`, `ENROLLMENT`, `MATERIAL`, and the vector store (provenance in JSONB, not a `CHUNK` table). Planned: `CONCEPT`, `SKM_RECORD`, `REVIEW_ITEM`, `QUESTION`, `QUIZ_ATTEMPT`, `EXAM_SESSION`, `CHAT_SESSION`, `GOAL`, `FLASHCARD`, `SUMMARY`, and a dedicated `CHUNK` entity (a future normalization decision — chunk provenance currently rides in `vector_records.metadata`, §11.4/§12.1).
 
 ```mermaid
 erDiagram
     USER ||--o{ MATERIAL : owns
-    USER ||--|| CSP : has
+    USER ||--|| PROFILE : has
     USER ||--o{ QUIZ_ATTEMPT : takes
     USER ||--o{ EXAM_SESSION : takes
     USER ||--o{ CHAT_SESSION : creates
@@ -961,42 +1238,34 @@ erDiagram
     CONCEPT ||--o{ CONCEPT : prerequisite_of
     CONCEPT ||--o{ REVIEW_ITEM : scheduled_in
 
-    CSP ||--o{ SKM_RECORD : initializes
+    PROFILE ||--o{ SKM_RECORD : initializes
 
     EXAM_SESSION ||--o{ EXAM_ANSWER : contains
     QUESTION ||--o{ QUIZ_ATTEMPT : appears_in
 
     USER {
         uuid id PK
+        string keycloak_issuer
+        string keycloak_subject
         string email
-        string password_hash
-        string preferred_lang
+        bool email_verified
         json settings
     }
 
-    MATERIAL {
-        uuid id PK
-        uuid user_id FK
-        string title
-        string source_type
-        string language
-        int total_pages
-    }
-
-    CSP {
+    PROFILE {
         uuid id PK
         uuid user_id FK
         string education_level
         string major
         string university
-        text short_term_goals
-        text long_term_goals
+        text short_term_goals "planned"
+        text long_term_goals "planned"
         string learning_style_vark
         string preferred_language
-        string learning_speed
+        string learning_speed "planned"
         int daily_available_minutes
-        json past_test_results
-        json academic_interests
+        json past_test_results "planned"
+        json academic_interests "planned"
     }
 
     CONCEPT {
@@ -1039,100 +1308,166 @@ erDiagram
     }
 ```
 
+Corrections applied to the carried-over diagram: the `USER` entity no longer contains `password_hash` (credentials live in Keycloak) or `preferred_lang` (dropped by migration; language lives in `profiles`); `CSP` is relabeled `PROFILE` to match the implemented table. Fields annotated "planned" extend the verified six-field profile toward the designed CSP (§15.2); the SKM/adaptive entities are design intent only (§14, §16).
+
+### 21.5 Data-Access Philosophy (Design Principle)
+
+The store-per-access-pattern philosophy is preserved as the growth path: relational data stays in PostgreSQL; vectors stay in PostgreSQL + pgvector accessed exclusively through the PAL `VectorDBInterface` (so a future vector store is a new PAL provider plus configuration, per ADR-0004's interface seam); object storage stays behind the S3 API; and a graph store, when justified by KG workloads (§13), arrives as its own decision with its own ADR. What the philosophy no longer claims is that this multi-store posture exists broadly today — it exists exactly as enumerated in §21.1, and each additional store is added when its workload materializes.
+
 ---
 
 ## 22. API Design
 
-### 22.1 REST + WebSocket Architecture
+### 22.1 API Style (Current REST; Streaming Planned)
 
-The API follows a REST architecture for CRUD operations (resource creation, retrieval, update, deletion) and a WebSocket architecture for streaming operations (real-time chat, progress updates, exam session interactions). This dual architecture ensures that standard operations benefit from REST's simplicity, caching support, and HTTP infrastructure, while interactive operations benefit from WebSocket's bidirectional, low-latency communication.
+The API today is REST/JSON over HTTP with bearer-token authentication and a settings-driven CORS allow-list. The dual-architecture rationale is preserved as design: standard operations benefit from REST's simplicity, caching support, and HTTP infrastructure, while interactive operations (streaming chat, progress updates, exam sessions) are to use WebSocket's bidirectional, low-latency channel once the RAG/chat phase lands (ADR-0009 event protocol). No WebSocket endpoint exists in the current baseline.
 
-### 22.2 Authentication
+### 22.2 Authentication and Identity (Verified — ADR-0006)
 
-Authentication uses JWT (JSON Web Tokens) with bcrypt password hashing and optional OAuth integration for institutional deployments. JWT tokens carry the user ID, role, and session metadata, and are validated by the API Gateway middleware on every request. Token expiration is configurable (default: 24 hours), and refresh tokens are issued for longer sessions.
+Authentication is delegated to **Keycloak (OIDC)**; the backend renders no login pages. Users authenticate in the browser via the public client `openlearn-frontend` (Authorization Code + PKCE, §6.1). API requests present a Keycloak-issued access token as a bearer token, which the backend validates with PyJWT against the realm's JWKS (`PyJWKClient` with key caching):
 
-The authentication system supports five user roles with distinct permission scopes: Student (manage own materials and learning data), Teacher (manage virtual classrooms and shared materials), Admin (manage users and global resources), Guest (limited trial access), and Contributor (read code access through GitHub, not through the API).
+- **Signature and claims:** RS256 only; `exp`, `iat`, `iss`, `aud`, `sub` required; audience restricted to `openlearn-api`; issuer checked against the configured realm URL. Validation failures raise a typed error path, not a silent pass.
+- **Token lifetime:** the realm export sets a 300-second access-token lifespan with refresh handled by Keycloak (`refreshTokenMaxReuse: 0`). No refresh tokens are stored in the application database.
+- **Roles:** realm roles are extracted from `realm_access.roles`. The bootstrap realm defines `student` (default), `instructor`, and `admin`; RBAC enforcement maps these roles at the API layer.
+- **Identity mapping:** `(issuer, subject)` maps to a local user with **just-in-time provisioning** — first login creates the user, `email_verified` is synchronized on subsequent logins, and an email collision with a different identity is rejected rather than merged.
+- **Credential storage:** the application database stores **no password hashes** — credentials are owned by Keycloak, and migrations `c8103d7a5b42`/`fbdb3885535f` removed the legacy local-authentication storage.
 
-### 22.3 Key Endpoints
+Historical note: the v4.0 text described self-issued JWTs, bcrypt password hashing with monthly secret rotation, and five API roles (including Guest and Contributor). All of that is **superseded** by ADR-0006 and the verified implementation above.
 
-| Method | Path | Purpose | Auth Required |
-|--------|------|---------|---------------|
-| POST | `/materials/upload` | Upload educational content | Student+ |
-| GET | `/materials/{id}/status` | Check processing status | Student+ |
-| POST | `/chat/session` | Create new chat session | Student+ |
-| WS | `/ws/chat/{session_id}` | Streaming chat connection | Student+ |
-| POST | `/questions/generate` | Generate questions for material | Student+ |
-| POST | `/exams/start` | Start adaptive exam session | Student+ |
-| WS | `/ws/exams/{session_id}` | Interactive exam connection | Student+ |
-| GET | `/analytics/dashboard` | Learning analytics overview | Student+ |
-| GET | `/analytics/heatmap` | Concept mastery heatmap | Student+ |
-| GET | `/profile/me` | Retrieve student profile | Student+ |
-| PUT | `/profile/me` | Update student profile | Student+ |
-| GET | `/recommendations/today` | Daily study recommendations | Student+ |
-| GET | `/reviews/scheduled` | Scheduled review items | Student+ |
-| GET | `/knowledge-graph/{material_id}` | Material knowledge graph | Student+ |
+### 22.3 Verified Endpoint Inventory (Implemented)
+
+The verified API surface is four routers registered in `app/main.py`, plus health and a staging probe. Per-route paths and request/response schemas live in the router files, which were outside this pass's evidence bundle; the inventory below is therefore stated at router/capability level (to be refined from the router sources in a later evidence pass):
+
+| Router | Verified capability | Auth |
+|--------|--------------------|------|
+| `auth` | Identity-flow support endpoints backing the Keycloak integration (§22.2) | Bearer/OIDC |
+| `users` | Profile read and update for the authenticated user — the six-field CSP subset (§15.1) | Bearer (realm role) |
+| `courses` | Course CRUD with ownership enforcement (`owner_id` scoping) | Bearer (realm role) |
+| `materials` | Course-scoped upload: presigned URL issuance + material registration with `pending` status (server-generated `s3_key`) | Bearer (realm role) |
+| (root) | `GET /` service root; `GET /health` liveness probe; `GET /test/error` — staging-only Sentry verification probe (to be removed before production) | Public (root/health) |
+
+### 22.4 Planned API Surface (Preserved Design)
+
+The following endpoint design from v4.0 is **preserved in full as the target API**; none of these endpoints is implemented today. Dependencies mark what must land first:
+
+| Method | Path | Purpose | Status / depends on |
+|--------|------|---------|--------------------|
+| POST | `/materials/{id}/process` (shape TBD) | Trigger processing; job reference for the worker phase | Planned — material-processing tasks (§11.1) |
+| GET | `/materials/{id}/status` | Processing status once a status state machine exists | Planned — worker phase (§11.1) |
+| POST | `/chat/session` | Create new chat session | Planned — RAG retrieval (ADR-0009) |
+| WS | `/ws/chat/{session_id}` | Streaming chat connection (`retrieval_started` → `sources_found` → `reasoning_started` → `token` → `done`/`error`) | Planned — RAG + WebSocket transport |
+| POST | `/questions/generate` | Generate questions for material | Planned — reasoning provider (LiteLLM adapter, §8.1) |
+| POST | `/exams/start` | Start adaptive exam session | Planned — adaptive engine (§16) |
+| WS | `/ws/exams/{session_id}` | Interactive exam connection | Planned — adaptive engine |
+| GET | `/analytics/dashboard` | Learning analytics overview | Planned — analytics module |
+| GET | `/analytics/heatmap` | Concept mastery heatmap | Planned — SKM (§14) |
+| GET | `/recommendations/today` | Daily study recommendations | Planned — adaptive engine (§16) |
+| GET | `/reviews/scheduled` | Scheduled review items | Planned — SM-2/HLR scheduling (§16) |
+| GET | `/knowledge-graph/{material_id}` | Material knowledge graph | Planned — KG pipeline (§13) |
+
+The endpoint vocabulary (chat, exams, analytics, recommendations, reviews, knowledge graph) is kept unchanged so the frontend design (§20.3) and the target loop (§17.2) retain their API contract; only the implementation status is corrected.
 
 ---
 
 ## 23. Infrastructure & Deployment Modes
 
-### 23.1 Three Deployment Configurations
+### 23.1 Current Environments (Verified)
 
-The system supports three deployment configurations that correspond to the three execution modes defined in the Hybrid AI Architecture. Each configuration is a complete Docker Compose setup that provides all required services, with provider-specific services (Ollama, cloud API proxies) optional based on the chosen execution mode.
+Two Docker Compose environments exist in `infra/`. The **development** compose runs three services: `db` (`pgvector/pgvector:pg16`), `keycloak` 26.7.3 (`start-dev --import-realm` with the realm export, Postgres-backed), and a one-shot `keycloak-bootstrap` that provisions the shared dev test user and realm roles. The **staging** compose runs thirteen services, published from GHCR images (`IMAGE_TAG`-tagged) by GitHub Actions (`ci.yml` builds, `deploy-staging.yml` deploys, `storybook.yml` runs the Storybook pipeline; `infra/deploy.sh` assists rollout):
+
+| Service | Image / pin | Notes (verified) |
+|---------|-------------|------------------|
+| `backend` | GHCR backend image | Port 8000; env `DATABASE_URL`, `REDIS_PASSWORD`, `LITELLM_API_BASE=http://litellm:4000`; `/health` healthcheck |
+| `frontend` | GHCR frontend image | Port 3000; `SENTRY_DSN` injected; healthcheck via Node fetch |
+| `litellm` | `ghcr.io/berriai/litellm:main-latest` | Bound to `127.0.0.1:4000`; config from `litellm-config.yaml`; master + salt keys via env |
+| `db` | `pgvector/pgvector:pg16` | `pg_isready` healthcheck; named volume |
+| `redis` | `redis:7.4-alpine` | AOF persistence + `--requirepass`; ping healthcheck |
+| `celery_worker` / `celery_beat` | GHCR backend image | `celery -A app.workers.celery_app worker|beat` — infrastructure only, no tasks registered (§19.4) |
+| `flower` | GHCR backend image | `127.0.0.1:5555`; `FLOWER_UNAUTHENTICATED_API=true` (staging convenience to tighten) |
+| `keycloak` | `quay.io/keycloak/keycloak:latest` | `start-dev --import-realm`; H2 file store in staging (version skew vs dev's pinned 26.7.3 — flag for alignment) |
+| `prometheus` / `grafana` / `loki` / `alloy` | latest images | Prometheus 127.0.0.1:9090; Grafana :3001 with provisioning; Loki 127.0.0.1:3100; Alloy tails Docker logs into Loki |
+
+Corrections against v4.0: there is **no reverse proxy** (no Nginx service — HTTP ports are exposed directly on the host), **no MinIO service** (S3-compatible storage is consumed from a configured endpoint), and **no Ollama, ChromaDB, or Neo4j services anywhere in the compose files**.
+
+### 23.2 Staging Topology (As-Is)
 
 ```mermaid
 flowchart TB
-    subgraph LocalDeploy[Local Mode Deployment]
-        direction TB
-        LNginx[Nginx :80/:443]
-        LNext[Next.js :3000]
-        LFast[FastAPI :8000]
-        LWorker[Celery Worker]
-        LOllama[Ollama :11434]
-        LPG[PostgreSQL :5432]
-        LChroma[ChromaDB :8001]
-        LRedis[Redis :6379]
-        LMinIO[MinIO :9000]
+    U["Browser"] --> FE["frontend :3000"]
+    U --> BE["backend :8000"]
+    U --> KC["keycloak :8080"]
+    FE -->|"REST + bearer"| BE
+    FE -->|"OIDC"| KC
+    BE --> PG[("db — pgvector:pg16")]
+    BE --> RD[("redis 7.4")]
+    BE --> LIT["litellm :4000 (localhost)"]
+    BE --> KC
+    CW["celery_worker + celery_beat"] --> RD
+    CW --> PG
+    FL["flower :5555"] --> RD
+    subgraph OBS["Observability"]
+        PR["prometheus :9090"] -.-> BE
+        AL["alloy"] --> LK["loki :3100"]
+        GR["grafana :3001"] --> PR
+        GR --> LK
     end
+    S3["S3-compatible object storage (external, configured)"]
+    BE -.->|"presigned URLs"| S3
+```
 
-    subgraph HybridDeploy[Hybrid Mode Deployment]
-        direction TB
-        HNginx[Nginx :80/:443]
-        HNext[Next.js :3000]
-        HFast[FastAPI :8000]
-        HWorker[Celery Worker]
-        HOllama[Ollama :11434 — optional]
-        HPG[PostgreSQL :5432]
-        HChroma[ChromaDB :8001]
-        HRedis[Redis :6379]
-        HMinIO[MinIO :9000]
-        HCloudProxy[Cloud API Proxy]
-    end
+### 23.3 Deployment Modes (Design Preserved; Current Reality Explicit)
 
-    subgraph CloudDeploy[Cloud Mode Deployment]
+The three-configuration philosophy from the Hybrid AI Architecture (§7, §9) is preserved: Local (all providers local, maximal privacy, highest hardware demand), Hybrid (per-component local/cloud choice), and Cloud (all cloud, minimal hardware). Each configuration remains a complete Docker Compose story in the target design — one-command startup with mode selection, and provider-specific services optional per mode.
+
+**What exists today** is one development compose and one staging compose. The v4.0 claim of per-mode compose profiles (`--profile local|hybrid|cloud` selecting `ollama`, `chromadb`, `cloud-proxy` service groups) does not match the verified files: no such profiles exist. Mode selection today happens through **PAL provider configuration** (settings-level provider selection, §8.2) rather than through separate service topologies. The current staging shape is effectively hybrid: local embeddings (BGE-M3) and local pgvector, cloud OCR (Gemini), mock reasoning with the LiteLLM cloud gateway deployed for the planned adapter, and an external S3-compatible store.
+
+**Target mode topologies (planned):**
+
+```mermaid
+flowchart TB
+    subgraph T["Target mode topologies — none of the (planned) nodes below is deployed today"]
         direction TB
-        CNginx[Nginx :80/:443]
-        CNext[Next.js :3000]
-        CFast[FastAPI :8000]
-        CWorker[Celery Worker]
-        CPG[PostgreSQL :5432]
-        CRedis[Redis :6379]
-        CMinIO[MinIO :9000]
-        CCloudAll[All Cloud APIs]
+        subgraph LOCAL["Local mode (planned preset)"]
+            LN["Next.js + FastAPI + Celery"]
+            LLLM["Local LLM runtime (e.g. Ollama-class) (planned)"]
+            LEMB["BGE-M3 local embeddings"]
+            LOCR["Local OCR provider (planned)"]
+            LPG[("PostgreSQL + pgvector")]
+            LS3["Self-hosted S3-compatible storage (e.g. MinIO) (planned)"]
+            LN --> LLLM
+            LN --> LEMB
+            LN --> LOCR
+            LN --> LPG
+            LN --> LS3
+        end
+        subgraph HYBRID["Hybrid mode — current staging is approximately this shape"]
+            HN["Next.js + FastAPI + Celery"]
+            HLIT["LiteLLM cloud gateway (deployed)"]
+            HOCR["Cloud OCR — Gemini (configured)"]
+            HPG[("PostgreSQL + pgvector (deployed)")]
+            HN --> HLIT
+            HN --> HOCR
+            HN --> HPG
+        end
+        subgraph CLOUD["Cloud mode (planned preset)"]
+            CN["Next.js + FastAPI + Celery"]
+            CALL["All-cloud AI providers via LiteLLM"]
+            CPG[("Managed PostgreSQL + pgvector")]
+            CN --> CALL
+            CN --> CPG
+        end
     end
 ```
 
-### 23.2 Docker Compose Configuration
+The mode-specific service choices (local LLM runtime, local OCR provider, self-hosted object storage) are the **planned** extension of the verified provider-configuration mechanism; offering them as one-command presets remains a target deliverable (§9).
 
-All deployment modes use Docker Compose as the orchestration tool, ensuring that the entire platform can be started with a single `docker-compose up` command. The Docker Compose file is structured with service profiles that enable or disable specific containers based on the deployment mode. Local mode includes the `ollama` and `chromadb` profiles, hybrid mode includes `ollama` as optional and `cloud-proxy` as active, and cloud mode includes only `cloud-proxy` and the core services (FastAPI, Next.js, PostgreSQL, Redis).
+### 23.4 Hardware Requirements by Mode (Target Guidance)
 
-The configuration is designed for one-command deployment: `docker-compose --profile local up` starts the full local stack, `docker-compose --profile hybrid up` starts the hybrid stack, and `docker-compose --profile cloud up` starts the cloud stack. No manual configuration is required beyond setting the appropriate environment variables (cloud API keys for hybrid/cloud modes).
-
-### 23.3 Hardware Requirements by Mode
+The sizing table is retained as **target guidance aligned with §9.1** — it informs the deployment-profiles document and future presets; it does not describe the current staging deployment (which is CPU-only with cloud APIs):
 
 | Mode | Minimum RAM | Recommended RAM | GPU | Storage | Internet |
 |------|-------------|-----------------|-----|---------|----------|
-| Local | 8 GB | 16 GB | NVIDIA 8GB+ VRAM | 20 GB | Not required |
+| Local | 8 GB | 16 GB (GPU recommended for local LLM inference) | NVIDIA 8GB+ VRAM | 20 GB | Not required |
 | Hybrid | 4 GB | 8 GB | Optional (improves local LLM speed) | 10 GB | Required (for cloud APIs) |
 | Cloud | 2 GB | 4 GB | Not required | 5 GB | Required (persistent) |
 
@@ -1140,91 +1475,155 @@ The configuration is designed for one-command deployment: `docker-compose --prof
 
 ## 24. Security & Privacy
 
-### 24.1 Security Architecture
+### 24.1 Security Architecture (Control Framework)
 
-The security architecture is designed around the principle that educational data is personally sensitive and must be protected at the infrastructure level, not merely at the application level. The architecture implements security at four layers: transport security (HTTPS/TLS for all connections), authentication security (JWT with bcrypt hashing and short-lived tokens), data security (encrypted storage for sensitive fields, access control per user role), and operational security (input validation, rate limiting, audit logging).
+The security architecture keeps its four-layer framing — transport security, authentication security, data security, and operational security — with one honesty correction: **not every layer is currently implemented**. The framework below maps each layer to its verified controls and its planned ones, so the target posture stays visible without implying protections that do not exist yet. Educational data is personally sensitive and must be protected at the infrastructure level as well as the application level; the planned layers exist to guarantee that end-state.
 
-Transport security is enforced by Nginx, which terminates TLS connections and forwards decrypted traffic to the internal services. This ensures that all external communication is encrypted, while internal service-to-service communication operates on the trusted internal network without additional encryption overhead. The Nginx configuration also enforces HTTP-to-HTTPS redirection, ensuring that no unencrypted traffic is accepted.
+### 24.2 Implemented Controls (Verified)
 
-Authentication uses bcrypt for password hashing (12 rounds, providing approximately 200ms hash time — sufficient to prevent brute-force attacks without causing noticeable login latency) and JWT for session tokens. JWT tokens carry minimal payload (user ID, role, expiration timestamp) to reduce token size and avoid exposing sensitive data in the token itself. Tokens are signed with a server-side secret key that is rotated monthly in production deployments.
+- **Authentication (Keycloak/OIDC, ADR-0006):** RS256 access tokens validated against the realm JWKS with audience and issuer enforcement; `exp`/`iat`/`iss`/`aud`/`sub` required; short-lived tokens (300 s) with Keycloak-managed refresh (`refreshTokenMaxReuse: 0`). No passwords or refresh tokens are stored in the application database; credentials belong to Keycloak entirely.
+- **Authorization:** realm roles (`student` default, `instructor`, `admin`) extracted from token claims and enforced at the API layer; ownership scoping in the data model (courses belong to `owner_id`; materials are course-scoped; all user-owned rows cascade on delete so revoked users leave no orphaned data).
+- **Identity lifecycle:** just-in-time provisioning keyed on `(issuer, subject)`; `email_verified` synchronization; rejection of email collisions across distinct identities rather than silent account merging.
+- **Upload safety:** server-generated S3 object keys (a client-supplied path is never trusted), presigned upload URLs, unique `s3_key` per material, and a `pending` status that keeps unscanned content out of processing until the planned scan/processing phase defines the transition.
+- **Input validation and configuration hygiene:** Pydantic request validation; settings-driven CORS allow-list; all credentials injected via environment variables (`DATABASE_URL`, `REDIS_PASSWORD`, `LITELLM_MASTER_KEY`/`LITELLM_SALT_KEY`, `KEYCLOAK_ADMIN_*`, `SENTRY_DSN`, `GEMINI_API_KEY`) — no secrets in the repository. LiteLLM holds a master key and a salt key for virtual-key encryption; dev-only bootstrap credentials (`admin/admin`, required test-user password variable) are explicitly non-production.
+- **Operational visibility:** structlog structured logging, Sentry error tracking (backend and frontend, with a staging error probe endpoint), Prometheus metrics instrumentation, and `/health` liveness probes wired into compose healthchecks.
 
-### 24.2 Privacy Architecture
+### 24.3 Planned Controls (Target)
 
-The privacy architecture is the most distinctive security feature of OpenLearn AI, reflecting the Privacy First design principle. The architecture implements three privacy guarantees:
+- **Transport security:** no reverse proxy is deployed today, so no in-cluster TLS termination exists yet. The target architecture terminates TLS at a reverse proxy (Nginx is a candidate for the target deployment) with HTTP→HTTPS redirection; until then, transport protection depends on the deployment environment's ingress.
+- **Rate limiting and abuse controls** on authentication and AI-cost-bearing endpoints (the LiteLLM request budget cap is the first, partial instantiation of cost control).
+- **Upload content/virus scanning** before a material leaves `pending` (the material model comment reserves this for the processing phase).
+- **Audit logging** of security-relevant events (role changes, profile updates, material lifecycle transitions) beyond today's structured application logs.
+- **Encryption of sensitive fields at rest** if/when sensitive profile data beyond the current six fields is introduced, plus reliance on managed/volume encryption for the database.
+- **Realm key management:** JWKS-based signing makes rotation a Keycloak operational concern (the v4.0 "monthly secret rotation" applied to self-issued JWTs and is superseded); monitoring of realm key rotation is a planned operational task.
+- **Worker reliability controls:** task retries, dead-letter handling, and idempotent processing semantics once material-processing tasks exist (§19.4).
 
-**Local Processing Guarantee:** All core features — document processing, embedding generation, similarity search, LLM generation, knowledge graph construction, mastery tracking, and learning analytics — can operate entirely on the student's local machine without transmitting any data to external services. The Provider Abstraction Layer enables local providers for every interface, and the default configuration uses local providers exclusively.
+### 24.4 Privacy Architecture (Principles Preserved; Current Defaults Corrected)
 
-**Minimum Data Principle:** When cloud providers are used, the system transmits only the minimum data necessary for the specific operation. For embedding generation, only the text chunks being embedded are transmitted — not the entire document corpus. For LLM generation, only the retrieved context chunks and the student's prompt are transmitted — not the student's entire interaction history. This principle ensures that cloud providers receive task-specific data slices rather than comprehensive student profiles.
+The privacy architecture remains the most distinctive feature of OpenLearn AI, and its three guarantees are preserved as design principles — with the current defaults stated truthfully:
 
-**Explicit Consent Mechanism:** Cloud providers are never activated by default. The system configuration explicitly specifies which providers use cloud services, and the onboarding wizard informs the student about data transmission implications before enabling cloud providers. A student who declines cloud services receives full functionality through local providers, potentially at lower quality or speed, but with guaranteed data isolation.
+**Local Processing Guarantee (design principle).** All core features — document processing, embedding generation, similarity search, LLM generation, knowledge graph construction, mastery tracking, and learning analytics — are to be able to operate entirely on the student's local machine without transmitting any data to external services. The PAL keeps every AI capability provider-substitutable, which is what makes the guarantee reachable. **Current default mix:** extraction (Docling), embeddings (BGE-M3), similarity search, and vector storage (pgvector) already run locally; OCR defaults to the cloud Gemini provider (`gemini-2.5-flash`) when configured; reasoning is the mock provider (no external transmission) with the LiteLLM cloud gateway deployed for the planned adapter. The v4.0 claim that the default configuration is exclusively local is therefore corrected — the shipped default is a hybrid, and the all-local preset is planned (§9, §23.3).
+
+**Minimum Data Principle (design principle, unmodified).** When cloud providers are used, the system transmits only the minimum data necessary for the specific operation: for embedding generation, only the text chunks being embedded — not the entire document corpus; for LLM generation, only the retrieved context chunks and the student's prompt — not the student's entire interaction history. Cloud providers receive task-specific data slices rather than comprehensive student profiles. This principle governs every current and future provider call, including Gemini OCR page batches.
+
+**Explicit Consent Mechanism (planned).** Cloud providers are never activated without explicit configuration, and the target onboarding wizard is to inform the student about data-transmission implications before cloud providers are enabled. Today's mechanism is configuration-level provider selection by the operator; the student-facing consent flow is planned, not built. A student or institution declining cloud services receives the planned all-local preset — full functionality at potentially lower quality or speed, with guaranteed data isolation (§9's institution self-hosting path).
+
+### 24.5 Reliability & Operational Concerns
+
+**Implemented today:** compose healthchecks across the core services (backend `/health`, frontend Node fetch probe, `pg_isready`, Redis ping, Keycloak TCP probe) with `restart: unless-stopped` and ordered `depends_on` conditions; PAL provider fallback with ordered fallback semantics, gather-style health checks across providers, and a typed exception hierarchy (`ProviderError`, `ConfigurationError`) so provider failures fail loudly and predictably (§8); ingestion preserves `PARTIAL_SUCCESS` conversion status with per-error details instead of silently dropping content; Sentry error tracking with the staging error probe; Prometheus/Grafana/Loki/Alloy log-and-metric pipeline; Flower for worker visibility (authentication currently disabled in its staging config — flagged to tighten before any shared deployment).
+
+**Planned:** retry and dead-letter policies for worker tasks; the material status state machine that makes processing observable and recoverable; SLOs and alerting rules on top of the existing metric pipeline; backup/restore drills for PostgreSQL and the object store; rate limiting (§24.3); and runbooks for the Keycloak/LiteLLM/pgvector services. The reliability philosophy is unchanged from v4.0 — degrade explicitly, never silently — and now rests on verified mechanisms rather than planned ones alone.
 
 ---
 
 ## 25. Performance & Scalability
 
-### 25.1 Non-Functional Requirements
+> **Status: targets and design model.** No load tests, latency benchmarks, or throughput measurements exist in the verified baseline — the `backend/app/eval/` package is a seeded evaluation harness mechanism, not a performance benchmark (§1, §10.2). Every quantitative value in this section is an **architectural target or planning assumption**, not a measured result, and each requires the listed measurement method before it can be treated as evidence. What *is* verified is the current resource profile (§25.2): which performance-relevant mechanisms exist and which do not.
 
-The system targets the following non-functional performance requirements, calibrated for the minimum hardware configuration in local mode (16GB RAM, 8GB VRAM GPU):
+### 25.1 Non-Functional Requirements (Targets)
 
-| Code | Category | Requirement | Measurement Method |
-|------|----------|-------------|-------------------|
-| NFR-1 | Performance | RAG query response < 3 seconds (end-to-end: embedding + retrieval + generation) | Postman / k6 latency testing |
-| NFR-2 | Performance | 10 MCQ generation < 30 seconds | Timer from request to last question delivered |
-| NFR-3 | Performance | PDF processing (100 pages) < 60 seconds including OCR | Worker processing timestamp |
-| NFR-4 | Scalability | 50 concurrent users on single server (4GB RAM for hybrid mode) | Load testing with k6 |
-| NFR-5 | Reliability | Uptime > 99% in production deployment | Monitoring dashboard |
-| NFR-6 | Security | bcrypt + HTTPS mandatory + JWT authentication | Security audit checklist |
-| NFR-7 | Privacy | 100% offline operation available without external API calls | Offline mode test |
+The system targets the following non-functional requirements, calibrated for the hardware guidance of §9.1 (local mode: 8 GB RAM minimum, 16 GB RAM with a GPU recommended for local LLM inference) and the single-host deployment reality of §23:
+
+| Code | Category | Requirement (target) | Measurement Method (planned) |
+|------|----------|----------------------|------------------------------|
+| NFR-1 | Performance | RAG query response < 3 s (end-to-end: embedding + retrieval + generation) | Postman / k6 latency testing |
+| NFR-2 | Performance | 10 MCQ generation < 30 s | Timer from request to last question delivered |
+| NFR-3 | Performance | PDF processing (100 pages) < 60 s including OCR | Worker processing timestamp |
+| NFR-4 | Scalability | 50 concurrent users on a single server | Load testing with k6 |
+| NFR-5 | Reliability | Uptime > 99% in production deployment | Monitoring dashboard (Grafana, §26) |
+| NFR-6 | Security | Keycloak/OIDC authentication (RS256 access tokens validated via JWKS) with transport security enforced at the environment's ingress | Security audit checklist |
+| NFR-7 | Privacy | Offline-capable operation without external API calls (the all-local mode is a planned preset, §9.1; today mock providers support offline development and tests) | Offline mode test |
 | NFR-8 | Usability | Arabic/English bilingual + full RTL support | UI testing across both languages |
 | NFR-9 | Usability | One-command deployment (Docker Compose) | Deployment verification |
 | NFR-10 | Maintainability | Test coverage >= 70% on core modules | pytest-cov reporting |
 
-### 25.2 Performance Optimization Strategies
+Corrections against v4.0: NFR-4's "(4GB RAM for hybrid mode)" contradicted the §9.1 hardware guidance (8 GB minimum) and has been removed; NFR-6 described bcrypt plus self-issued JWT authentication, which is superseded by Keycloak/OIDC (ADR-0006, §24). NFR-1 through NFR-3 additionally presuppose the RAG/generation pipeline (§12.2) and worker-chained document processing (§11.7), which are planned; the targets are retained because they shape the architecture now (§25.3), not because they are met.
 
-**Caching:** Redis caches frequently accessed data — user profiles, material metadata, recent quiz attempts, and popular search results. Cache invalidation follows a time-based strategy (TTL per data type) combined with event-based invalidation (cache cleared when the underlying data changes). The cache layer sits between the service layer and the repository layer, ensuring that caching is transparent to business logic.
+### 25.2 Current Resource Profile (Verified)
 
-**Vector Search Optimization:** The embedding dimension and index type are configurable through the Vector DB Interface. ChromaDB supports HNSW (Hierarchical Navigable Small World) indexing for fast approximate nearest neighbor search, which provides sub-second retrieval for collections up to 100,000 vectors. For larger collections, the system supports sharding across multiple ChromaDB instances or migrating to a cloud vector database (Pinecone, Weaviate) that handles horizontal scaling automatically.
+The performance-relevant reality of the staging baseline:
 
-**LLM Response Streaming:** LLM generation responses are streamed token-by-token through WebSocket connections, rather than buffered until the complete response is ready. Streaming provides immediate visual feedback (the student sees the first words of the answer within 100ms, even if the complete answer takes 5-10 seconds), dramatically improving perceived responsiveness. The streaming pattern is implemented through FastAPI's WebSocket support and the Provider Abstraction Layer's streaming-capable Reasoning Interface.
+- **In-process AI workloads.** BGE-M3 embeddings run in-process (sentence-transformers, CPU) — the dominant memory/CPU consumer on the backend container. Docling extraction and structure-aware chunking (§11.3, §11.4) run in-process and are CPU-bound. Gemini OCR is network-bound (one single-page PDF request per call, §9.3) and shifts OCR compute off-host entirely.
+- **Asynchronous infrastructure deployed; heavy work not yet wired.** Celery worker, Celery Beat, Flower, and the Redis broker are deployed in staging (§23.1), but the automated material-processing chain (upload → ingestion → chunking → embeddings → pgvector) is not wired yet (§11.1, §12.5) — so in practice no heavy background workload runs today.
+- **Database.** One PostgreSQL 16 instance with pgvector stores relational data and vectors (`vector_records`, `VECTOR(1024)`, cosine similarity, ADR-0004). There is no separate vector server, no cache tier, and no read replicas.
+- **No application cache.** Redis currently serves as the Celery broker only; no application-level caching of profiles, materials, or search results exists.
+- **Gateway.** LiteLLM is a lightweight proxy deployed in staging; it carries no product traffic yet because the PAL reasoning adapter is not wired (§6.1, ADR-0005).
+- **Observability without baselines.** Prometheus metrics, Grafana dashboards, and Loki/Alloy log aggregation are deployed (§23.1) — the means to observe performance exist; no performance baselines have been recorded.
+
+### 25.3 Target Scalability Model (Design)
+
+The mechanisms below preserve the original scaling rationale as design intent — configured levers for the growth path, not tuned or benchmarked mechanisms:
+
+- **Async processing and worker scale-out (infrastructure deployed; workloads planned).** The FastAPI application handles requests asynchronously, and Celery + Redis provides the distributed task layer. Ingestion, OCR orchestration, embedding, and RAG work (ADR-0009) are designed to run on workers so that request latency stays independent of document workloads; scaling throughput then becomes a matter of worker replicas and concurrency settings, with Flower providing task visibility (§23.2). Autoscaling is a deployment-level extension, not part of the current Compose topology.
+- **Database and pgvector search (storage implemented; index tuning to be benchmarked).** pgvector supports approximate-nearest-neighbor indexes (HNSW, IVFFlat) on `vector_records` for fast cosine search as collections grow; index choice and parameters are to be selected against measured recall/latency, not assumed. Because the embedding dimension is fixed at 1024 (§12.1), index planning has a stable shape. Horizontal database scale-out — read replicas, partitioning, or a dedicated vector store — is a target consideration; per ADR-0004 a dedicated store would be reconsidered only with measured evidence that PostgreSQL + pgvector is insufficient. The v4.0 text describing ChromaDB HNSW sizing, sub-second retrieval claims, multi-instance sharding, and migration to Pinecone/Weaviate is superseded (ADR-0004).
+- **Caching (design intent).** Redis-based application caching — frequently accessed data such as user profiles, material metadata, recent quiz attempts, and popular search results, with TTL-per-data-type plus event-based invalidation between the service and repository layers — remains the design. Today Redis serves only as the Celery broker (§25.2).
+- **LLM response streaming (partially implemented).** Token-by-token streaming is the designed chat transport: the PAL router already implements streaming-capable reasoning with pre-first-chunk fallback (§8.3), and FastAPI's WebSocket support is the reserved transport for the planned chat interface (§22.1, ADR-0009). The end-to-end streaming path to the client does not exist yet; "first tokens perceived almost immediately" is a design objective with no measured first-token latency.
+- **Provider fallback as performance insurance (implemented).** The PAL router's ordered fallback chain (§8.3) and LiteLLM's configured model fallback (`gpt-4o-mini` → `gpt-3.5-turbo`) keep AI operations responsive when a provider degrades — a reliability mechanism that also bounds tail behavior by converting hard failures into degraded-but-successful responses.
+- **Stateless horizontal scaling (target).** Backend and worker containers are stateless — state lives in PostgreSQL, Redis, and S3-compatible object storage — so the current Compose topology maps onto multi-replica deployment behind a reverse proxy as the product grows (§23.4 target guidance; no reverse proxy is deployed today).
 
 ---
 
 ## 26. Technology Stack
 
-### 26.1 Recommended Stack with Justification
+### 26.1 Current Stack (Verified against the staging baseline)
 
-The following table presents the recommended technology stack with specific choices and justification for each selection. Every choice was evaluated against the eight design principles, and alternatives were considered before the final selection was made.
+The inventory below is the as-built technology stack, verified against the repository at the baseline commit. **Implemented** entries map to code, configuration, or compose definitions in the repository; **Planned** entries belong to the target architecture and are tracked in their respective sections; **Historical** entries are v4.0 defaults that have been superseded — each is retained with its supersession reason and governing ADR, because knowing what was rejected and why is part of the architecture record (ADR-0002 governs where ADRs conflict with this table).
 
-| Layer | Component | Recommended Choice | Justification | Alternatives Considered |
-|-------|-----------|-------------------|---------------|------------------------|
-| **Frontend** | Framework | Next.js 16 (App Router) | SSR for performance, App Router for clean routing, native WebSocket, type-safe API routes | Remix, Vite + React SPA |
-| **Frontend** | UI Library | React 19 + TypeScript 5 | Latest React features (concurrent rendering, server components), TypeScript for type safety | Vue 3, Svelte |
-| **Frontend** | Styling | Tailwind CSS 4 + shadcn/ui | Utility-first CSS for rapid development, shadcn/ui for consistent, accessible components | MUI, Ant Design |
-| **Frontend** | State | Zustand + TanStack Query | Zustand for simple client state, TanStack for server state with caching and sync | Redux, Jotai |
-| **Frontend** | Charts | Recharts + Nivo | Recharts for analytics charts, Nivo for heatmap and complex visualizations | Chart.js, D3.js raw |
-| **Frontend** | KG Visualizer | Cytoscape.js / D3.js | Cytoscape.js for interactive graph navigation, D3.js for custom graph layouts | vis.js, sigma.js |
-| **Backend** | Framework | FastAPI (Python 3.12) | Native async, auto OpenAPI docs, Pydantic validation, WebSocket support | Django, Flask |
-| **Backend** | ORM | SQLAlchemy 2 + Pydantic v2 | SQLAlchemy for database operations, Pydantic for API validation — complementary, not competing | Tortoise ORM, Prisma |
-| **Backend** | Async Tasks | Celery + Redis | Mature task queue, Redis as broker, supports scheduling (Beat), monitoring (Flower) | Dramatiq, Huey |
-| **Backend** | Streaming | WebSocket (FastAPI native) | Native WebSocket in FastAPI, no additional libraries needed | SSE, Socket.IO |
-| **AI/ML** | LLM Runtime | Ollama | Easy local LLM deployment, model management API, supports multiple model families | vLLM, llama.cpp, LM Studio |
-| **AI/ML** | LLM Models | Qwen 2.5 (7B default) | Excellent Arabic quality, reasonable size, JSON mode support, freely available | Llama 3.1, Gemma 2, Phi-3.5 |
-| **AI/ML** | Embeddings | BGE-m3 (BAAI/bge-m3) | Strong multilingual (Arabic+English), 1024-dim, open-source, well-benchmarked | multilingual-e5-large, OpenAI embeddings |
-| **AI/ML** | Re-ranking | bge-reranker-v2-m3 | Matches embedding model, open-source, good cross-encoder performance | Cohere Rerank |
-| **AI/ML** | OCR | PaddleOCR | Superior Arabic OCR quality, open-source, supports mixed-language text | Tesseract, Surya |
-| **AI/ML** | Knowledge Tracing | pyBKT | Python implementation of Bayesian Knowledge Tracing, open-source, research-validated | Custom implementation |
-| **AI/ML** | IRT | py-irt | Python implementation of Item Response Theory, open-source | Custom implementation |
-| **Data** | Relational DB | PostgreSQL 16 | Industry-standard RDBMS, JSONB for flexible storage, full-text search, mature ecosystem | MySQL, SQLite |
-| **Data** | Vector DB | ChromaDB (embedded) | Lightweight, embedded mode, no external dependencies, open-source, HNSW indexing | FAISS, Qdrant, Milvus |
-| **Data** | Cache/Queue | Redis | Dual purpose (cache + task queue), sub-millisecond latency, pub/sub for WebSocket | Memcached + RabbitMQ |
-| **Data** | Object Storage | MinIO | S3-compatible, local deployment, open-source, supports large files | AWS S3, Azure Blob |
-| **Data** | Knowledge Graph | Neo4j (production) / NetworkX (dev) | Neo4j for production (Cypher queries, visual exploration), NetworkX for lightweight dev | JSONB in PostgreSQL |
-| **Infrastructure** | Containerization | Docker + Docker Compose | Industry-standard containerization, one-command deployment, consistent environments | Podman, K3s |
-| **Infrastructure** | Reverse Proxy | Nginx | TLS termination, load balancing, static file serving, mature and reliable | Traefik, Caddy |
-| **Infrastructure** | CI/CD | GitHub Actions | Integrated with GitHub, free for public repos, supports Docker builds and testing | Jenkins, CircleCI |
-| **Observability** | LLM Tracing | Langfuse (open-source) | Open-source alternative to LangSmith, supports local deployment, tracks LLM calls | LangSmith, Helicone |
-| **Observability** | Error Tracking | Sentry | Automatic error capture, stack trace analysis, performance monitoring | Rollbar |
-| **Observability** | Logging | structlog | Structured JSON logging, easy to parse and analyze | standard logging |
+| Layer | Technology | Status | Purpose / Notes |
+|-------|-----------|--------|-----------------|
+| **Backend** | FastAPI 0.138.1 (Python 3.11, `python:3.11-slim`) | Implemented | Async web framework; automatic OpenAPI docs; Pydantic-native validation |
+| **Backend** | Pydantic v2 (`pydantic-settings` 2.15.0) | Implemented | Settings-driven configuration; all `ai_*` provider knobs are settings (§8.2) |
+| **Backend** | SQLAlchemy 2 (2.0.43, async mode) | Implemented | Async ORM over PostgreSQL |
+| **Backend** | Alembic 1.16.5 | Implemented | Database migrations |
+| **Backend** | Celery 5.6.3 + Redis broker; Flower 2.0.1 | Implemented | Task-queue infrastructure (worker/beat/monitoring deployed; processing tasks not yet wired, §11.1) |
+| **Backend** | structlog 25.5.0 | Implemented | Structured JSON logging across the backend |
+| **Backend** | FastAPI WebSocket support | Planned | Reserved transport for streaming chat (ADR-0009 event protocol, §22.1); no WebSocket endpoint ships today |
+| **Frontend** | Next.js 16.3.1 (App Router) + React 19.2.8 | Implemented | SSR, App Router organization; no client-state library beyond React/TanStack |
+| **Frontend** | TypeScript 5 | Implemented | Type safety across the frontend |
+| **Frontend** | Tailwind CSS 4 + shadcn/ui toolchain (`shadcn` CLI, `@base-ui/react`, `lucide-react`, CVA, `tailwind-merge`, `next-themes`) | Implemented | Styling and component system |
+| **Frontend** | TanStack Query 5 | Implemented | Server-state fetching, caching, and synchronization |
+| **Frontend** | `keycloak-js` 26.2.4 | Implemented | OIDC Authorization Code + PKCE in the browser (§6.1, ADR-0006) |
+| **Frontend** | `@sentry/nextjs` 10.74 | Implemented | Frontend error monitoring |
+| **Frontend** | Analytics charts (Recharts/Nivo) and KG visualizer (Cytoscape.js/D3.js) | Planned | For the planned analytics dashboard (§22.4) and KG exploration (§13); no chart or graph-visualization code exists |
+| **Frontend** | Zustand | Historical | v4.0 default for client state; superseded — React state plus TanStack Query covers current needs (§20.1) |
+| **Database** | PostgreSQL 16 + pgvector (`pgvector/pgvector:pg16` image; `pgvector` 0.4.1 Python package) | Implemented | Relational store and vectors in one database (`vector_records`, `VECTOR(1024)`, cosine similarity; ADR-0004) |
+| **Database** | asyncpg 0.30.0 | Implemented | Async PostgreSQL driver |
+| **Database** | Redis 7.4 | Implemented | Celery broker; application-cache role is design intent (§25.3) |
+| **Database** | ChromaDB | Historical | v4.0 vector-store default; superseded by PostgreSQL + pgvector (ADR-0004). A dedicated store would be a new PAL provider implementation, reconsidered only on measured evidence |
+| **Authentication** | Keycloak (26.7.3 in dev; `latest` in staging), realm `openlearn` | Implemented | OIDC identity provider; public client `openlearn-frontend`, audience `openlearn-api` (ADR-0006) |
+| **Authentication** | PyJWT 2.13.0 + `cryptography` 45.0.4 | Implemented | RS256 access-token validation against the realm JWKS (§22.2, §24.2) |
+| **Authentication** | bcrypt password hashing | Historical | v4.0 approach; superseded — credential handling is owned entirely by Keycloak; no passwords are stored in the application database (ADR-0006) |
+| **AI/PAL** | PAL: five capability interfaces + shared base contract, provider factory, router with ordered/streaming fallback, typed exception hierarchy | Implemented | The provider abstraction boundary (ADR-0009, §8); mock providers exist for all provider-backed interfaces |
+| **AI/PAL** | Gemini OCR (`gemini-2.5-flash` via `google-genai` 1.24.0) | Implemented | OCR provider — single-page PDF requests (§11.5); model and key from settings (`ai_ocr_model`, `GEMINI_API_KEY`) |
+| **AI/PAL** | BGE-M3 (`BAAI/bge-m3` via `sentence-transformers` 3.3.1), 1024-dim dense | Implemented | In-process local embeddings |
+| **AI/PAL** | LiteLLM gateway (`main-latest` image) | Implemented (deployed; not yet product-wired) | Staging LLM gateway: `gpt-4o-mini` primary, `gpt-3.5-turbo` fallback, budget cap, `drop_params` (ADR-0005, §6.1); the PAL reasoning adapter is planned |
+| **AI/PAL** | bge-reranker-v2-m3 | Planned | Re-ranking provider for the RAG pipeline (§12.2); no ranking provider is bound today |
+| **AI/PAL** | pyBKT, py-irt | Planned | Candidate libraries for BKT (§14.3) and IRT (§14.4); no adaptive-learning code exists (§16) |
+| **AI/PAL** | Ollama + Qwen 2.5 | Historical | v4.0 local-LLM default; superseded — no local LLM runtime ships, and reasoning is gateway-mediated (ADR-0005). A local runtime remains possible as a future PAL provider if evaluation evidence supports it |
+| **Document processing** | Docling 2.127.0 | Implemented | PDF/DOCX/HTML/Markdown/image extraction into `CanonicalDocument` (§11.3) |
+| **Document processing** | pypdfium2 5.13.0 | Implemented | Page-level PDF extraction producing targeted-OCR sources |
+| **Document processing** | PaddleOCR / Surya | Historical (benchmark candidates) | v4.0 OCR default; superseded by the Gemini provider. Retained only as benchmark candidates in `experiments/OCR/` under the ADR-0003 process — never imported by product code |
+| **Document processing** | PyMuPDF / python-docx / python-pptx | Historical | v4.0 per-format extraction assumption; superseded by Docling (§11.3) |
+| **Document processing** | LangChain text splitters | Historical | v4.0 chunking assumption; superseded by the custom structure-aware chunker with parameterized size/overlap (§11.4); LangChain is not a dependency |
+| **Infrastructure** | Docker + Docker Compose (dev: 3 services; staging: 13 services) | Implemented | One-command environments (§23.1) |
+| **Infrastructure** | GitHub Actions CI/CD + GHCR images | Implemented | `ci.yml`, `deploy-staging.yml`, `storybook.yml` build, publish, and deploy the stack |
+| **Infrastructure** | S3-compatible object storage via boto3 1.35.36 | Implemented | Presigned uploads with server-generated keys (§11.1); the endpoint is configuration — no storage service exists in the compose files |
+| **Infrastructure** | MinIO | Historical | v4.0 assumption of a deployed MinIO service; superseded — storage is consumed from a configured S3-compatible endpoint (self-hosted MinIO remains a valid target-mode choice, §23.3) |
+| **Infrastructure** | Nginx reverse proxy | Historical / target candidate | Not deployed today (§23.1); TLS termination at a reverse proxy is target architecture (§24.3) |
+| **Observability** | Prometheus + Grafana + Loki + Alloy | Implemented (staging) | Metrics, dashboards, and log aggregation (§23.1) |
+| **Observability** | `prometheus-fastapi-instrumentator` 7.1.0 | Implemented | HTTP metrics on the backend |
+| **Observability** | Sentry (`sentry-sdk` 2.35.0) | Implemented | Backend error monitoring (paired with `@sentry/nextjs` on the frontend) |
+| **Observability** | Langfuse | Configured, not deployed | LiteLLM carries a Langfuse success callback; the Langfuse service itself is not deployed (§6.1) |
+| **Testing / evaluation** | pytest + coverage | Implemented | Backend test suite; the 70% core-coverage gate is the NFR-10 target |
+| **Testing / evaluation** | `backend/app/eval/` harness | Implemented (basic) | CLI (`python -m app.eval`), evaluator registry, JSON dataset loading/validation, seeded dummy evaluator; the complete ADR-0003 evaluation framework is planned (§10.2) |
+| **Testing / evaluation** | Storybook 10.6 + Vitest + Playwright + ESLint 9 (+ Chromatic) | Implemented (frontend) | Component workshop, unit/browser testing, E2E infrastructure, linting |
+| **Testing / evaluation** | k6 / Postman load testing | Planned | The measurement methods behind NFR-1–NFR-4 (§25.1); no load-test assets exist in the repository |
+| **Development tooling** | Dev Compose profile + `infra/dev/` bootstrap scripts | Implemented | Local environment; Keycloak realm bootstrap and realm import |
+| **Development tooling** | Deployment profiles document (`OpenLearn_AI_System_Requirements_and_Deployment_Profiles.md`) | Supporting reference | Complements §9.1/§23.4 hardware guidance; not an authority above this specification (ADR-0002) |
+
+### 26.2 Stack Selection Rationale (Preserved)
+
+The original stack-selection logic remains sound and is preserved in compressed form: FastAPI was chosen over Django/Flask for native async and type-safe validation on an AI-heavy workload; SQLAlchemy 2 + Alembic over Tortoise/Prisma for mature async ORM and versioned migrations on PostgreSQL; Celery + Redis over Dramatiq/Huey for the broker/queue combination and Flower visibility; PostgreSQL + pgvector (ADR-0004) over embedded vector stores for one database with transactions and provenance; Next.js/React/Tailwind for SSR, ecosystem maturity, and the shadcn/ui component path; Keycloak (ADR-0006) over application-managed identity to keep credentials and token lifecycle out of the application database; LiteLLM (ADR-0005) to give the reasoning path model fallback, budget control, and provider substitution without code changes; and Docker Compose for one-command reproducibility within a graduation project's operational scope (the modular-monolith reasoning of ADR-0001 applies). Each planned entry above inherits its justification from the section that specifies it.
 
 ---
 
@@ -1236,21 +1635,23 @@ The following table presents the recommended technology stack with specific choi
 
 ### 27.1 Research Foundations
 
-Every pedagogical algorithm in OpenLearn AI is grounded in published research. The system does not employ ad-hoc heuristics without theoretical justification — this is a requirement of both the Research Driven design principle and the academic standards expected by graduation committee reviewers. The following table maps each algorithm to its research foundation:
+Every pedagogical algorithm in OpenLearn AI is grounded in published research. The system does not employ ad-hoc heuristics without theoretical justification — this is a requirement of both the Research Driven design principle and the academic standards expected by graduation committee reviewers. One distinction governs this section: a research foundation justifies a design decision; it does not by itself constitute an implemented capability. BKT, IRT, CAT, SM-2, and Half-Life Regression are the research-grounded design of the Student Knowledge Model and Adaptive Learning Engine (§14, §16) — none is implemented in the baseline. The following table maps each algorithm to its research foundation and its actual implementation status:
 
-| Algorithm | Research Foundation | Key Paper | Implementation |
-|-----------|---------------------|-----------|---------------|
-| Bayesian Knowledge Tracing | Cognitive mastery modeling | Corbett & Anderson, 1995 — "Knowledge Tracing: Modeling the Acquisition of Problem-Solving Skills" | pyBKT library |
-| Item Response Theory | Question difficulty estimation | Wainer et al. — "Computerized Adaptive Testing: A Primer" | py-irt library |
-| Computerized Adaptive Testing | Adaptive exam construction | Wainer et al. + Lord, 1980 — "Applications of Item Response Theory to Practical Testing Problems" | Custom CAT engine |
-| Spaced Repetition (SM-2) | Review scheduling optimization | Wozniak, 1990 — "SuperMemo" | Custom SM-2 implementation |
-| Forgetting Prediction (Half-Life Regression) | Retention probability estimation | Settles & Meeder, 2016 — "A Trainable Spaced Repetition Model for Language Learning" | Custom Half-Life Regression |
-| VARK Learning Styles | Learning modality classification | Fleming, 2001 — "VARK: A Guide to Learning Styles" | Onboarding quiz |
-| Semantic Chunking | Text segmentation strategy | Various NLP literature on topic segmentation and discourse structure | LangChain text splitters |
+| Algorithm | Research Foundation | Key Paper | Implementation Status |
+|-----------|---------------------|-----------|----------------------|
+| Bayesian Knowledge Tracing | Cognitive mastery modeling | Corbett & Anderson, 1995 — "Knowledge Tracing: Modeling the Acquisition of Problem-Solving Skills" | **Planned** — pyBKT is the candidate library (§14.3); no knowledge-tracing code exists |
+| Item Response Theory | Question difficulty estimation | Wainer et al. — "Computerized Adaptive Testing: A Primer" | **Planned** — py-irt is the candidate library (§14.4) |
+| Computerized Adaptive Testing | Adaptive exam construction | Wainer et al. + Lord, 1980 — "Applications of Item Response Theory to Practical Testing Problems" | **Planned** — custom CAT engine designed (§16.5) |
+| Spaced Repetition (SM-2) | Review scheduling optimization | Wozniak, 1990 — "SuperMemo" | **Planned** — custom SM-2 designed (§16.4) |
+| Forgetting Prediction (Half-Life Regression) | Retention probability estimation | Settles & Meeder, 2016 — "A Trainable Spaced Repetition Model for Language Learning" | **Planned** — complements SM-2 review scheduling (§16.4) |
+| VARK Learning Styles | Learning modality classification | Fleming, 2001 — "VARK: A Guide to Learning Styles" | **Field implemented** — `learning_style_vark` is stored in the profile (§15.1); the onboarding quiz that populates it is planned |
+| Semantic Chunking | Text segmentation strategy | NLP literature on topic segmentation and discourse structure | **Implemented differently** — custom structure-aware chunking over Docling's document structure with parameterized size/overlap (§11.4); the v4.0 LangChain text-splitter reference is superseded, and LangChain is not a dependency |
+
+The same research-grounding discipline extends to the AI infrastructure decisions, where ADRs record the reasoning: retrieval-augmented generation and citation grounding shape the target pipeline (ADR-0009, §12.2); semantic embeddings justify the BGE-M3 selection and its 1024-dimension contract (§12.1); OCR research — particularly for Arabic — is the reason the ADR-0003 benchmark process (ground truth → metrics → engines) exists rather than a default being assumed (§11.5); and knowledge-graph learning research underlies the target KG architecture (§13). Where a research preference and a verified ADR decision conflict, the ADR governs and the research remains as recorded rationale — for example, the embedding and OCR literature informed the candidates, but ADR-0004 and ADR-0003 fixed how and when those candidates are adopted.
 
 ### 27.2 Publishable Research Topics
 
-OpenLearn AI presents several research opportunities that extend beyond the project's implementation scope and are suitable for publication in academic conferences and journals:
+OpenLearn AI presents several research opportunities that extend beyond the project's implementation scope and are suitable for publication in academic conferences and journals. Each topic is stated against the current reality: the needed data flows and models are the designed architecture (§12–§16), so these are research programs the platform is built to enable, not capabilities it can already exercise at full depth.
 
 **Knowledge Tracing in Multilingual Contexts:** Most BKT and IRT research has been conducted in English-language educational settings. OpenLearn AI's multilingual (Arabic + English) environment provides a unique testbed for studying how knowledge tracing models perform across languages, whether Arabic-specific calibration is needed, and how cross-language concept mastery correlates. This topic is publishable at AIED, LAK, and EDM conferences.
 
@@ -1258,9 +1659,9 @@ OpenLearn AI presents several research opportunities that extend beyond the proj
 
 **Forgetting Prediction for Educational Content:** Half-Life Regression was originally developed for vocabulary learning (flashcards). Its application to educational content at the concept level (where concepts have different inherent difficulty and prerequisite depth) is a novel extension. Research questions include: How does concept-level forgetting differ from word-level forgetting? Does prerequisite mastery affect forgetting rates? Can forgetting models be improved by incorporating Knowledge Graph structure?
 
-**Educational RAG with Citation Grounding:** Standard RAG systems retrieve and generate without explicit citation mapping. OpenLearn AI's citation-grounded generation (where every claim in the LLM response is mapped to a specific source chunk) provides a framework for studying how citation grounding affects student trust, factual accuracy, and learning outcomes. This topic bridges educational AI and NLP, suitable for ACL/EMNLP workshops on educational applications.
+**Educational RAG with Citation Grounding:** Standard RAG systems retrieve and generate without explicit citation mapping. OpenLearn AI's citation-grounded generation design (where every claim in the LLM response is mapped to a specific source chunk, ADR-0009) provides a framework for studying how citation grounding affects student trust, factual accuracy, and learning outcomes. This topic bridges educational AI and NLP, suitable for ACL/EMNLP workshops on educational applications.
 
-**Provider-Agnostic Hybrid AI for Education:** The Hybrid AI Architecture itself is a research contribution. Most educational AI systems are either fully local (limited quality) or fully cloud (limited privacy). The provider-agnostic abstraction that enables free combination of local and cloud providers is an architectural pattern that has not been systematically studied in the educational technology context. Research questions include: How does provider choice affect learning outcomes? Does local privacy assurance improve student engagement? What are the performance-quality tradeoffs across different hybrid configurations?
+**Provider-Agnostic Hybrid AI for Education:** The Hybrid AI Architecture itself is a research contribution. Most educational AI systems are either fully local (limited quality) or fully cloud (limited privacy). The provider-agnostic abstraction that enables free combination of local and cloud providers is an architectural pattern that has not been systematically studied in the educational technology context — and OpenLearn AI implements its core: the PAL interface set, factory, and fallback router are verified code (§8), giving the pattern a working reference implementation for the questions below. Research questions include: How does provider choice affect learning outcomes? Does local privacy assurance improve student engagement? What are the performance-quality tradeoffs across different hybrid configurations?
 
 ### 27.3 Target Conferences and Journals
 
@@ -1279,27 +1680,35 @@ OpenLearn AI presents several research opportunities that extend beyond the proj
 
 ### 28.1 Technical Risk Register
 
-The following risk register identifies the most significant technical risks that could impede the project, along with their assessed probability and impact, and explicit fallback strategies. Each fallback strategy is a concrete, actionable alternative that can be deployed without architectural changes — it is a configuration or implementation adjustment, not a fundamental redesign.
+The risk register below distinguishes two kinds of rows: risks whose mitigations are **implemented today** (infrastructure and provider risks, where the PAL, Keycloak, LiteLLM, and the staging stack already do the work), and risks attached to **planned capabilities** (RAG, knowledge graph, adaptive learning), whose mitigations are designed but activate only when those features are built. Each fallback is a concrete, actionable alternative deployable without architectural redesign — a configuration or implementation adjustment, not a fundamental rework. Probability/impact ratings for planned-feature rows are planning assumptions carried from v4.0; none has been quantified against operational data.
 
 | Risk | Probability | Impact | Primary Fallback | Ultimate Fallback |
 |------|-------------|--------|------------------|-------------------|
-| OCR quality insufficient for Arabic | High | High | Use PaddleOCR instead of Tesseract; apply Arabic-specific preprocessing | Support only text-native PDFs in initial release, defer scanned PDF support |
-| Local LLM too slow for real-time interaction | High | Medium | Use smaller model (Qwen 2.5 1.5B / Phi-3.5 Mini) for faster inference | Route to free cloud provider (Groq) when local latency exceeds threshold |
-| Generated questions contain factual errors | Medium | High | Apply grounding check against source chunks + JSON structured output | Add "Report Error" button for manual correction; flag low-confidence questions |
-| Concept extraction produces noisy or irrelevant triples | Medium | Medium | Use few-shot prompting with domain-specific examples; apply post-extraction filtering | Display concepts only (without relations) until extraction quality improves |
-| Neo4j infrastructure overhead too high for deployment | Medium | Low | Use NetworkX (in-memory) with JSON serialization for persistence | Store graph as JSONB in PostgreSQL; abandon interactive visualization |
-| BKT parameter estimation requires more data than available | Medium | Medium | Start with weighted moving average heuristic; upgrade to BKT only after sufficient data | Display "Insufficient Data" indicator for concepts with fewer than 5 interactions |
-| Adaptive Engine produces counter-intuitive recommendations | Medium | Medium | Implement rule-based fallback mode with explicit transparency (show recommendation rationale) | Add "Skip Recommendation" button; allow manual study path selection |
-| IRT/CAT implementation complexity exceeds timeline capacity | High | Medium | Implement simplified CAT (Easy -> Medium -> Hard sequential progression) | Use 1PL (Rasch model) only; defer 2PL and discrimination parameter estimation |
-| Forgetting prediction inaccurate for concept-level data | Medium | Low | Use simplified Ebbinghaus formula (R = e^(-t/s) with s calibrated per difficulty level) | Defer Half-Life Regression; use fixed SM-2 intervals without forgetting prediction |
-| Cloud provider API changes break provider implementations | Low | Medium | Provider Abstraction Layer isolates changes to single provider class; update only affected class | Switch to alternative cloud provider through configuration change |
-| Docker deployment fails on Windows environments | Medium | High | WSL2 + Docker Desktop as standard Windows setup | GitHub Codespaces (free 60 hours/month) as alternative development environment |
+| OCR quality insufficient for Arabic | High | High | **Current:** Gemini (`gemini-2.5-flash`) provider implemented; a local engine (PaddleOCR/Surya candidates) is adopted only through the ADR-0003 benchmark; Arabic-specific preprocessing can be added in the ingestion service | **Planned:** support only text-native PDFs in the initial release; defer scanned-PDF support |
+| LLM provider failure or degradation | Medium | High | **Current:** PAL router ordered fallback with pre-first-chunk streaming fallback (§8.3, unit-tested); LiteLLM model fallback (`gpt-4o-mini` → `gpt-3.5-turbo`) configured | **Current:** substitute any provider via configuration (§8.2); gateway-level routing changes require no code |
+| Embedding provider failure or model substitution | Low | Medium | **Current:** BGE-M3 runs locally in-process (no external embedding API dependency); mock provider covers tests | **Planned:** any embedding-model swap requires an explicit dimension migration (ADR-0009, §12.1) — treated as a schema event, not a config flip |
+| LLM interaction latency and API cost | Medium | High | **Current:** LiteLLM budget cap ($10 / 30 days) and `drop_params` enforced in staging; **Planned:** smaller/faster models selectable via gateway config once reasoning traffic flows | **Planned:** route to cheaper providers through configuration; local runtime only if the ADR-0005-aligned evaluation supports it |
+| Generated questions contain factual errors (hallucination) | Medium | High | **Planned:** citation-grounded generation against retrieved source chunks plus JSON structured output (ADR-0009, §12.2) | **Planned:** "Report Error" mechanism for manual correction; flag low-confidence questions |
+| Concept extraction produces noisy or irrelevant triples | Medium | Medium | **Planned** (KG is §13): few-shot prompting with domain-specific examples; post-extraction filtering | **Planned:** display concepts without relations until extraction quality is demonstrated |
+| Graph-store operational overhead (if adopted) | Low | Low | **Corrected context:** no graph store is deployed (§13); introducing one is a future ADR plus a new PAL interface, not a configuration switch. Fallback if adopted and costly: PostgreSQL JSONB representation before any dedicated store | **Planned:** abandon interactive graph visualization; keep the structural data relational |
+| BKT parameter estimation requires more data than available | Medium | Medium | **Planned:** the SKM evolution strategy starts with the heuristic stage and upgrades to BKT only after sufficient data (§14.2) | **Planned:** "Insufficient Data" indicator for concepts with fewer than 5 interactions |
+| Adaptive Engine produces counter-intuitive recommendations | Medium | Medium | **Planned:** rule-based fallback mode with explicit rationale transparency (§16.2) | **Planned:** "Skip Recommendation" action; manual study-path selection |
+| IRT/CAT implementation complexity exceeds timeline capacity | High | Medium | **Planned:** simplified CAT first (Easy → Medium → Hard progression, §16.5) | **Planned:** 1PL (Rasch) only; defer 2PL and discrimination estimation |
+| Forgetting prediction inaccurate for concept-level data | Medium | Low | **Planned:** simplified Ebbinghaus formula (`R = e^(-t/s)` with `s` calibrated per difficulty level) | **Planned:** defer Half-Life Regression; use fixed SM-2 intervals |
+| Document parsing failures on complex PDFs | Medium | Medium | **Current:** Docling extraction with per-page preservation and error capture in `CanonicalDocument` (§11.3); targeted-OCR orchestration planned (§11.7) | **Planned:** mark the material's processing as failed with operator retry once the status workflow exists |
+| Worker failure or task backlog growth | Medium | Medium | **Current:** Celery/Redis/Flower infrastructure deployed with health visibility (§23.2); **Planned:** task-level retries and dead-letter handling when processing tasks are wired (§11.7) | **Planned:** re-run idempotent tasks from source documents; processing state stays recoverable by design |
+| Database and storage growth | Medium | Medium | **Current:** vectors and relational data share one PostgreSQL instance with provenance metadata in JSONB (§12.1); **Planned:** pgvector ANN indexing and retention/pruning policies as scale demands (§25.3) | **Planned:** read replicas or a dedicated vector store reconsidered per ADR-0004 on measured evidence |
+| Single-host resource constraints (CPU-only production) | Medium | Medium | **Current:** staging runs the full 13-service stack within modest hardware; OCR compute is offloaded to Gemini; embeddings run on CPU; Prometheus/Grafana give visibility (§23.1, §25.2) | **Planned:** reduced service sets for constrained environments (core backend, db, Keycloak, Redis); AI work scales through workers (§25.3) |
+| Observability gaps for AI behavior | Low | Medium | **Current:** Prometheus/Grafana/Loki/Alloy deployed; LiteLLM carries a Langfuse callback though the Langfuse service is not deployed (§6.1) | **Planned:** LLM-call tracing and quality dashboards as reasoning traffic lands |
+| Incomplete evaluation framework | Medium | High | **Current:** basic harness exists (CLI, registry, seeded evaluator, §10.2); **Planned:** the ADR-0003 methodology (hand-verified ground truth → metrics → engines) | **Residual risk:** until the framework exists, model-quality claims — especially Arabic OCR and generation quality — remain unmeasured (§25.1) |
+| Cloud provider API changes break provider implementations | Low | Medium | **Current:** PAL isolates changes to a single adapter class per provider (§8); LiteLLM absorbs gateway-side API changes | **Current:** switch providers through configuration |
+| Docker deployment fails on Windows environments | Medium | High | **Current guidance:** WSL2 + Docker Desktop as the standard Windows setup | **Current guidance:** GitHub Codespaces as an alternative development environment |
 
 ### 28.2 Risk Mitigation Philosophy
 
-The risk mitigation philosophy follows the "Fallback Always" principle: for every identified risk, there is not merely an aspirational mitigation strategy but a concrete, tested fallback plan that can be deployed immediately when the risk materializes. The fallback plans are prioritized in two tiers: primary fallback (an alternative approach that achieves the same goal with different means) and ultimate fallback (an acceptable compromise that sacrifices some capability to ensure core functionality continues).
+The risk mitigation philosophy follows the "Fallback Always" principle: for every identified risk there is a concrete fallback plan, prioritized in two tiers — a primary fallback (an alternative approach that achieves the same goal with different means) and an ultimate fallback (an acceptable compromise that sacrifices some capability to ensure core functionality continues). The register marks which of these fallbacks are already implemented and which are designed and waiting on their feature: the provider-risk tier (PAL fallback, provider substitution via configuration, budget caps) is real, tested code today, while the feature-risk tier (RAG grounding, KG filtering, adaptive fallbacks) activates as those features are built.
 
-This philosophy recognizes that technical risks in AI systems are not probabilistic — they are nearly certain. OCR quality will be insufficient for some documents. LLM generation will produce occasional errors. Knowledge graph extraction will produce noise. The difference between successful and unsuccessful projects is not whether risks occur, but whether the project has prepared alternatives that enable continued progress despite risk materialization.
+This philosophy recognizes that technical risks in AI systems are not merely probabilistic — several are near-certain. OCR quality will be insufficient for some documents. LLM generation will produce occasional errors. Knowledge-graph extraction will produce noise. The difference between successful and unsuccessful projects is not whether risks occur, but whether the project has prepared alternatives that enable continued progress despite risk materialization. The same philosophy bounded the architecture itself: the mock-provider strategy, the seeded evaluation harness, and the staged staging deployment are all expressions of "degrade gracefully, verify honestly, keep building."
 
 ---
 
@@ -1307,15 +1716,17 @@ This philosophy recognizes that technical risks in AI systems are not probabilis
 
 ### 29.1 Three-Year Roadmap
 
+> **Status: aspirational roadmap.** The verified baseline covers the content-and-identity foundation (§17.1) — authentication, courses and materials, profile, and the PAL/ingestion/vector infrastructure. The RAG/generation, knowledge-graph, adaptive, and analytics layers are the roadmap's substance and are specified as targets in §§12–§16. Year targets below (users, stars, papers, revenue) are goals to measure progress against, not forecasts or committed schedules.
+
 The long-term vision for OpenLearn AI extends beyond the graduation project scope into a sustainable open-source ecosystem and potential commercial platform. The roadmap is organized into three phases that progressively expand the platform's reach, capabilities, and community.
 
-**Year 1 (Graduation Project):** The primary goal is completing v1.0 as a functional, well-documented, publicly accessible graduation project. Key milestones include: publishing the GitHub repository under AGPL-3.0, achieving 100+ GitHub stars, onboarding 50+ beta users from the university community, publishing one research paper at an Arabic or regional AI conference, and establishing the foundational codebase and architecture that future contributors can build upon.
+**Year 1 (Graduation Project):** The primary goal is completing v1.0 as a functional, well-documented, publicly accessible graduation project. Key milestones include: publishing the GitHub repository under AGPL-3.0, achieving 100+ GitHub stars, onboarding 50+ beta users from the university community, publishing one research paper at an Arabic or regional AI conference, and establishing the foundational codebase and architecture that future contributors can build upon. Within this phase, the verified staging baseline already delivers the platform's foundation; the remaining v1.0 work is the processing and learning loop itself (§11.7, §12.2, §16).
 
 **Year 2 (Open Source Community):** The second year focuses on building a sustainable open-source community around the platform. Key milestones include: releasing v2.0-v3.0 with advanced features (multi-user classrooms, teacher dashboards, mobile-responsive design), achieving 1,000+ GitHub stars with 10+ active contributors from different countries, developing a mobile app (React Native or Flutter) for iOS and Android, publishing at a top-tier international conference (AIED or LAK), and establishing a contribution guide, governance model, and regular release cadence.
 
 **Year 3 (Global Platform):** The third year envisions OpenLearn AI as a globally accessible educational platform. Key milestones include: launching a freemium SaaS offering for institutions and individual users, achieving 100,000+ registered users across 20+ countries, supporting 6+ languages (Arabic, English, French, Spanish, Turkish, Urdu), establishing an Enterprise Tier for universities and educational institutions, and securing seed funding for a dedicated development team of 5-10 engineers.
 
-### 29.2 Evolution Metrics
+### 29.2 Evolution Metrics (Aspirational Targets)
 
 | Metric | Year 1 | Year 2 | Year 3 |
 |--------|--------|--------|--------|
@@ -1327,6 +1738,21 @@ The long-term vision for OpenLearn AI extends beyond the graduation project scop
 | Team Size | 1 student | 3-5 volunteers | 5-10 employees |
 | Revenue | 0 | Donations | SaaS revenue |
 
+### 29.3 Capability Horizons (Preserved Design)
+
+Beyond the roadmap's business milestones, the architecture keeps deliberate extension points open, and the long-term capability set is preserved here as design intent:
+
+- **Complete RAG with citation-grounded answers** — retrieval, context assembly, and grounded generation per ADR-0009 (§12.2), so every answer can show its sources.
+- **Knowledge graph** — concept/prerequisite structure enabling study ordering, prerequisite-aware retrieval, and explainable adaptation (§13).
+- **Student Knowledge Model and adaptive learning** — mastery estimation evolving from heuristics through BKT/IRT, with CAT-based exams and SM-2/HLR review scheduling (§14, §16, §27).
+- **Richer personalization** — the full thirteen-field profile with sensitivity metadata and settings surfaces (§15.2), feeding format, pacing, and scheduling decisions.
+- **Multimodal learning** — speech and vision capability interfaces are planned extensions of the PAL interface set (§8.1); no speech or vision code exists.
+- **Arabic-first educational intelligence** — Arabic/English quality as a first-class evaluation dimension (ADR-0003 methodology), RTL experience, and Arabic-language model evaluation (§10, §27.2).
+- **Scalable provider substitution** — the configuration-driven provider factory keeps every AI component substitutable as models evolve (§8), and the LiteLLM gateway gives the reasoning path cost and model governance (ADR-0005).
+- **Advanced evaluation and learning analytics** — the ADR-0003 evaluation methodology maturing from the basic harness into benchmarked model comparisons (§10.2), with analytics surfaces for instructors (§22.4).
+
+None of these horizons is current capability; each names the section where its design is specified and its status is tracked.
+
 ---
 
 ## 30. Graduation Project Value
@@ -1335,43 +1761,43 @@ The long-term vision for OpenLearn AI extends beyond the graduation project scop
 
 OpenLearn AI demonstrates value across six dimensions that correspond to common graduation committee evaluation criteria:
 
-**Originality and Innovation (20%):** The project introduces two novel contributions: the integration of Knowledge Graph prerequisite chains into adaptive learning decisions (existing adaptive systems operate on flat concept lists), and the Hybrid AI Architecture that enables provider-agnostic AI system design for educational technology (existing systems are either fully cloud or fully local). These contributions are not incremental improvements over existing tools — they represent architectural innovations that change how educational AI systems are designed and deployed.
+**Originality and Innovation (20%):** The project introduces two novel contributions: the integration of Knowledge Graph prerequisite chains into adaptive learning decisions (existing adaptive systems operate on flat concept lists), and the Hybrid AI Architecture that enables provider-agnostic AI system design for educational technology (existing systems are either fully cloud or fully local). The second contribution is already implemented and verified — the PAL interface set, factory, and fallback router are working code (§8) — while the first is preserved as the design that the verified foundation was built to serve (§13, §16). These contributions are not incremental improvements over existing tools — they represent architectural innovations that change how educational AI systems are designed and deployed.
 
-**Technical Feasibility (20%):** The project is designed for incremental delivery with eight runnable releases (v0.1 through v1.0), each providing demonstrable functionality. The minimum viable product (v0.2) delivers a complete experience: upload a PDF, receive summaries, answer questions, study flashcards, and interact with a RAG chatbot. Every subsequent release adds verified, tested capabilities. The live demo strategy uses pre-generated data to avoid LLM latency risks during committee presentations, ensuring a smooth demonstration regardless of network conditions or model loading times.
+**Technical Feasibility (20%):** The project is designed for incremental delivery with eight runnable releases (v0.1 through v1.0), each providing demonstrable functionality. The release plan defines the minimum viable product (v0.2) as a complete experience — upload a PDF, receive summaries, answer questions, study flashcards, and interact with a RAG chatbot — and every subsequent release is designed to add verified, tested capabilities. The current verified state is the content-and-identity foundation (§17.1): authentication, courses and materials with presigned uploads, the profile API, and the PAL/ingestion/chunking/vector infrastructure. The live demo strategy uses pre-generated data to avoid LLM latency risks during committee presentations, ensuring a smooth demonstration regardless of network conditions or model loading times.
 
-**Theoretical Knowledge (15%):** The project requires and demonstrates understanding of Bayesian Knowledge Tracing (Corbett & Anderson, 1995), Item Response Theory (Wainer et al.), Computerized Adaptive Testing, Spaced Repetition (SM-2), Half-Life Regression (Settles & Meeder), and RAG architecture. Each algorithm is cited, explained, and justified in this specification. The student's understanding is demonstrated not only in the report but in the working implementation — the code reflects the theoretical models faithfully.
+**Theoretical Knowledge (15%):** The project requires and demonstrates understanding of Bayesian Knowledge Tracing (Corbett & Anderson, 1995), Item Response Theory (Wainer et al.), Computerized Adaptive Testing, Spaced Repetition (SM-2), Half-Life Regression (Settles & Meeder), and RAG architecture. Each algorithm is cited, explained, and justified in this specification (§14, §16, §27). The theoretical grounding is demonstrated in the specification and the design work today; the corresponding model implementations are planned (§16), while the provider-abstraction and vector infrastructure those models will operate on is implemented and verified (§8, §12.1).
 
-**Engineering Quality (15%):** The architecture follows established software engineering practices: modular design with explicit boundaries, dependency injection through the Provider Abstraction Layer, async processing for long-running tasks, WebSocket streaming for real-time interaction, comprehensive testing (target: 70% coverage on core modules), CI/CD pipeline on GitHub Actions, and Docker-based one-command deployment. These practices are not aspirational — they are enforced through linting rules, code review templates, and automated quality checks.
+**Engineering Quality (15%):** The architecture follows established software engineering practices: modular design with explicit boundaries (ADR-0001), dependency abstraction through the Provider Abstraction Layer (ADR-0009), asynchronous infrastructure for long-running tasks (Celery + Redis + Flower, §23.1), streaming-capable provider routing with WebSocket transport planned for the chat interface (§8.3, §22.1), testing (pytest + coverage on the backend; Storybook/Vitest/Playwright on the frontend; 70% coverage on core modules as the target), a CI/CD pipeline on GitHub Actions, and Docker-based one-command deployment. The infrastructure and quality gates are enforced today through linting rules, code review templates, and automated checks; the interaction features they will serve (chat, exams, analytics) are planned (§22.4).
 
 **Presentation and Documentation (10%):** The project produces comprehensive documentation: this technical specification, an OpenAPI specification auto-generated by FastAPI, a developer guide, a user guide, and a Docusaurus-powered documentation website. The presentation includes a 20-25 slide deck, a 3-minute demo video, and a live demonstration with pre-prepared fallback data.
 
-**Impact and Value (10%):** The project addresses a real problem affecting millions of Arabic-speaking students who lack access to adaptive educational technology. The open-source license ensures that the platform remains free and community-maintained beyond the graduation project, creating lasting value rather than a disposable academic exercise. Beta testing with 5+ real students validates that the platform addresses genuine needs, not imagined requirements.
+**Impact and Value (10%):** The project addresses a real problem affecting millions of Arabic-speaking students who lack access to adaptive educational technology. The open-source license ensures that the platform remains free and community-maintained beyond the graduation project, creating lasting value rather than a disposable academic exercise. Beta testing with 5+ real students is planned to validate that the platform addresses genuine needs, not imagined requirements.
 
 ### 30.2 Evaluation Criteria Mapping
 
 | Committee Criterion | Weight | How OpenLearn AI Addresses It |
 |---------------------|--------|-------------------------------|
-| Originality and Innovation | 20% | CSP + Adaptive Engine + Hybrid AI Architecture = unique combination; Knowledge Graph integration in adaptive decisions = novel approach |
-| Technical Feasibility | 20% | Live Demo + E2E tests + 8 incremental releases with runnable milestones |
-| Theoretical Knowledge | 15% | BKT, IRT, CAT, SM-2, Half-Life Regression — all cited, implemented, and explained |
-| Engineering Quality | 15% | Modular Monolith + Provider Abstraction + Tests + CI/CD + Docker deployment |
+| Originality and Innovation | 20% | CSP + Adaptive Engine + Hybrid AI Architecture = unique combination; Knowledge Graph integration in adaptive decisions = novel approach; the PAL core of the Hybrid AI contribution is implemented and verified (§8) |
+| Technical Feasibility | 20% | Verified foundation already runnable in staging + planned live demo + E2E test infrastructure + 8 incremental releases with runnable milestones |
+| Theoretical Knowledge | 15% | BKT, IRT, CAT, SM-2, Half-Life Regression — all cited and explained; implementation planned (§14, §16, §27) |
+| Engineering Quality | 15% | Modular Monolith (ADR-0001) + Provider Abstraction (ADR-0009) + tests + CI/CD + Docker deployment |
 | Presentation and Documentation | 10% | Technical Specification + OpenAPI docs + User Guide + Demo Video + Slides |
-| Impact and Value | 10% | Real student testing + Open source (AGPL-3.0) + Arabic support + Free access |
-| Scalability | 5% | Clear roadmap + Open source community model + Cloud/hybrid deployment |
-| Working Within Constraints | 5% | Milestone tracking + Risk management with fallbacks + Incremental delivery |
+| Impact and Value | 10% | Planned student beta testing + Open source (AGPL-3.0) + Arabic support + Free access |
+| Scalability | 5% | Clear roadmap + Open source community model + Cloud/hybrid deployment modes (§9, §23.3) |
+| Working Within Constraints | 5% | Milestone tracking + Risk management with two-tier fallbacks (§28) + Incremental delivery |
 
 ---
 
 ## 31. Conclusion
 
-OpenLearn AI Version 4.0 represents a comprehensive redesign of the platform around a Hybrid AI Architecture that is provider-agnostic, privacy-preserving, and locally deployable. The architecture ensures that every AI component — reasoning, embedding, OCR, speech, vector storage, vision, and ranking — is replaceable through abstraction, enabling students and institutions to freely combine local and cloud providers based on their hardware capabilities, privacy requirements, and quality preferences.
+OpenLearn AI Version 4.1 specifies a platform whose architecture is provider-agnostic, privacy-conscious, and honestly sequenced. The design principle is unchanged: every AI capability — OCR, embedding, ranking, reasoning, and vector storage (with speech and vision as planned extensions, §8.1) — sits behind a provider abstraction, so students and institutions can combine local and cloud providers according to their hardware, privacy requirements, and quality needs. What this revision adds is the distinction between that design and today's verified reality, so the document can serve as both an as-built specification and a target architecture.
 
-The eight-layer system architecture — Content Ingestion, Knowledge Base, Knowledge Graph, Student Knowledge Model, Customized Student Profile, Adaptive Learning Engine, Generation & Simulation, and Learning Analytics — forms a closed feedback loop where each component feeds the others, producing genuine educational intelligence rather than superficial document interaction. The Student Knowledge Model tracks mastery per concept using Bayesian Knowledge Tracing, the Customized Student Profile captures learning preferences and constraints through thirteen structured fields, and the Adaptive Learning Engine fuses these models with the Knowledge Graph's prerequisite structure to make contextually informed pedagogical decisions.
+The eight-layer system architecture — Content Ingestion, Knowledge Base, Knowledge Graph, Student Knowledge Model, Customized Student Profile, Adaptive Learning Engine, Generation & Simulation, and Learning Analytics — remains the designed closed loop that separates this platform from superficial document interaction. The verified baseline implements the loop's foundation: identity and RBAC through Keycloak, courses and materials with presigned uploads, the profile subset, document ingestion and structure-aware chunking, embeddings with pgvector storage and search, and the PAL that abstracts every AI provider (§17.1). The remaining layers — retrieval and grounded generation, the knowledge graph, the Student Knowledge Model, the adaptive engine, and analytics — are specified in full with their research grounding (§§12–§16, §27) and sequenced as the roadmap's substance (§29).
 
-The Provider Abstraction Layer is the architectural mechanism that makes the Hybrid AI philosophy operational. It defines seven core interfaces with standardized contracts, binds providers through configuration rather than code, supports runtime provider switching with graceful degradation, and enforces architectural boundaries that prevent creeping dependency on specific AI providers. This design ensures that the system remains current as AI models evolve, adaptable as hardware capabilities change, and resilient as cloud services experience outages.
+The Provider Abstraction Layer is the architectural mechanism that makes the hybrid philosophy operational, and it exists as verified code: five capability interfaces plus a shared base contract with standardized result models, a configuration-driven provider factory, a router with ordered fallback and pre-first-chunk streaming-fallback semantics, and a typed exception hierarchy (§8, ADR-0009). Providers bind through configuration rather than code, which keeps the system current as AI models evolve, adaptable as hardware constraints change, and resilient when cloud services degrade.
 
-The technology stack — FastAPI backend, Next.js frontend, PostgreSQL relational database, ChromaDB vector database, Redis cache and task queue, MinIO object storage, Neo4j knowledge graph, and Ollama local LLM runtime — is selected with justification for each choice and alternatives documented for every component. The recommended default configuration prioritizes local operation for privacy, with cloud options available for quality augmentation through configuration changes rather than code modifications.
+The implemented technology stack is deliberately minimal: FastAPI on Python 3.11, a Next.js 16 / React 19 frontend, PostgreSQL 16 with pgvector as the single data store for relational data and vectors, Keycloak for OIDC authentication, LiteLLM as the staging LLM gateway, Docling for document extraction, BGE-M3 for in-process embeddings, Gemini for OCR, Celery + Redis for asynchronous infrastructure, and Prometheus/Grafana/Loki/Alloy for observability — all deployed through Docker Compose (§23, §26). The current defaults mix cloud providers (Gemini OCR, LiteLLM/OpenAI reasoning once wired) with locally executed components (BGE-M3, pgvector); the all-local profile remains a target preset (§9.1). Superseded v4.0 defaults — ChromaDB, Ollama, Qwen 2.5, PaddleOCR, MinIO-as-service, Neo4j, bcrypt — are recorded as historical with their supersession rationale, not silently dropped (§26.1).
 
-Every pedagogical algorithm is grounded in published research: Bayesian Knowledge Tracing (Corbett & Anderson, 1995), Item Response Theory (Wainer et al.), Spaced Repetition (Wozniak), Half-Life Regression (Settles & Meeder), and VARK Learning Styles (Fleming). The risk management strategy provides concrete fallback plans for every identified technical risk, ensuring continued progress despite inevitable challenges.
+Every pedagogical algorithm in the design is grounded in published research — Bayesian Knowledge Tracing (Corbett & Anderson, 1995), Item Response Theory (Wainer et al.), Spaced Repetition (Wozniak), Half-Life Regression (Settles & Meeder), and VARK Learning Styles (Fleming) — and that grounding is the design's strength; the implementations are the roadmap (§14, §16, §27). The risk management strategy pairs implemented fallbacks (provider fallback, configuration-driven substitution, budget caps) with designed fallbacks for every planned feature, ensuring continued progress despite inevitable challenges (§28).
 
-The platform is positioned to serve as both a graduation project demonstrating theoretical depth and engineering quality, and as the foundation for a sustainable open-source educational platform that addresses the real needs of under-served linguistic communities worldwide.
+The platform is positioned to serve as both a graduation project demonstrating theoretical depth and engineering quality, and as the foundation for a sustainable open-source educational platform that addresses the real needs of under-served linguistic communities worldwide. What it claims today is what it has verified; what it designs, it documents — and the distance between the two is measured, visible, and intentional.
