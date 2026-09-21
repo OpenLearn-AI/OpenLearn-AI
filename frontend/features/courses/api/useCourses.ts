@@ -1,0 +1,39 @@
+import { useQuery } from "@tanstack/react-query";
+import { getKeycloak } from "@/lib/keycloak";
+
+export interface Course {
+    id: string;
+    owner_id: string;
+    title: string;
+    description: string | null;
+    created_at: string;
+}
+
+async function fetchCourses(): Promise<Course[]> {
+    const keycloak = await getKeycloak();
+
+    if (!keycloak || !keycloak.token) {
+        throw new Error("Not authenticated");
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+    const response = await fetch(`${baseUrl}/v1/courses`, {
+        headers: {
+            Authorization: `Bearer ${keycloak.token}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch courses: ${response.status}`);
+    }
+
+    return response.json();
+}
+
+export function useCourses() {
+    return useQuery({
+        queryKey: ["courses"],
+        queryFn: fetchCourses,
+    });
+}
