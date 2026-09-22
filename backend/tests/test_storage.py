@@ -1,4 +1,4 @@
-ننننن"""Unit tests for the S3 storage helper and material S3 key helpers."""
+"""Unit tests for the S3 storage helper and material S3 key helpers."""
 
 import uuid
 
