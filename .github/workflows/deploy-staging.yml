@@ -77,6 +77,7 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           command_timeout: "30m"
+
           script: |
             set -e
 
@@ -86,24 +87,39 @@ jobs:
             git checkout staging
             git pull origin staging
 
-            # إنشاء .env.runtime وحقن كافة السيكريتس والـ IMAGE_TAG
-            cat > infra/.env.runtime <<EOF
+            # Create .env.runtime from GitHub Secrets/Variables.
+            cat > infra/.env.runtime <<'EOF'
             DATABASE_URL=${{ secrets.DATABASE_URL }}
             POSTGRES_USER=${{ secrets.POSTGRES_USER }}
             POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
             POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+
             REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+
             IMAGE_TAG=sha-${{ github.sha }}
+
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+
             LITELLM_MASTER_KEY=${{ secrets.LITELLM_MASTER_KEY }}
             LITELLM_SALT_KEY=${{ secrets.LITELLM_SALT_KEY }}
+
             GRAFANA_ADMIN_USER=${{ secrets.GRAFANA_ADMIN_USER }}
             GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+
             KEYCLOAK_ADMIN_USER=${{ secrets.KEYCLOAK_ADMIN_USER }}
             KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+
+            MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+            MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+
+            S3_BUCKET_NAME=${{ vars.S3_BUCKET_NAME }}
+            S3_REGION_NAME=${{ vars.S3_REGION_NAME }}
+            S3_URL_EXPIRATION_SECONDS=${{ vars.S3_URL_EXPIRATION_SECONDS }}
+
             ENVIRONMENT=staging
             EOF
 
+            chmod 600 infra/.env.runtime
             chmod +x infra/deploy.sh
 
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io \
