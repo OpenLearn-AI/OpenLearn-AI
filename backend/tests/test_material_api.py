@@ -237,12 +237,17 @@ async def test_upload_url_uses_configured_storage_settings(
 
     assert response.status_code == 200
 
-    assert fake_boto3.client_kwargs == {
-        "endpoint_url": settings.s3_endpoint_url,
-        "aws_access_key_id": settings.s3_access_key_id,
-        "aws_secret_access_key": settings.s3_secret_access_key,
-        "region_name": settings.s3_region_name,
-    }
+    # Contract assertions (not exact-kwargs equality): the client must be
+    # built from deployment configuration with SigV4 forced. SigV2 presigned
+    # URLs cover the Content-Type header, which breaks real browser uploads.
+    kwargs = fake_boto3.client_kwargs
+    assert kwargs["endpoint_url"] == settings.s3_endpoint_url
+    assert kwargs["aws_access_key_id"] == settings.s3_access_key_id
+    assert kwargs["aws_secret_access_key"] == settings.s3_secret_access_key
+    assert kwargs["region_name"] == settings.s3_region_name
+    config = kwargs.get("config")
+    assert config is not None
+    assert "s3v4" in str(getattr(config, "signature_version", ""))
 
     method, params, expires_in = fake_boto3.s3_client.calls[0]
     assert method == "put_object"
