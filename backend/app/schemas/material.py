@@ -55,3 +55,13 @@ class MaterialResponse(BaseModel):
     status: str
     uploaded_by: uuid.UUID
     created_at: datetime
+
+
+class MaterialStatusResponse(BaseModel):
+    material_id: uuid.UUID
+    status: str
+
+
+class MaterialAcceptedResponse(BaseModel):
+    material_id: uuid.UUID
+    job_id: str

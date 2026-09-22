@@ -3,7 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.courses import router as courses_router
-from app.api.materials import router as materials_router
+from app.api.materials import (
+    router as materials_router,
+    status_router as material_status_router,
+)
 from app.api.users import router as users_router
 
 from app.config import settings
@@ -36,6 +39,7 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(courses_router)
 app.include_router(materials_router)
+app.include_router(material_status_router)
 
 
 @app.get("/")

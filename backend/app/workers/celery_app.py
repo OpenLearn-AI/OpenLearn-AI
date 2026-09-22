@@ -21,7 +21,10 @@ celery_app = Celery(
     "openlearn",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["app.workers.tasks.sample"],
+    include=[
+        "app.workers.tasks.sample",
+        "app.workers.tasks.material_tasks",
+    ],
 )
 
 

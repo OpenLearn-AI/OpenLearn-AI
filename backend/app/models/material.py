@@ -15,9 +15,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 # Materials are registered as ``pending`` until a future scan/processing phase
-# transitions them. There is deliberately no status CHECK constraint yet: the
-# set of supported statuses is owned by that future phase.
+# The supported status vocabulary is defined here; transitions are enforced
+# by the material service.
 PENDING_STATUS = "pending"
+PROCESSING_STATUS = "processing"
+READY_STATUS = "ready"
+FAILED_STATUS = "failed"
 
 
 class Material(Base):

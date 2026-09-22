@@ -12,8 +12,10 @@ from app.db.session import get_db
 from app.models.course import Course
 from app.models.user import User
 from app.schemas.material import (
+    MaterialAcceptedResponse,
     MaterialCreate,
     MaterialResponse,
+    MaterialStatusResponse,
     UploadUrlCreate,
     UploadUrlResponse,
 )
@@ -22,8 +24,11 @@ from app.services.course_service import get_course_by_id
 from app.services.material_service import (
     build_material_s3_key,
     create_material,
+    get_material_by_id,
     is_material_s3_key_for_course,
+    list_materials_by_course,
 )
+from app.workers.publishing import enqueue_material_processing
 
 router = APIRouter(
     prefix="/v1/courses/{course_id}/materials",
@@ -36,6 +41,19 @@ _MATERIAL_ERROR_RESPONSES = {
     401: {"description": "Not authenticated (missing or invalid bearer token)"},
     403: {"description": "Insufficient permissions (instructor role and course ownership required)"},
     404: {"description": "No local user for the authenticated identity, or course does not exist"},
+}
+
+
+status_router = APIRouter(
+    prefix="/v1/materials",
+    tags=["materials"],
+)
+
+# The status read requires authentication only; instructor role and course
+# ownership are intentionally not enforced, matching GET course endpoints.
+_MATERIAL_STATUS_ERROR_RESPONSES = {
+    401: {"description": "Not authenticated (missing or invalid bearer token)"},
+    404: {"description": "Material does not exist"},
 }
 
 
@@ -88,8 +106,8 @@ async def create_upload_url_handler(
 
 @router.post(
     "",
-    response_model=MaterialResponse,
-    status_code=http_status.HTTP_201_CREATED,
+    response_model=MaterialAcceptedResponse,
+    status_code=http_status.HTTP_202_ACCEPTED,
     responses={**_MATERIAL_ERROR_RESPONSES, 409: {"description": "Material already registered"}},
 )
 async def register_material_handler(
@@ -98,7 +116,7 @@ async def register_material_handler(
     user: User = Depends(get_current_user),
     _: dict[str, Any] = Depends(require_instructor),
     db: AsyncSession = Depends(get_db),
-) -> MaterialResponse:
+) -> MaterialAcceptedResponse:
     course = await _require_owned_course(db, course_id, user)
 
     if not is_material_s3_key_for_course(course.id, payload.s3_key):
@@ -121,4 +139,50 @@ async def register_material_handler(
             detail="A material with this s3_key is already registered",
         ) from None
 
-    return MaterialResponse.model_validate(material)
+    job_id = await enqueue_material_processing(
+        material.id,
+        material.s3_key,
+        material.course_id,
+        material.uploaded_by,
+    )
+    return MaterialAcceptedResponse(
+        material_id=material.id,
+        job_id=job_id,
+    )
+
+
+@router.get(
+    "",
+    response_model=list[MaterialResponse],
+    responses=_MATERIAL_ERROR_RESPONSES,
+)
+async def list_materials_handler(
+    course_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[MaterialResponse]:
+    await _require_owned_course(db, course_id, user)
+    materials = await list_materials_by_course(db, course_id)
+    return [MaterialResponse.model_validate(material) for material in materials]
+
+
+@status_router.get(
+    "/{material_id}/status",
+    response_model=MaterialStatusResponse,
+    responses=_MATERIAL_STATUS_ERROR_RESPONSES,
+)
+async def get_material_status_handler(
+    material_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MaterialStatusResponse:
+    material = await get_material_by_id(db, material_id)
+    if material is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Material not found",
+        )
+    return MaterialStatusResponse(
+        material_id=material.id,
+        status=material.status,
+    )
