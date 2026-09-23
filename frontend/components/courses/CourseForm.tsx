@@ -158,7 +158,7 @@ export function CourseForm({
                     placeholder="Course description"
                     disabled={isSubmitting}
                     aria-invalid={Boolean(errors.description)}
-                    className="min-h-32 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    className="min-h-32 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 />
 
                 {errors.description && (

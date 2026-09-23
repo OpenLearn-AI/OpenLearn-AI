@@ -1,73 +1,17 @@
-"use client";
+import { CourseTable } from "@/components/courses/CourseTable";
 
-import { useParams } from "next/navigation";
-import { CourseForm } from "@/components/courses/CourseForm";
-import { useCourse } from "@/features/courses/api/useCourse";
-
-export default function EditCoursePage() {
-    const params = useParams<{ id: string }>();
-    const courseId = params.id;
-
-    const {
-        data: course,
-        isLoading,
-        isError,
-        error,
-    } = useCourse(courseId);
-
-    if (isLoading) {
-        return (
-            <main className="min-h-screen bg-background px-4 py-8">
-                <div className="mx-auto max-w-2xl rounded-lg border p-6 text-center">
-                    Loading course...
-                </div>
-            </main>
-        );
-    }
-
-    if (isError) {
-        return (
-            <main className="min-h-screen bg-background px-4 py-8">
-                <div className="mx-auto max-w-2xl rounded-lg border p-6 text-center text-destructive">
-                    {error instanceof Error
-                        ? error.message
-                        : "Failed to load course."}
-                </div>
-            </main>
-        );
-    }
-
-    if (!course) {
-        return (
-            <main className="min-h-screen bg-background px-4 py-8">
-                <div className="mx-auto max-w-2xl rounded-lg border p-6 text-center">
-                    Course not found.
-                </div>
-            </main>
-        );
-    }
-
+export default function CoursesPage() {
     return (
-        <main className="min-h-screen bg-background px-4 py-8">
-            <div className="mx-auto max-w-2xl space-y-6">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
+            <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">
-                        Edit Course
-                    </h1>
-
-                    <p className="mt-2 text-muted-foreground">
-                        Update the course information.
-                    </p>
+                    <h1 className="text-2xl font-bold text-slate-900">Courses</h1>
+                    <p className="text-sm text-slate-500 mt-1">Browse the available OpenLearn AI courses.</p>
                 </div>
+            </div>
 
-                <CourseForm
-                    mode="edit"
-                    courseId={course.id}
-                    initialValues={{
-                        title: course.title,
-                        description: course.description,
-                    }}
-                />
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+                <CourseTable />
             </div>
         </main>
     );
