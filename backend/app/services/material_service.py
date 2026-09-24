@@ -9,7 +9,7 @@ import os
 import re
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,7 @@ from app.models.material import (
 _ALLOWED_TRANSITIONS = {
     PENDING_STATUS: {PROCESSING_STATUS},
     PROCESSING_STATUS: {READY_STATUS, FAILED_STATUS},
+    FAILED_STATUS: {PROCESSING_STATUS},
 }
 
 _KEY_PREFIX_TEMPLATE = "courses/{course_id}/materials/"
@@ -89,6 +90,35 @@ async def get_material_by_id(
         select(Material).where(Material.id == material_id)
     )
     return result.scalar_one_or_none()
+
+
+async def claim_pending_material(
+    db: AsyncSession,
+    material_id: uuid.UUID,
+) -> Material | None:
+    """Atomically claim a pending material for processing (W8).
+
+    The claim is a single conditional UPDATE that makes the ``pending`` ->
+    ``processing`` transition and only matches rows still ``pending`` at
+    execution time, so concurrent workers can never claim the same material
+    twice. The claim is committed before returning; the returned material is
+    already persisted as ``processing``. Returns ``None`` when there is no
+    pending material to claim (including when another worker already claimed
+    it).
+    """
+    result = await db.execute(
+        update(Material)
+        .where(Material.id == material_id, Material.status == PENDING_STATUS)
+        .values(status=PROCESSING_STATUS)
+        .returning(Material.id)
+        .execution_options(synchronize_session=False)
+    )
+    if result.scalar_one_or_none() is None:
+        return None
+    await db.commit()
+    material = await get_material_by_id(db, material_id)
+    await db.refresh(material)
+    return material
 
 
 async def list_materials_by_course(

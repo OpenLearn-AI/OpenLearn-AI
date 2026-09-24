@@ -5,6 +5,7 @@ string arguments, and must not import ``app.workers.celery_app`` (which raises
 unless ``REDIS_PASSWORD`` is set) at module import time.
 """
 
+import threading
 import uuid
 
 import pytest
@@ -87,3 +88,39 @@ async def test_enqueue_material_processing_returns_task_id_unchanged(monkeypatch
     )
 
     assert job_id == "job-1"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_material_processing_runs_send_task_off_event_loop_thread(
+    monkeypatch,
+):
+    """F5 regression: the blocking ``send_task`` call must not run on the event
+    loop thread; ``asyncio.to_thread`` offloads it to a worker thread.
+    """
+    loop_thread_id = threading.get_ident()
+
+    class ThreadAwareFakeCeleryApp:
+        def __init__(self):
+            self.send_thread_id = None
+
+        def send_task(self, name, args=None):
+            self.send_thread_id = threading.get_ident()
+            return FakeTaskResult(task_id="job-offloop")
+
+    fake_app = ThreadAwareFakeCeleryApp()
+    monkeypatch.setattr(publishing, "_celery_app", lambda: fake_app)
+
+    material_id = uuid.uuid4()
+    course_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+
+    job_id = await publishing.enqueue_material_processing(
+        material_id,
+        "some-object-key.pdf",
+        course_id,
+        owner_id,
+    )
+
+    assert fake_app.send_thread_id is not None
+    assert fake_app.send_thread_id != loop_thread_id
+    assert job_id == "job-offloop"

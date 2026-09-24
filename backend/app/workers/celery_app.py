@@ -1,6 +1,7 @@
 import os
 
 from celery import Celery
+from celery.signals import worker_process_init
 
 
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
@@ -51,4 +52,17 @@ celery_app.conf.update(
     # Celery Beat
     beat_schedule={},
 )
+
+
+@worker_process_init.connect
+def _initialize_worker_process_sentry(**kwargs) -> None:
+    """F9: initialize Sentry in each forked Celery worker process.
+
+    Connecting the receiver at import time only registers the handler; the SDK
+    is initialized per worker process when the signal fires — never in the
+    master process and never via the API's full observability setup.
+    """
+    from app.observability import setup_worker_sentry
+
+    setup_worker_sentry()
 
