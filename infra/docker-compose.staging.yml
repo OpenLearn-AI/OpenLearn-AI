@@ -138,6 +138,9 @@ services:
     command: celery -A app.workers.celery_app worker --loglevel=info -E
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DATABASE_URL: ${DATABASE_URL}
+      SENTRY_DSN: ${SENTRY_DSN}
+      ENVIRONMENT: staging
     depends_on:
       redis:
         condition: service_healthy
@@ -150,6 +153,7 @@ services:
     command: celery -A app.workers.celery_app beat --loglevel=info
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       redis:
         condition: service_healthy

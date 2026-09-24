@@ -1,5 +1,6 @@
 from typing import Any
 
+import structlog
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status as http_status
@@ -28,7 +29,12 @@ from app.services.material_service import (
     is_material_s3_key_for_course,
     list_materials_by_course,
 )
-from app.workers.publishing import enqueue_material_processing
+from app.workers.publishing import (
+    MATERIAL_PROCESSING_TASK_NAME,
+    enqueue_material_processing,
+)
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/v1/courses/{course_id}/materials",
@@ -49,10 +55,11 @@ status_router = APIRouter(
     tags=["materials"],
 )
 
-# The status read requires authentication only; instructor role and course
-# ownership are intentionally not enforced, matching GET course endpoints.
+# The status read requires course ownership (through the shared
+# ``_require_owned_course`` helper); no instructor role dependency is added.
 _MATERIAL_STATUS_ERROR_RESPONSES = {
     401: {"description": "Not authenticated (missing or invalid bearer token)"},
+    403: {"description": "Insufficient permissions (course ownership required)"},
     404: {"description": "Material does not exist"},
 }
 
@@ -139,12 +146,26 @@ async def register_material_handler(
             detail="A material with this s3_key is already registered",
         ) from None
 
-    job_id = await enqueue_material_processing(
-        material.id,
-        material.s3_key,
-        material.course_id,
-        material.uploaded_by,
-    )
+    # Commit-before-publish contract (F8): the material is committed ``pending``
+    # by ``create_material`` before Celery publish is attempted. A publish
+    # failure leaves that committed ``pending`` row in place and the request
+    # returns 500 without a job id. Broker acceptance followed by an error
+    # remains a possible at-least-once tail: the worker may still process it.
+    try:
+        job_id = await enqueue_material_processing(
+            material.id,
+            material.s3_key,
+            material.course_id,
+            material.uploaded_by,
+        )
+    except Exception:
+        logger.exception(
+            "material_processing_enqueue_failed",
+            material_id=str(material.id),
+            course_id=str(material.course_id),
+            task_name=MATERIAL_PROCESSING_TASK_NAME,
+        )
+        raise
     return MaterialAcceptedResponse(
         material_id=material.id,
         job_id=job_id,
@@ -182,6 +203,7 @@ async def get_material_status_handler(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Material not found",
         )
+    await _require_owned_course(db, material.course_id, user)
     return MaterialStatusResponse(
         material_id=material.id,
         status=material.status,

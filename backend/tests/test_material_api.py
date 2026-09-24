@@ -15,7 +15,13 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.config import settings
 from app.db.session import get_db
@@ -29,6 +35,7 @@ from app.models.material import (
     Material,
 )
 from app.models.user import User
+from app.schemas.material import MaterialResponse, MaterialStatusResponse
 from app.services import material_service, storage
 from app.services.auth import oidc as oidc_module
 
@@ -545,6 +552,89 @@ async def test_register_material_creates_pending_row_and_enqueues_processing(
 
 
 @pytest.mark.asyncio
+async def test_register_material_publish_failure_returns_500_and_leaves_pending(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    monkeypatch,
+):
+    """F8 pin: commit-before-publish.
+
+    The material is committed ``pending`` by ``create_material`` before the
+    Celery publish is attempted. If the publish raises, the request returns 500,
+    no job_id is produced, and the committed ``pending`` row remains. A task
+    may still have been accepted by the broker (at-least-once tail); this test
+    does not assert either way.
+    """
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-enqueue-fail-subject",
+        "material-enqueue-fail@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    s3_key = material_service.build_material_s3_key(course.id, "slides.pdf")
+
+    captured: dict[str, uuid.UUID] = {}
+
+    async def failing_enqueue(
+        material_id: uuid.UUID,
+        s3_key: str,
+        course_id: uuid.UUID,
+        owner_id: uuid.UUID,
+    ):
+        captured["material_id"] = material_id
+        raise RuntimeError("broker unavailable")
+
+    monkeypatch.setattr(
+        "app.api.materials.enqueue_material_processing",
+        failing_enqueue,
+    )
+
+    token = _build_token(
+        private_key,
+        sub=instructor.keycloak_subject,
+        roles=["instructor"],
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            f"/v1/courses/{course.id}/materials",
+            json={"title": "Slides", "s3_key": s3_key},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 500
+    assert "job_id" not in response.text
+
+    material_id = captured["material_id"]
+
+    engine = create_async_engine(settings.database_url)
+    factory = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    try:
+        async with factory() as fresh_session:
+            result = await fresh_session.execute(
+                select(Material).where(Material.id == material_id)
+            )
+            stored = result.scalar_one()
+            assert stored.status == PENDING_STATUS
+            assert stored.course_id == course.id
+            assert stored.s3_key == s3_key
+    finally:
+        await engine.dispose()
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
 async def test_register_material_rejects_client_uploaded_by(
     db_session,
     rsa_keypair,
@@ -1031,27 +1121,23 @@ async def test_list_materials_ordered_by_created_at_desc_then_id(
 
 
 @pytest.mark.asyncio
-async def test_get_material_status_returns_200_for_authenticated_user(
+async def test_get_material_status_returns_200_for_owner(
     db_session,
     rsa_keypair,
     fake_jwks,
 ):
-    """The status endpoint requires authentication only, not an instructor role."""
+    """The status endpoint returns 200 for the user who owns the material's
+    course; ownership is enforced via ``_require_owned_course``.
+    """
     private_key, _ = rsa_keypair
-    instructor = await _create_user(
+    owner = await _create_user(
         db_session,
         "material-status-owner-subject",
         "material-status-owner@example.com",
     )
-    course = await _create_course(db_session, instructor)
-    material = await _create_material(db_session, course, instructor)
-
-    student = await _create_user(
-        db_session,
-        "material-status-student-subject",
-        "material-status-student@example.com",
-    )
-    token = _build_token(private_key, sub=student.keycloak_subject, roles=["student"])
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    token = _build_token(private_key, sub=owner.keycloak_subject, roles=["instructor"])
 
     async with _api(db_session, token) as (client, headers):
         response = await client.get(
@@ -1063,8 +1149,50 @@ async def test_get_material_status_returns_200_for_authenticated_user(
     assert response.json()["material_id"] == str(material.id)
     assert response.json()["status"] == "pending"
 
-    await db_session.delete(instructor)
-    await db_session.delete(student)
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.parametrize("role", ["student", "instructor"])
+@pytest.mark.asyncio
+async def test_get_material_status_forbidden_for_non_owner(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    role,
+):
+    """A material status is only readable by the user who owns its course.
+
+    Ownership carries no role dependency: a non-owner gets 403 whether they
+    hold the instructor role or not.
+    """
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "material-status-nonowner-owner-subject",
+        "material-status-nonowner-owner@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+
+    intruder = await _create_user(
+        db_session,
+        "material-status-nonowner-intruder-subject",
+        "material-status-nonowner-intruder@example.com",
+    )
+    token = _build_token(private_key, sub=intruder.keycloak_subject, roles=[role])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(
+            f"/v1/materials/{material.id}/status",
+            headers=headers,
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Insufficient permissions"
+
+    await db_session.delete(owner)
+    await db_session.delete(intruder)
     await db_session.commit()
 
 
@@ -1188,8 +1316,24 @@ def test_openapi_documents_material_endpoints():
     status_responses = paths[status_path]["get"]["responses"]
     assert "200" in status_responses
     assert "401" in status_responses
+    assert "403" in status_responses
     assert "404" in status_responses
     assert "422" in status_responses
+
+    material_status_schema = spec["components"]["schemas"]["MaterialStatusResponse"]
+    assert material_status_schema["properties"]["status"]["enum"] == [
+        PENDING_STATUS,
+        PROCESSING_STATUS,
+        READY_STATUS,
+        FAILED_STATUS,
+    ]
+    material_schema = spec["components"]["schemas"]["MaterialResponse"]
+    assert material_schema["properties"]["status"]["enum"] == [
+        PENDING_STATUS,
+        PROCESSING_STATUS,
+        READY_STATUS,
+        FAILED_STATUS,
+    ]
 
     upload_responses = paths[upload_url_path]["post"]["responses"]
     assert "200" in upload_responses
@@ -1211,3 +1355,44 @@ def test_openapi_documents_material_endpoints():
     assert "401" in list_responses
     assert "403" in list_responses
     assert "404" in list_responses
+
+
+def test_material_status_literal_accepts_exact_vocabulary_only():
+    now = datetime.now(timezone.utc)
+
+    for status_value in (PENDING_STATUS, PROCESSING_STATUS, READY_STATUS, FAILED_STATUS):
+        status_response = MaterialStatusResponse(
+            material_id=uuid.uuid4(),
+            status=status_value,
+        )
+        assert status_response.status == status_value
+
+        material = MaterialResponse(
+            id=uuid.uuid4(),
+            course_id=uuid.uuid4(),
+            title="Slides",
+            s3_key="courses/x/materials/a.pdf",
+            status=status_value,
+            uploaded_by=uuid.uuid4(),
+            created_at=now,
+        )
+        assert material.status == status_value
+
+
+def test_material_status_literal_rejects_unknown_status():
+    with pytest.raises(ValidationError):
+        MaterialStatusResponse(
+            material_id=uuid.uuid4(),
+            status="uploaded",
+        )
+
+    with pytest.raises(ValidationError):
+        MaterialResponse(
+            id=uuid.uuid4(),
+            course_id=uuid.uuid4(),
+            title="Slides",
+            s3_key="courses/x/materials/a.pdf",
+            status="uploaded",
+            uploaded_by=uuid.uuid4(),
+            created_at=datetime.now(timezone.utc),
+        )

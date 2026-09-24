@@ -13,7 +13,13 @@ import uuid
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
+from app.config import settings
 from app.models.course import Course
 from app.models.material import (
     FAILED_STATUS,
@@ -24,6 +30,7 @@ from app.models.material import (
 )
 from app.models.user import User
 from app.services.material_service import (
+    claim_pending_material,
     get_material_by_id,
     transition_material_status,
 )
@@ -189,6 +196,105 @@ async def test_invalid_transitions_raise_value_error_and_leave_status_unchanged(
 
     assert material.status == initial_status
     assert flush_calls == []
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_claim_pending_material_sets_processing_and_commits(db_session):
+    owner = await _create_user(
+        db_session, "material-claim-owner", "material-claim@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+
+    claimed = await claim_pending_material(db_session, material.id)
+
+    assert claimed is not None
+    assert claimed.id == material.id
+    assert claimed.status == PROCESSING_STATUS
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == material.id)
+    )
+    persisted = result.scalar_one()
+    assert persisted.status == PROCESSING_STATUS
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_claim_pending_material_returns_none_for_missing_id(db_session):
+    claimed = await claim_pending_material(db_session, uuid.uuid4())
+
+    assert claimed is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "initial_status", [PROCESSING_STATUS, READY_STATUS, FAILED_STATUS]
+)
+async def test_claim_pending_material_returns_none_for_non_pending(
+    db_session, initial_status
+):
+    owner = await _create_user(
+        db_session,
+        f"material-claim-{initial_status}-owner",
+        f"material-claim-{initial_status}@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(
+        db_session, course, owner, status=initial_status
+    )
+
+    claimed = await claim_pending_material(db_session, material.id)
+
+    assert claimed is None
+    await db_session.refresh(material)
+    assert material.status == initial_status
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_claim_pending_material_excludes_concurrent_claim_from_another_session(
+    db_session,
+):
+    """W8: the claim is a single conditional UPDATE. Once one session claims a
+    pending material as ``processing``, a second session (a concurrent worker)
+    claiming the same material must receive ``None`` and leave the persisted
+    status at ``processing``."""
+    owner = await _create_user(
+        db_session, "material-claim-excl-owner", "material-claim-excl@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+
+    claimed = await claim_pending_material(db_session, material.id)
+    assert claimed is not None
+    assert claimed.status == PROCESSING_STATUS
+
+    engine = create_async_engine(settings.database_url)
+    factory = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    try:
+        async with factory() as other_session:
+            second_claim = await claim_pending_material(other_session, material.id)
+            assert second_claim is None
+
+            result = await other_session.execute(
+                select(Material).where(Material.id == material.id)
+            )
+            persisted = result.scalar_one()
+            assert persisted.status == PROCESSING_STATUS
+    finally:
+        await engine.dispose()
 
     await db_session.delete(owner)
     await db_session.commit()

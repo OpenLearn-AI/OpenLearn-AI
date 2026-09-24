@@ -6,6 +6,7 @@ Celery app is imported lazily (at call time) to avoid the ``REDIS_PASSWORD``
 import-time requirement in ``app.workers.celery_app``.
 """
 
+import asyncio
 import uuid
 from importlib import import_module
 
@@ -24,7 +25,8 @@ async def enqueue_material_processing(
 ) -> str:
     """Publish the processing task and return the Celery task id as the job id."""
     celery_app = _celery_app()
-    result = celery_app.send_task(
+    result = await asyncio.to_thread(
+        celery_app.send_task,
         MATERIAL_PROCESSING_TASK_NAME,
         args=[
             str(material_id),

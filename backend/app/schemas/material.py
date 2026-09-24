@@ -6,8 +6,11 @@ POST /v1/courses/{course_id}/materials
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+MaterialStatus = Literal["pending", "processing", "ready", "failed"]
 
 
 class UploadUrlCreate(BaseModel):
@@ -52,16 +55,21 @@ class MaterialResponse(BaseModel):
     course_id: uuid.UUID
     title: str
     s3_key: str
-    status: str
+    status: MaterialStatus
     uploaded_by: uuid.UUID
     created_at: datetime
 
 
 class MaterialStatusResponse(BaseModel):
     material_id: uuid.UUID
-    status: str
+    status: MaterialStatus
 
 
 class MaterialAcceptedResponse(BaseModel):
     material_id: uuid.UUID
-    job_id: str
+    job_id: str = Field(
+        description=(
+            "Celery task id. Intended for log correlation only in W7; it is "
+            "not queryable through the API."
+        )
+    )
