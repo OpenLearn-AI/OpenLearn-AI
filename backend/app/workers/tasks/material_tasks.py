@@ -134,17 +134,18 @@ async def _handle_material(
             try:
                 await session.rollback()
                 material = await get_material_by_id(session, material_uuid)
-                try:
-                    await transition_material_status(
-                        session, material, FAILED_STATUS
-                    )
-                    await session.commit()
-                except Exception:
-                    logger.exception(
-                        "material_failed_persistence_failed",
-                        material_id=material_id,
-                        s3_key=s3_key,
-                    )
+                if material is not None:
+                    try:
+                        await transition_material_status(
+                            session, material, FAILED_STATUS
+                        )
+                        await session.commit()
+                    except Exception:
+                        logger.exception(
+                            "material_failed_persistence_failed",
+                            material_id=material_id,
+                            s3_key=s3_key,
+                        )
             except Exception:
                 logger.exception(
                     "material_failed_recovery_failed",

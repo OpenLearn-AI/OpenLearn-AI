@@ -170,33 +170,13 @@ async def test_processing_to_failed_succeeds(db_session):
 
 
 @pytest.mark.asyncio
-async def test_failed_to_processing_succeeds(db_session):
-    owner = await _create_user(
-        db_session, "material-transition-fpr-owner", "material-transition-fpr@example.com"
-    )
-    course = await _create_course(db_session, owner)
-    material = await _create_material(
-        db_session, course, owner, status=FAILED_STATUS
-    )
-    flush_calls = _spy_on_flush(db_session)
-
-    result = await transition_material_status(db_session, material, PROCESSING_STATUS)
-
-    assert result is material
-    assert material.status == PROCESSING_STATUS
-    assert flush_calls == [True]
-
-    await db_session.delete(owner)
-    await db_session.commit()
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("initial_status", "invalid_target"),
     [
         (PENDING_STATUS, READY_STATUS),
         (PENDING_STATUS, FAILED_STATUS),
         (READY_STATUS, PROCESSING_STATUS),
+        (FAILED_STATUS, PROCESSING_STATUS),
     ],
 )
 async def test_invalid_transitions_raise_value_error_and_leave_status_unchanged(

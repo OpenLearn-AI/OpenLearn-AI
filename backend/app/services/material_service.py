@@ -24,7 +24,6 @@ from app.models.material import (
 _ALLOWED_TRANSITIONS = {
     PENDING_STATUS: {PROCESSING_STATUS},
     PROCESSING_STATUS: {READY_STATUS, FAILED_STATUS},
-    FAILED_STATUS: {PROCESSING_STATUS},
 }
 
 _KEY_PREFIX_TEMPLATE = "courses/{course_id}/materials/"

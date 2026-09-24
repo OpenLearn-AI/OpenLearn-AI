@@ -339,6 +339,76 @@ async def test_process_material_second_delivery_after_claim_is_noop(
 
 
 @pytest.mark.asyncio
+async def test_process_material_concurrent_double_delivery_claims_seam_exactly_once(
+    db_session, worker_session_factory, monkeypatch
+):
+    """Phase 1D W8 acceptance: two deliveries of the same pending material run
+    genuinely concurrently under ``asyncio.gather`` against the same material id.
+
+    Exactly one execution wins the atomic ``pending -> processing`` claim and
+    reaches the content seam; the loser takes the safe re-entry/no-op path
+    (returns the current status, never reaches the seam). The winner's final
+    transition is committed, so the persisted status is the winner's outcome.
+    """
+    owner = await _create_user(
+        db_session,
+        "material-task-concurrent-owner",
+        "material-task-concurrent@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    s3_key = material.s3_key
+
+    seam_calls = []
+    winner_claimed = asyncio.Event()
+    release_winner = asyncio.Event()
+
+    async def barrier_content(inner_material, inner_s3_key, course_id, owner_id):
+        seam_calls.append((inner_material.id, inner_s3_key))
+        winner_claimed.set()
+        await release_winner.wait()
+
+    monkeypatch.setattr(material_tasks, "_process_material_content", barrier_content)
+
+    async def _deliver_as_winner():
+        return await material_tasks._handle_material(
+            str(material.id),
+            s3_key,
+            str(course.id),
+            str(owner.id),
+            session_factory=worker_session_factory,
+        )
+
+    async def _deliver_as_loser():
+        await winner_claimed.wait()
+        try:
+            return await material_tasks._handle_material(
+                str(material.id),
+                s3_key,
+                str(course.id),
+                str(owner.id),
+                session_factory=worker_session_factory,
+            )
+        finally:
+            release_winner.set()
+
+    winner_result, loser_result = await asyncio.gather(
+        _deliver_as_winner(), _deliver_as_loser()
+    )
+
+    assert winner_result == READY_STATUS
+    assert loser_result == PROCESSING_STATUS
+    assert len(seam_calls) == 1
+    assert seam_calls[0][0] == material.id
+
+    await db_session.refresh(material)
+    assert material.status == READY_STATUS
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
 async def test_process_material_statement_failure_preserves_original_error_and_records_failed(
     db_session, worker_session_factory, monkeypatch
 ):
@@ -476,8 +546,10 @@ def test_process_material_delivery_configuration_tripwire():
 
     The processing task is intentionally delivered with ``acks_late`` disabled,
     ``reject_on_worker_lost`` not enabled, no automatic retry delay, and publish
-    retry enabled. These settings are defaults today; the assertion guards
-    against accidental future changes to the delivery configuration.
+    retry enabled. F10 adds a 10-minute soft / 11-minute hard task time limit.
+    These settings are defaults today (plus the explicit F10 limits); the
+    assertions guard against accidental future changes to the delivery
+    configuration.
     """
     conf = material_tasks.celery_app.conf
 
@@ -485,6 +557,9 @@ def test_process_material_delivery_configuration_tripwire():
     assert not conf.get("task_reject_on_worker_lost")
     assert conf.get("task_default_retry_delay") is None
     assert conf.get("task_publish_retry") is True
+
+    assert conf.get("task_soft_time_limit") == 600
+    assert conf.get("task_time_limit") == 660
 
 
 def test_process_material_sequential_tasks_use_distinct_loops_in_same_process(

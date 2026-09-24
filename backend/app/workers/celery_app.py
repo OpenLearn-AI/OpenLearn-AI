@@ -38,6 +38,13 @@ celery_app.conf.update(
     # Redis startup retry
     broker_connection_retry_on_startup=True,
 
+    # Task time limits (W7 F10): soft 10m / hard 11m. SoftTimeLimitExceeded
+    # feeds the existing material failure path (result: failed). The hard
+    # kill / OOM / container restart case remains the documented W7 residual
+    # gap; no reaper is built.
+    task_soft_time_limit=600,
+    task_time_limit=660,
+
     # Timezone
     timezone="UTC",
     enable_utc=True,
