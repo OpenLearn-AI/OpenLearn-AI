@@ -310,7 +310,26 @@ No rollback was performed as part of this runbook validation.
 
 ---
 
-## 10. Rollback Completion Checklist
+## 10. Week 7 Material Processing: Hard-Kill/OOM Recovery Backstop
+
+If a material remains stuck in `processing` because the Celery worker was
+hard-killed or OOM-killed and the task's failure handler could not run, an
+operator may manually mark it `failed`:
+
+```sql
+UPDATE materials
+SET status = 'failed'
+WHERE id = :material_id
+  AND status = 'processing';
+```
+
+- Only perform this after confirming the worker is no longer processing that material.
+- This is a manual recovery backstop for the known hard-kill/OOM case only.
+- This is **not** an automatic recovery mechanism.
+
+---
+
+## 11. Rollback Completion Checklist
 
 * [ ] Target backend SHA exists in GHCR.
 * [ ] Target frontend SHA exists in GHCR.
