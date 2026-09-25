@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getKeycloak } from "@/lib/keycloak";
+import { getAccessToken } from "@/lib/keycloak";
 
 export interface Course {
     id: string;
@@ -10,9 +10,9 @@ export interface Course {
 }
 
 async function fetchCourses(): Promise<Course[]> {
-    const keycloak = await getKeycloak();
+    const token = await getAccessToken();
 
-    if (!keycloak || !keycloak.token) {
+    if (!token) {
         throw new Error("Not authenticated");
     }
 
@@ -20,7 +20,7 @@ async function fetchCourses(): Promise<Course[]> {
 
     const response = await fetch(`${baseUrl}/v1/courses`, {
         headers: {
-            Authorization: `Bearer ${keycloak.token}`,
+            Authorization: `Bearer ${token}`,
         },
     });
 

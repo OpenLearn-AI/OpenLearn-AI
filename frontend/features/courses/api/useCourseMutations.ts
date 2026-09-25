@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { getKeycloak } from "@/lib/keycloak";
+import { getAccessToken } from "@/lib/keycloak";
 import type { CourseFormValues } from "../schemas";
 
 export class CourseApiError extends Error {
@@ -12,18 +12,13 @@ export class CourseApiError extends Error {
     }
 }
 
-async function getAccessToken(): Promise<string> {
-    const keycloak = await getKeycloak();
-
-    if (!keycloak || !keycloak.token) {
-        throw new CourseApiError("Not authenticated", 401);
-    }
-
-    return keycloak.token;
-}
 
 async function createCourse(payload: CourseFormValues) {
     const token = await getAccessToken();
+
+    if (!token) {
+        throw new CourseApiError("Not authenticated", 401);
+    }
     const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const response = await fetch(`${baseUrl}/v1/courses`, {
@@ -50,6 +45,11 @@ async function updateCourse(
     payload: CourseFormValues,
 ) {
     const token = await getAccessToken();
+
+    if (!token) {
+        throw new CourseApiError("Not authenticated", 401);
+    }
+
     const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const response = await fetch(
