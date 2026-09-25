@@ -2,9 +2,11 @@
 
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import { useProfile } from "@/features/profile/api/useProfile";
+import { useMe } from "@/features/auth/api/useMe";
 import Link from "next/link";
 
 export default function ProfilePage() {
+    const { data: me } = useMe();
     const {
         data: profile,
         isLoading,
@@ -44,8 +46,7 @@ export default function ProfilePage() {
         );
     }
 
-    // استخراج اسم المستخدم لأول حرف للـ Avatar
-    const profileName = (profile as any)?.username || (profile as any)?.name || (profile as any)?.email || "User";
+    const profileName = me?.email || "User";
     const profileInitial = typeof profileName === "string" ? profileName.charAt(0).toUpperCase() : "U";
 
     return (
@@ -65,7 +66,7 @@ export default function ProfilePage() {
                             {profileName}
                         </h1>
                         <p className="text-indigo-100 text-xs sm:text-sm">
-                            {(profile as any)?.email || "Manage your account credentials and personal preferences"}
+                            {me?.email || "Manage your account credentials and personal preferences"}
                         </p>
                     </div>
                 </div>

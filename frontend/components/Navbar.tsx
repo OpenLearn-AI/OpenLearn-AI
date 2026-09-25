@@ -8,10 +8,10 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export function Navbar() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { data: user, isLoading: userLoading } = useMe() as { data: any; isLoading: boolean };
+  const { data: user, isLoading: userLoading } = useMe();
 
   const isLoading = authLoading || userLoading;
-  const userName = user?.username || user?.name || user?.email || "My Profile";
+  const userName = user?.email || "My Profile";
   const userInitial = typeof userName === "string" ? userName.charAt(0).toUpperCase() : "U";
 
   return (
