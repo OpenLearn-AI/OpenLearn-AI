@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getAccessToken } from "@/lib/keycloak";
+import { useMe } from "@/features/auth/api/useMe";
 
 export interface Course {
     id: string;
@@ -32,8 +33,11 @@ async function fetchCourses(): Promise<Course[]> {
 }
 
 export function useCourses() {
+    const me = useMe();
+
     return useQuery({
         queryKey: ["courses"],
         queryFn: fetchCourses,
+        enabled: me.isSuccess,
     });
 }

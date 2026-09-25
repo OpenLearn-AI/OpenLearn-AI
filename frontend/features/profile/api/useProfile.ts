@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getAccessToken } from "@/lib/keycloak";
+import { useMe } from "@/features/auth/api/useMe";
 
 export interface Profile {
     id: string;
@@ -37,8 +38,11 @@ async function fetchProfile(): Promise<Profile> {
 }
 
 export function useProfile() {
+    const me = useMe();
+
     return useQuery({
         queryKey: ["profile"],
         queryFn: fetchProfile,
+        enabled: me.isSuccess,
     });
 }
