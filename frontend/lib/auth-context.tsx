@@ -26,12 +26,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         let cancelled = false;
 
-        getKeycloak().then((keycloak) => {
-            if (cancelled || !keycloak) return;
+        async function initializeAuth() {
+            try {
+                const keycloak = await getKeycloak();
 
-            setIsAuthenticated(!!keycloak.authenticated);
-            setIsLoading(false);
-        });
+                if (cancelled) {
+                    return;
+                }
+
+                setIsAuthenticated(
+                    Boolean(keycloak?.authenticated),
+                );
+            } catch (error) {
+                console.error(
+                    "Failed to initialize authentication:",
+                    error,
+                );
+
+                if (!cancelled) {
+                    setIsAuthenticated(false);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
+            }
+        }
+
+        initializeAuth();
 
         return () => {
             cancelled = true;
@@ -39,7 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, isLoading }}>
+        <AuthContext.Provider
+            value={{
+                isAuthenticated,
+                isLoading,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );
