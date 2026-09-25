@@ -27,7 +27,7 @@ async function updateProfile(
     payload: ProfileFormValues,
 ): Promise<Profile> {
     const token = await getAccessToken();
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const response = await fetch(`${baseUrl}/v1/users/me`, {
         method: "PUT",

@@ -16,7 +16,7 @@ async function fetchCourses(): Promise<Course[]> {
         throw new Error("Not authenticated");
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const response = await fetch(`${baseUrl}/v1/courses`, {
         headers: {

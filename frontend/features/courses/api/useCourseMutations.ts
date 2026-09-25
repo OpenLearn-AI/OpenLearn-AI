@@ -24,7 +24,7 @@ async function getAccessToken(): Promise<string> {
 
 async function createCourse(payload: CourseFormValues) {
     const token = await getAccessToken();
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const response = await fetch(`${baseUrl}/v1/courses`, {
         method: "POST",
@@ -50,7 +50,7 @@ async function updateCourse(
     payload: CourseFormValues,
 ) {
     const token = await getAccessToken();
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const response = await fetch(
         `${baseUrl}/v1/courses/${courseId}`,

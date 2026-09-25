@@ -18,9 +18,15 @@ export async function getKeycloak(): Promise<Keycloak | null> {
 
         if (!keycloak) {
             keycloak = new KeycloakConstructor({
-                url: "http://localhost:8080",
-                realm: "openlearn",
-                clientId: "openlearn-frontend",
+                url:
+                    process.env.NEXT_PUBLIC_KEYCLOAK_URL ??
+                    "http://localhost:8080",
+                realm:
+                    process.env.NEXT_PUBLIC_KEYCLOAK_REALM ??
+                    "openlearn",
+                clientId:
+                    process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ??
+                    "openlearn-frontend",
             });
         }
 

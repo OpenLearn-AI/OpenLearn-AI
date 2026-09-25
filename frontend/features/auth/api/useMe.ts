@@ -9,7 +9,7 @@ async function fetchMe(): Promise<MeResponse> {
         throw new Error("Not authenticated");
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const response = await fetch(`${baseUrl}/auth/me`, {
         headers: {
