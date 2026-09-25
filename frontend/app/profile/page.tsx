@@ -36,22 +36,12 @@ export default function ProfilePage() {
         );
     }
 
-    if (!profile) {
-        return (
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 shadow-xs max-w-md mx-auto">
-                    Profile not found.
-                </div>
-            </main>
-        );
-    }
-
     const profileName = me?.email || "User";
     const profileInitial = typeof profileName === "string" ? profileName.charAt(0).toUpperCase() : "U";
 
     return (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8 bg-slate-50/50 min-h-screen">
-            
+
             {/* Header Banner */}
             <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-700 text-white p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
                 <div className="flex items-center gap-4">
@@ -77,22 +67,35 @@ export default function ProfilePage() {
 
             {/* Content Layout Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
                 {/* Left 2 Columns: Main Profile Form */}
                 <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900">Personal Information</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Update your account details and profile configurations.</p>
+                        <h3 className="text-lg font-bold text-slate-900">
+                            {profile ? "Personal Information" : "Create Your Profile"}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                            {profile
+                                ? "Update your account details and profile configurations."
+                                : "Complete your profile information to get started."}
+                        </p>
                     </div>
 
+                    {!profile && (
+                        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                            <p className="text-xs text-indigo-900">
+                                Your account does not have a profile yet. Complete the form below to create one.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="border-t border-slate-100 pt-6">
-                        <ProfileForm profile={profile} />
+                        <ProfileForm profile={profile ?? null} />
                     </div>
                 </div>
 
                 {/* Right Column: Account Status & Info Cards */}
                 <div className="space-y-6">
-                    
+
                     {/* Cloud Platform Status Card */}
                     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
                         <h3 className="font-bold text-slate-900 text-base border-b border-slate-100 pb-3">Subscription & Plan</h3>
@@ -119,9 +122,7 @@ export default function ProfilePage() {
                             If you encounter any issues updating your profile credentials, check your connection or reach out to platform support.
                         </p>
                     </div>
-
                 </div>
-
             </div>
         </main>
     );

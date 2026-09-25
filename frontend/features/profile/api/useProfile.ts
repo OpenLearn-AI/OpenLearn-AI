@@ -13,7 +13,7 @@ export interface Profile {
     daily_available_minutes: number;
 }
 
-async function fetchProfile(): Promise<Profile> {
+async function fetchProfile(): Promise<Profile | null> {
     const token = await getAccessToken();
 
     if (!token) {
@@ -27,6 +27,10 @@ async function fetchProfile(): Promise<Profile> {
             Authorization: `Bearer ${token}`,
         },
     });
+
+    if (response.status === 404) {
+        return null;
+    }
 
     if (!response.ok) {
         throw new Error(

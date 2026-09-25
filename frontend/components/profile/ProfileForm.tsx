@@ -15,31 +15,26 @@ import { Label } from "@/components/ui/label";
 import type { Profile } from "@/features/profile/api/useProfile";
 
 interface ProfileFormProps {
-    profile: Profile;
+    profile: Profile | null;
 }
 
 export function ProfileForm({ profile }: ProfileFormProps) {
     const updateProfile = useUpdateProfile();
 
     const [educationLevel, setEducationLevel] = useState(
-        profile.education_level,
+        profile?.education_level ?? "",
     );
-    const [major, setMajor] = useState(profile.major);
-    const [preferredLanguage, setPreferredLanguage] = useState<
-        "en" | "ar"
-    >(
-        profile.preferred_language === "ar"
-            ? "ar"
-            : "en",
+    const [major, setMajor] = useState(profile?.major ?? "");
+    const [preferredLanguage, setPreferredLanguage] = useState<"en" | "ar">(
+        profile?.preferred_language === "ar" ? "ar" : "en",
     );
-    const [university, setUniversity] = useState(
-        profile.university ?? "",
-    );
+    const [university, setUniversity] = useState(profile?.university ?? "");
     const [learningStyle, setLearningStyle] = useState(
-        profile.learning_style_vark ?? "",
+        profile?.learning_style_vark ?? "",
     );
-    const [dailyAvailableMinutes, setDailyAvailableMinutes] =
-        useState(String(profile.daily_available_minutes));
+    const [dailyAvailableMinutes, setDailyAvailableMinutes] = useState(
+        String(profile?.daily_available_minutes ?? 60),
+    );
 
     const [errors, setErrors] = useState<{
         education_level?: string;
@@ -99,7 +94,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         updateProfile.mutate(result.data, {
             onSuccess: () => {
                 setSuccessMessage(
-                    "Profile updated successfully.",
+                    profile
+                        ? "Profile updated successfully."
+                        : "Profile created successfully.",
                 );
             },
         });
@@ -112,13 +109,13 @@ export function ProfileForm({ profile }: ProfileFormProps) {
             ? mutationError.status === 401
                 ? "Your session has expired. Please log in again."
                 : mutationError.status === 404
-                  ? "Profile not found."
-                  : mutationError.status === 422
-                    ? "Please check your profile information."
-                    : mutationError.message
+                    ? "Unable to save the profile for this user."
+                    : mutationError.status === 422
+                        ? "Please check your profile information."
+                        : mutationError.message
             : mutationError instanceof Error
-              ? mutationError.message
-              : null;
+                ? mutationError.message
+                : null;
 
     return (
         <form
@@ -299,7 +296,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
             >
                 {updateProfile.isPending
                     ? "Saving..."
-                    : "Save Changes"}
+                    : profile
+                        ? "Save Changes"
+                        : "Create Profile"}
             </Button>
         </form>
     );
