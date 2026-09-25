@@ -4,55 +4,30 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-// مثال تجريبي للكورسات والمحتوى المتاح (يمكن استبداله بـ API لاحقاً)
-const MOCK_COURSES = [
-    {
-        id: "1",
-        title: "Advanced Software Architecture",
-        description: "Explore design patterns, SOLID principles, and enterprise system scaling.",
-        modulesCount: 6,
-        progress: 75,
-        updatedAt: "2 days ago",
-    },
-    {
-        id: "2",
-        title: "Distributed Systems & Cloud Computing",
-        description: "Learn NIST cloud models, Xen hypervisors, and SDN OpenFlow protocols.",
-        modulesCount: 4,
-        progress: 40,
-        updatedAt: "5 days ago",
-    },
-    {
-        id: "3",
-        title: "Vue 3 Single Page Applications",
-        description: "Build reactive interfaces with composition API, routers, and state management.",
-        modulesCount: 8,
-        progress: 100,
-        updatedAt: "1 week ago",
-    },
-    {
-        id: "4",
-        title: "Big Data Processing with Apache Spark",
-        description: "Master Spark RDDs, DataFrames, HDFS blocks, and Airflow DAG workflows.",
-        modulesCount: 5,
-        progress: 20,
-        updatedAt: "2 weeks ago",
-    },
-];
+import { useCourses } from "@/features/courses/api/useCourses";
 
 export default function CoursesPage() {
     const [searchQuery, setSearchQuery] = useState("");
 
-    const filteredCourses = MOCK_COURSES.filter(
+    const {
+        data: courses,
+        isLoading,
+        isError,
+        error,
+    } = useCourses();
+
+    const filteredCourses = (courses ?? []).filter(
         (course) =>
-            course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            course.description.toLowerCase().includes(searchQuery.toLowerCase())
+            course.title
+                .toLowerCase()
+                .includes(searchQuery.toLowerCase()) ||
+            (course.description ?? "")
+                .toLowerCase()
+                .includes(searchQuery.toLowerCase()),
     );
 
     return (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8 bg-background min-h-screen">
-            
             {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border pb-6">
                 <div>
@@ -64,9 +39,7 @@ export default function CoursesPage() {
                     </p>
                 </div>
                 <Link href="/courses/new">
-                    <Button>
-                        + Create New Course
-                    </Button>
+                    <Button>+ Create New Course</Button>
                 </Link>
             </div>
 
@@ -84,7 +57,21 @@ export default function CoursesPage() {
 
             {/* Courses Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-                {filteredCourses.length > 0 ? (
+                {isLoading ? (
+                    <div className="col-span-full text-center py-12 bg-card rounded-2xl border border-border">
+                        <p className="text-muted-foreground text-sm">
+                            Loading courses...
+                        </p>
+                    </div>
+                ) : isError ? (
+                    <div className="col-span-full text-center py-12 bg-card rounded-2xl border border-border">
+                        <p className="text-destructive text-sm">
+                            {error instanceof Error
+                                ? error.message
+                                : "Failed to load courses."}
+                        </p>
+                    </div>
+                ) : filteredCourses.length > 0 ? (
                     filteredCourses.map((course) => (
                         <div
                             key={course.id}
@@ -96,37 +83,39 @@ export default function CoursesPage() {
                                         {course.title}
                                     </h2>
                                     <span className="text-xs bg-secondary text-secondary-foreground px-2.5 py-1 rounded-full font-medium shrink-0">
-                                        {course.modulesCount} Modules
+                                        Course
                                     </span>
                                 </div>
+
                                 <p className="text-sm text-muted-foreground line-clamp-2">
-                                    {course.description}
+                                    {course.description || "No description"}
                                 </p>
                             </div>
 
                             <div className="space-y-3 pt-2 border-t border-border">
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                    <span>Progress</span>
-                                    <span className="font-semibold text-foreground">{course.progress}%</span>
-                                </div>
-                                <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                                    <div
-                                        className="bg-primary h-full rounded-full transition-all duration-500"
-                                        style={{ width: `${course.progress}%` }}
-                                    ></div>
-                                </div>
-
                                 <div className="flex justify-between items-center pt-2">
                                     <span className="text-xs text-muted-foreground">
-                                        Updated {course.updatedAt}
+                                        Created{" "}
+                                        {new Date(
+                                            course.created_at,
+                                        ).toLocaleDateString()}
                                     </span>
+
                                     <div className="flex items-center gap-2">
-                                        <Link href={`/courses/${course.id}/edit`}>
-                                            <Button variant="outline" size="sm">
+                                        <Link
+                                            href={`/courses/${course.id}/edit`}
+                                        >
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                            >
                                                 Edit
                                             </Button>
                                         </Link>
-                                        <Link href={`/courses/${course.id}`}>
+
+                                        <Link
+                                            href={`/courses/${course.id}`}
+                                        >
                                             <Button size="sm">
                                                 Open Hub &rarr;
                                             </Button>
@@ -138,7 +127,11 @@ export default function CoursesPage() {
                     ))
                 ) : (
                     <div className="col-span-full text-center py-12 bg-card rounded-2xl border border-border">
-                        <p className="text-muted-foreground text-sm">No courses found matching your search.</p>
+                        <p className="text-muted-foreground text-sm">
+                            {searchQuery
+                                ? "No courses found matching your search."
+                                : "No courses found."}
+                        </p>
                     </div>
                 )}
             </div>
