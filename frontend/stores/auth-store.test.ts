@@ -11,7 +11,7 @@ function createMockKeycloak(overrides: Record<string, unknown> = {}) {
         authenticated: true,
         realmAccess: { roles: ["student"] },
         logout: vi.fn().mockResolvedValue(undefined),
-        onAuthLogout: undefined,
+        onAuthLogout: undefined as (() => void) | undefined,
         ...overrides,
     };
 }
