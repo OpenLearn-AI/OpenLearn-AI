@@ -26,3 +26,4 @@ Thumbs.db
 # OCR benchmark datasets — stored locally, not committed
 experiments/OCR/ocr-benchmark/data/raw/misraj/
 experiments/OCR/ocr-benchmark/data/raw/bce-arabic-v1/
+.vscode/
