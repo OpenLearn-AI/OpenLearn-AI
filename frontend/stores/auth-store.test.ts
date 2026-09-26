@@ -10,8 +10,6 @@ function createMockKeycloak(overrides: Record<string, unknown> = {}) {
     return {
         authenticated: true,
         realmAccess: { roles: ["student"] },
-        updateToken: vi.fn().mockResolvedValue(true),
-        login: vi.fn().mockResolvedValue(undefined),
         logout: vi.fn().mockResolvedValue(undefined),
         onAuthLogout: undefined,
         ...overrides,
@@ -20,13 +18,10 @@ function createMockKeycloak(overrides: Record<string, unknown> = {}) {
 
 describe("useAuthStore", () => {
     beforeEach(() => {
-        vi.useFakeTimers();
         useAuthStore.setState({ isAuthenticated: false, isLoading: true, roles: [] });
     });
 
     afterEach(() => {
-        vi.clearAllTimers();
-        vi.useRealTimers();
         vi.restoreAllMocks();
     });
 
@@ -40,7 +35,7 @@ describe("useAuthStore", () => {
         expect(state.isLoading).toBe(false);
     });
 
-    it("sets isAuthenticated and roles from an authenticated keycloak instance", async () => {
+    it("sets isAuthenticated and roles from an authenticated keycloak instance (successful auth state / session restoration)", async () => {
         const mockKeycloak = createMockKeycloak({
             authenticated: true,
             realmAccess: { roles: ["admin", "student"] },
@@ -55,49 +50,30 @@ describe("useAuthStore", () => {
         expect(state.roles).toEqual(["admin", "student"]);
     });
 
-    it("refreshes the token every 30s via updateToken(70)", async () => {
+    it("sets isAuthenticated=false when Keycloak reports no active session (failed authentication state)", async () => {
+        const mockKeycloak = createMockKeycloak({ authenticated: false, realmAccess: undefined });
+        vi.mocked(getKeycloak).mockResolvedValue(mockKeycloak as never);
+
+        await useAuthStore.getState().initialize();
+
+        const state = useAuthStore.getState();
+        expect(state.isAuthenticated).toBe(false);
+        expect(state.isLoading).toBe(false);
+        expect(state.roles).toEqual([]);
+    });
+
+    it("clears auth state when Keycloak triggers onAuthLogout (e.g. expired refresh token)", async () => {
         const mockKeycloak = createMockKeycloak();
         vi.mocked(getKeycloak).mockResolvedValue(mockKeycloak as never);
 
         await useAuthStore.getState().initialize();
-        expect(mockKeycloak.updateToken).not.toHaveBeenCalled();
+        expect(useAuthStore.getState().isAuthenticated).toBe(true);
 
-        await vi.advanceTimersByTimeAsync(30000);
-        expect(mockKeycloak.updateToken).toHaveBeenCalledWith(70);
-
-        await vi.advanceTimersByTimeAsync(30000);
-        expect(mockKeycloak.updateToken).toHaveBeenCalledTimes(2);
-    });
-
-    it("logs out and redirects to Keycloak login when token refresh fails", async () => {
-        const mockKeycloak = createMockKeycloak({
-            updateToken: vi.fn().mockRejectedValue(new Error("refresh failed")),
-        });
-        vi.mocked(getKeycloak).mockResolvedValue(mockKeycloak as never);
-
-        await useAuthStore.getState().initialize();
-        await vi.advanceTimersByTimeAsync(30000);
-
-        await vi.waitFor(() => {
-            expect(mockKeycloak.login).toHaveBeenCalledWith({
-                redirectUri: window.location.origin,
-            });
-        });
+        mockKeycloak.onAuthLogout?.();
 
         const state = useAuthStore.getState();
         expect(state.isAuthenticated).toBe(false);
         expect(state.roles).toEqual([]);
-    });
-
-    it("does not stack a second interval when initialize() runs twice", async () => {
-        const mockKeycloak = createMockKeycloak();
-        vi.mocked(getKeycloak).mockResolvedValue(mockKeycloak as never);
-
-        await useAuthStore.getState().initialize();
-        await useAuthStore.getState().initialize();
-
-        await vi.advanceTimersByTimeAsync(30000);
-        expect(mockKeycloak.updateToken).toHaveBeenCalledTimes(1);
     });
 
     describe("logout", () => {

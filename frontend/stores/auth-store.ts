@@ -9,8 +9,6 @@ interface AuthState {
     logout: () => Promise<void>;
 }
 
-let refreshIntervalId: ReturnType<typeof setInterval> | null = null;
-
 export const useAuthStore = create<AuthState>((set) => ({
     isAuthenticated: false,
     isLoading: true,
@@ -30,35 +28,14 @@ export const useAuthStore = create<AuthState>((set) => ({
             roles: keycloak.realmAccess?.roles ?? [],
         });
 
-        // Bug fix: nothing was refreshing the access token before this.
-        // accessTokenLifespan is 300s in the realm config, so without this
-        // every API call started failing with 401 shortly after login.
-        if (refreshIntervalId) {
-            clearInterval(refreshIntervalId);
-        }
-
-        refreshIntervalId = setInterval(async () => {
-            try {
-                await keycloak.updateToken(70);
-            } catch {
-                set({ isAuthenticated: false, roles: [] });
-
-                if (refreshIntervalId) {
-                    clearInterval(refreshIntervalId);
-                    refreshIntervalId = null;
-                }
-
-                await keycloak.login({ redirectUri: window.location.origin });
-            }
-        }, 30000);
-
+        // Token refresh is handled on-demand by getAccessToken() (lib/keycloak.ts)
+        // right before each authenticated API request — no background interval
+        // needed here. Previously this store ran its own setInterval doing the
+        // same job in parallel; removed in favor of the single on-demand path
+        // used across courses/profile (see fix(#3) on
+        // fix/frontend-pre-week7-integration).
         keycloak.onAuthLogout = () => {
             set({ isAuthenticated: false, roles: [] });
-
-            if (refreshIntervalId) {
-                clearInterval(refreshIntervalId);
-                refreshIntervalId = null;
-            }
         };
     },
 
@@ -66,11 +43,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         const keycloak = await getKeycloak();
 
         if (!keycloak) return;
-
-        if (refreshIntervalId) {
-            clearInterval(refreshIntervalId);
-            refreshIntervalId = null;
-        }
 
         set({ isAuthenticated: false, roles: [] });
 
