@@ -205,6 +205,7 @@ services:
 
   celery_worker:
     image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
+    user: "1000:1000"
     restart: unless-stopped
     command: celery -A app.workers.celery_app worker --loglevel=info -E
     environment:
