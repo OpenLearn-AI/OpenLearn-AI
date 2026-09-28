@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Response, status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_instructor
+from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/v1/courses", tags=["courses"])
 # document the auth/rbac/resolution failures raised manually.
 _COURSE_ERROR_RESPONSES = {
     401: {"description": "Not authenticated (missing or invalid bearer token)"},
-    403: {"description": "Insufficient permissions (instructor role or course ownership required)"},
+    403: {"description": "Insufficient permissions"},
     404: {"description": "No local user for the authenticated identity, or course does not exist"},
 }
 
@@ -35,7 +35,6 @@ _COURSE_ERROR_RESPONSES = {
 async def create_course_handler(
     payload: CourseCreate,
     user: User = Depends(get_current_user),
-    _: dict = Depends(require_instructor),
     db: AsyncSession = Depends(get_db),
 ) -> CourseResponse:
     # owner_id always comes from the authenticated local user; the request

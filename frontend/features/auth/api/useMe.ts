@@ -1,19 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
-import { getKeycloak } from "@/lib/keycloak";
+import { getAccessToken } from "@/lib/keycloak";
 import type { MeResponse } from "../types";
 
 async function fetchMe(): Promise<MeResponse> {
-    const keycloak = await getKeycloak();
+    const token = await getAccessToken();
 
-    if (!keycloak || !keycloak.token) {
+    if (!token) {
         throw new Error("Not authenticated");
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const response = await fetch(`${baseUrl}/auth/me`, {
         headers: {
-            Authorization: `Bearer ${keycloak.token}`,
+            Authorization: `Bearer ${token}`,
         },
     });
 
@@ -30,3 +30,4 @@ export function useMe() {
         queryFn: fetchMe,
     });
 }
+
