@@ -1,8 +1,8 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 Slice 1 (Courses foundation) closure recorded 2026-09-29 (§7)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`; staging browser login remains an external operational dependency); Phase 2 IN PROGRESS — Slice 1 (apiFetch + ApiError + course schemas + keys + query defaults + course hook migrations + CourseForm ApiError + unit tests) lands as `phase2_courses_foundation.patch` on top of `d9d1c53`, locally verified. Phases 3–6 NOT STARTED.
-> **Branch:** `feature/frontend-refactor` @ `d9d1c53` (HEAD after Phase 1 final closure; Phase 2 Slice 1 patch applied on top in this revision as `phase2_courses_foundation.patch`, not yet committed to the remote branch).
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 Slice 1 (Courses foundation) closure recorded 2026-09-29 (§7); Phase 2 continuation (queryOptions pattern) closure recorded 2026-09-29 (§7 continuation record)
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`; staging browser login remains an external operational dependency); Phase 2 REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN — Slice 1 committed at `af43728`; continuation slice (D5 `queryOptions` pattern for course queries + query-options unit tests) lands as `phase2_continuation.patch` on top of `af43728`. Manual courses-CRUD round-trip pending user verification on a local running stack. Phases 3–6 NOT STARTED.
+> **Branch:** `feature/frontend-refactor` @ `af43728` (HEAD after Phase 2 Slice 1; continuation patch applied on top in this revision as `phase2_continuation.patch`, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
@@ -31,12 +31,12 @@ Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are ac
 
 | Field | Value |
 |---|---|
-| Phase | Phase 2 — Data Foundation (Courses pilot); Slice 1 closure record in §7 |
-| Status | IN PROGRESS — Slice 1 (apiFetch + ApiError + course response schema + course key factory + explicit QueryClient defaults + useCourses/useCourse/useCourseMutations migration + CourseForm ApiError + unit tests for apiFetch and the key factory) lands as `phase2_courses_foundation.patch` on top of `d9d1c53`, locally verified. Phase 1 is committed at `d9d1c53` and remains REPOSITORY COMPLETE + LOCALLY VERIFIED (staging browser login still external). |
-| Objective | Establish the single API boundary (`apiFetch` + `ApiError`), Zod schemas as the source of response types, a centralized course query-key factory, explicit TanStack Query defaults, and real mutation invalidation — proven on the courses feature as the reference implementation every later migration copies |
-| Current Task | Slice 1 patch handoff — `phase2_courses_foundation.patch` (see §7 Slice 1 closure record for the verification table and the next Phase 2 action) |
-| Blocked By | Phase 2 is not blocked by Phase 1's external staging dependencies (by design — the two tracks share no files). Phase 2 Slice 1 is locally verified; the Phase 2 phase gate's manual courses-CRUD round-trip item requires a running local backend + Keycloak (the user's `setup-dev.sh` environment) and has not been re-run by the GLM executor in this slice |
-| Next Gate | Phase 2 phase gate (§7) — automated items CLOSED (TypeScript / lint / build / unit tests all PASS); manual courses-CRUD round-trip item pending user verification on a running local stack |
+| Phase | Phase 2 — Data Foundation (Courses pilot); continuation record in §7 |
+| Status | REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN. Slice 1 committed at `af43728`; continuation slice (D5 `queryOptions` pattern for course queries + 5 new query-options unit tests) lands as `phase2_continuation.patch` on top of `af43728`. TypeScript, ESLint, unit tests (22), and production build all PASS. Manual courses-CRUD round-trip pending user verification on a local running stack. |
+| Objective | Establish the single API boundary (`apiFetch` + `ApiError`), Zod schemas as the source of response types, a centralized course query-key factory, explicit TanStack Query defaults, `queryOptions` objects next to the hooks (D5), and real mutation invalidation — proven on the courses feature as the reference implementation every later migration copies |
+| Current Task | Continuation patch handoff — `phase2_continuation.patch` (see §7 continuation record for the gap analysis and verification table) |
+| Blocked By | Phase 2 is not blocked by Phase 1's external staging dependencies. The Phase 2 phase gate's manual courses-CRUD round-trip item requires a running local backend + Keycloak (the user's `setup-dev.sh` environment) and has not been re-run by the GLM executor |
+| Next Gate | Phase 2 phase gate (§7) — automated items CLOSED (TypeScript / lint / build / 22 unit tests all PASS); manual courses-CRUD round-trip item pending user verification on a local running stack |
 
 ---
 
@@ -97,7 +97,7 @@ Architecture Decisions (accepted)
 |---|---|---|---|---|
 | 0 | Preparation & Baseline | **DONE** (2026-09-29) | Accept decisions, name owners, baseline the roadmap | days |
 | 1 | Configuration, Hygiene & Staging Auth Fix | **REPOSITORY COMPLETE + LOCALLY VERIFIED** (2026-09-29 — Slice 1 committed at `773186e`; Slice 2 committed at `c6e7b3f`; final closure patch in this revision; staging browser login remains an external operational dependency — see §6 final closure record) | Staging auth works from any browser; config central + validated | ~1 sprint |
-| 2 | Data Foundation (First Implementation Slice) | **IN PROGRESS** (2026-09-29 — Slice 1 patch in this revision, see §7 closure record) | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
+| 2 | Data Foundation (First Implementation Slice) | **REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN** (2026-09-29 — Slice 1 committed at `af43728`; continuation `queryOptions` patch in this revision; manual CRUD round-trip pending user verification — see §7 continuation record) | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
 | 3 | Application Shell & Route Patterns | NOT STARTED | One guarded (app) group; shared state components; route fallbacks | ~1 sprint |
 | 4 | Feature & Page Migration | NOT STARTED | All routes on the foundation; fake data gone; delete works; mobile menu | 2–3 sprints |
 | 5 | Arabic/RTL Readiness & Accessibility Baseline | NOT STARTED | RTL rails verified; axe-clean primitives; keyboard checks | ~1 sprint |
@@ -359,7 +359,7 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS (2026-09-29) — Slice 1 patch landed in this revision, locally verified; Phase 2 phase gate automated items CLOSED, manual CRUD round-trip pending user verification (see Slice 1 closure record below) | ~1 sprint | D3, D4, D5, D8 (error half) | Phase 0 gate only (closed 2026-09-29) — deliberately **not** gated on Phase 1 |
+| REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN (2026-09-29) — Slice 1 committed at `af43728`; continuation slice (D5 `queryOptions` pattern + query-options tests) landed in this revision. Phase 2 phase gate automated items CLOSED; manual courses-CRUD round-trip pending user verification (see continuation closure record below) | ~1 sprint | D3, D4, D5, D8 (error half) | Phase 0 gate only (closed 2026-09-29) — deliberately **not** gated on Phase 1 |
 
 **Parallel note.** Shares no files with Phase 1's deployment track; both may run after Phase 0. If Phase 1 already landed `lib/config.ts`, reuse it; if not, Slice 1 carries the module itself, exactly as architecture document Section 12 defines.
 
@@ -405,13 +405,13 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 ### Phase gate — before starting Phase 3
 
-- [~] Slice 1 merged and explicitly reviewed as the reference implementation — Slice 1 patch landed in this revision; review by Seyam pending
-- [x] Remaining course hooks migrated onto the pattern — `useCourse.ts` and `useCourseMutations.ts` both migrated in Slice 1; `CourseForm.tsx` consumes `ApiError`
-- [x] TypeScript, lint, and build pass — VERIFIED locally on the Slice 1 tree: `npx tsc --noEmit` EXIT 0; `npm run lint` EXIT 0 (zero errors, zero warnings); `npm run build` EXIT 0 (all 10 routes compiled). New unit tests pass: `npm run test` → 17/17 tests pass across `lib/api.test.ts` (12) and `features/courses/keys.test.ts` (5)
+- [x] Slice 1 merged and explicitly reviewed as the reference implementation — Slice 1 committed at `af43728`; continuation slice (D5 `queryOptions` pattern) landed in this revision. Review by Seyam pending on the continuation patch.
+- [x] Remaining course hooks migrated onto the pattern — `useCourse.ts` and `useCourseMutations.ts` both migrated in Slice 1; `CourseForm.tsx` consumes `ApiError`; continuation slice added `queryOptions` objects to `useCourses.ts` and `useCourse.ts`
+- [x] TypeScript, lint, and build pass — VERIFIED locally on the continuation tree: `npx tsc --noEmit` EXIT 0; `npm run lint` EXIT 0 (zero errors, zero warnings); `npm run build` EXIT 0 (all 10 routes compiled). Unit tests: `npm run test` → 22/22 tests pass across `lib/api.test.ts` (12), `features/courses/keys.test.ts` (5), and `features/courses/api/course-query-options.test.ts` (5)
 - [ ] Courses CRUD manual round trip green (create, read, update — delete arrives in Phase 4) — NOT RUN: the GLM executor has no running backend + Keycloak stack; the user must verify on their local `setup-dev.sh` environment after applying the patch
 - [~] Invalidation verified — no manual refresh needed after mutations — DESIGNED and code-reviewed (create invalidates `courseKeys.lists()`; update invalidates `courseKeys.lists()` + `courseKeys.detail(courseId)`); manual verification pending the CRUD round-trip above
-- [x] Protected functionality: course create/read/update behavior and API contract unchanged — VERIFIED by inspection: API paths (`/v1/courses`, `/v1/courses/{id}`), HTTP methods (GET/POST/PUT), request body shape (`CourseFormValues`), response shape (`CourseResponse`), and the form's navigation-on-success behavior are all preserved. The `CourseApiError` class is deleted but its status-mapping logic lives on in `CourseForm.tsx` via `ApiError` (same 401/403/404 messages, plus a new 422 message)
-- [~] Changes reviewed by Seyam — review pending
+- [x] Protected functionality: course create/read/update behavior and API contract unchanged — VERIFIED by inspection: API paths (`/v1/courses`, `/v1/courses/{id}`), HTTP methods (GET/POST/PUT), request body shape (`CourseFormValues`), response shape (`CourseResponse`), and the form's navigation-on-success behavior are all preserved. The `CourseApiError` class is deleted but its status-mapping logic lives on in `CourseForm.tsx` via `ApiError` (same 401/403/404 messages, plus a new 422 message). The `queryOptions` refactor preserves the same `queryKey`, `queryFn`, and `enabled` behavior — it only extracts the options into reusable objects
+- [~] Changes reviewed by Seyam — Slice 1 reviewed/committed; continuation patch review pending
 
 **Owner / execution model.** GLM implements — the slice is a single instructed task; follow-up hooks one task each. ChatGPT can prepare the implementation prompt from architecture Section 12. Seyam reviews the slice as the abstraction-level judgment. BigPickle optional (e.g., inventorying remaining fetch sites).
 
@@ -495,6 +495,97 @@ Of the seven Phase 2 phase-gate items:
 5. Only after the manual round trip is green does the Phase 2 phase gate close and Phase 3 become unblocked.
 
 **Phase 3 is NOT started by Slice 1.** No route-group restructure, no AuthGuard, no loading/error/not-found files, no shared state components, no Navbar relocation. Slice 1 is strictly Phase 2.
+
+### Phase 2 continuation — D5 `queryOptions` pattern closure record (2026-09-29)
+
+**Continuation purpose.** Close the one remaining gap between the Slice 1 implementation and the accepted D5 architecture decision. D5 Option B (accepted) explicitly states: "put options into `queryOptions(...)` objects next to the hooks (the pattern TanStack Query's documentation recommends for type safety)". Section 9.2 of the architecture document describes the target data flow as: "the hook is built on a `queryOptions` object referencing a key from `features/<domain>/keys.ts`". The Slice 1 hooks used inline `useQuery({ queryKey, queryFn, enabled })` instead of being built on a `queryOptions` object. This continuation slice closes that gap.
+
+**Gap analysis performed before implementation.**
+
+DONE (from Slice 1, committed at `af43728`):
+- `lib/api.ts` — `apiFetch` + `ApiError` (D3, D8 error half)
+- `features/courses/schemas.ts` — `courseResponseSchema` + `Course = z.infer` (D4)
+- `features/courses/keys.ts` — `courseKeys` factory (D5 key-factory half)
+- `lib/query-provider.tsx` — explicit `QueryClient` defaults (D5 defaults half)
+- `useCourses.ts`, `useCourse.ts`, `useCourseMutations.ts` — migrated to `apiFetch` with invalidation (D5 invalidation half)
+- `CourseForm.tsx` — consumes `ApiError` (D8)
+- 17 unit tests (12 for `apiFetch`, 5 for keys)
+- Schema cross-checked vs backend
+
+REMAINING (implemented in this continuation slice):
+- D5 `queryOptions(...)` objects next to the hooks — the one gap
+
+DEFERRED (not Phase 2):
+- `useMe` / profile hooks migration → Phase 4
+- Generated API client → Deferred Backlog
+- Route restructure / AuthGuard / loading/error files → Phase 3
+- Arabic/RTL / accessibility → Phase 5
+- E2E / Sentry / CI bar / README → Phase 6
+
+MANUAL VERIFICATION (cannot run in sandbox):
+- Before/after screenshots (requires browser)
+- Courses CRUD manual round trip (requires running backend + Keycloak)
+- Review by Seyam
+
+**Baseline.** Branch `feature/frontend-refactor` @ `af43728` (HEAD after Phase 2 Slice 1). The continuation patch rides on top of `af43728` as `phase2_continuation.patch` and is not yet committed to the remote branch.
+
+**Implementation outcome (repository state after `git apply phase2_continuation.patch` on top of `af43728`):**
+
+Modified files:
+- `frontend/features/courses/api/useCourses.ts` — extracted `coursesListOptions = queryOptions({ queryKey: courseKeys.lists(), queryFn: ... })` as an exported constant. `useCourses()` now spreads `...coursesListOptions` into `useQuery()` and only adds the hook-specific `enabled` flag. The `queryKey`, `queryFn`, and `schema` are defined once in the `queryOptions` object and can be reused by `prefetchQuery` / `fetchQuery` in future phases without duplicating the definition.
+- `frontend/features/courses/api/useCourse.ts` — extracted `courseDetailOptions(courseId)` as an exported function returning `queryOptions({ queryKey: courseKeys.detail(courseId), queryFn: ... })`. `useCourse(courseId)` now spreads `...courseDetailOptions(courseId)` into `useQuery()` and only adds the `enabled` flag. The function form is necessary because the key and path depend on the `courseId` parameter.
+
+New files:
+- `frontend/features/courses/api/course-query-options.test.ts` (5 tests) — covers: `coursesListOptions` uses the `courseKeys.lists()` key; `coursesListOptions.queryFn` returns `Course[]` (calls `apiFetch` with the right path + schema + bearer token); `courseDetailOptions(id)` uses the `courseKeys.detail(id)` key; `courseDetailOptions` produces different keys for different IDs; `courseDetailOptions(id).queryFn` fetches a single course from the right path.
+
+**What was NOT touched (scope guard).** `lib/api.ts`, `lib/config.ts`, `lib/keycloak.ts`, `lib/auth-context.tsx`, `sentry.client.config.ts`, `frontend/Dockerfile`, `frontend/.env.example`, `frontend/.dockerignore`, `.github/workflows/deploy-staging.yml`, `infra/realm-export.json`, all Phase 1 files. No `app/` page files. No `components/` files. No `features/courses/api/useCourseMutations.ts` (mutations don't use `queryOptions` in TanStack Query 5 — there's no `mutationOptions` helper; mutations remain inline). No auth/profile hooks (`useMe`, `useProfile`, `useProfileMutation` — those are Phase 4). No Phase 3 surface. No Phase 5/6 surface. No generated API client. No new dependencies.
+
+**Behavior deltas.** None. The `queryOptions` refactor is a pure structural change — the same `queryKey`, `queryFn`, and `enabled` values are passed to `useQuery()`; they're just defined in a `queryOptions` object first and spread into the hook. Runtime behavior is identical. The only user-visible difference is that the `queryFn` return type is now inferred from the `queryOptions` call rather than from the inline `useQuery` generic — both produce the same `Course[]` / `Course` type.
+
+**Verification performed (on the continuation tree).**
+
+| Check | Command | Result |
+|---|---|---|
+| Working-tree hygiene | `git diff --check` | PASS (EXIT 0) |
+| Forward apply (clean `af43728`) | `git apply --check phase2_continuation.patch` | PASS (EXIT 0) |
+| Forward apply (actual) | `git apply phase2_continuation.patch` | PASS (EXIT 0; 3 files: 1 new, 2 modified) |
+| Reverse check (patched tree) | `git apply --check --reverse phase2_continuation.patch` | PASS (EXIT 0) |
+| Reverse apply (patched tree) | `git apply --reverse phase2_continuation.patch` | PASS (EXIT 0; tree restored to `af43728`) |
+| TypeScript strict | `npx tsc --noEmit` (with 5 env vars set) | PASS (EXIT 0) |
+| Full ESLint | `npm run lint` | PASS (EXIT 0, zero errors, zero warnings) |
+| Unit tests | `npm run test` | PASS (22/22 tests across 3 files: `lib/api.test.ts` 12, `features/courses/keys.test.ts` 5, `features/courses/api/course-query-options.test.ts` 5) |
+| Next.js production build | `npm run build` (with 5 env vars set) | PASS (EXIT 0; all 10 routes compiled) |
+| Scope audit: no direct `fetch` in `features/courses` | `grep -rn '\bfetch(' frontend/features/courses/` | PASS (zero matches) |
+| Scope audit: no `process.env` in `features/courses` | `grep -rn 'process\.env' frontend/features/courses/` | PASS (zero matches) |
+| Scope audit: no auth/profile hooks touched | `git diff --name-only HEAD \| grep -E 'features/auth\|features/profile'` | PASS (zero matches) |
+| Manual courses CRUD round trip | not run (GLM executor has no running backend + Keycloak stack) | NOT RUN — user must verify on local `setup-dev.sh` environment |
+
+**Phase 2 gate status after continuation slice: REPOSITORY COMPLETE; AUTOMATED VERIFICATION GREEN; MANUAL VERIFICATION PENDING.**
+
+Of the seven Phase 2 phase-gate items:
+- [x] Slice 1 merged and reviewed — Slice 1 committed at `af43728`; continuation patch landed.
+- [x] Remaining course hooks migrated — DONE (Slice 1 + continuation `queryOptions` pattern).
+- [x] TypeScript, lint, build pass — DONE (22 unit tests pass).
+- [ ] Courses CRUD manual round trip — PENDING user verification on local stack.
+- [~] Invalidation verified — code-reviewed; manual verification pending the CRUD round-trip.
+- [x] Protected functionality — course API contract and form behavior preserved; `queryOptions` refactor is behavior-neutral.
+- [~] Reviewed by Seyam — continuation patch review pending.
+
+**Phase 2 completion distinction:**
+- **REPOSITORY COMPLETE** — YES. Every repository-side Phase 2 work item is implemented and committed/patched. D3, D4, D5 (all four elements: defaults + key factory + `queryOptions` + invalidation), and D8 (error half) are all implemented.
+- **AUTOMATED VERIFICATION** — GREEN. `tsc` PASS, `eslint` PASS, 22 unit tests PASS, `build` PASS, scope audits PASS.
+- **MANUAL VERIFICATION** — PENDING. The courses-CRUD round-trip requires a running local backend + Keycloak stack and a browser; the GLM executor has neither.
+- **PHASE GATE STATUS** — AUTOMATED ITEMS CLOSED; manual CRUD round-trip item remains OPEN pending user verification. Phase 3 is not unblocked until the manual round-trip is green.
+
+**Next Phase 2 action (after the continuation patch is applied locally).**
+
+1. User applies `phase2_continuation.patch` to a clean checkout of `feature/frontend-refactor` at `af43728` and commits the result. Recommended commit message: `refactor(frontend): adopt queryOptions pattern for course queries (Phase 2 D5 completion)`.
+2. User runs `npm run test`, `npm run lint`, `npx tsc --noEmit`, and `npm run build` locally to confirm the green state.
+3. User starts the local backend + Keycloak stack (`bash scripts/setup-dev.sh` if not already running) and performs the manual courses CRUD round trip: create a course → verify it appears in the list without a manual refresh (invalidation); edit the course → verify both the detail page and the list update; verify a logged-out state shows the 401 message; verify an invalid course ID shows the 404 message.
+4. User visually confirms the courses list page is identical before/after (no UI changes by design).
+5. Only after the manual round trip is green does the Phase 2 phase gate close and Phase 3 become unblocked.
+
+**Phase 3 is NOT started by this continuation slice.** No route-group restructure, no AuthGuard, no loading/error/not-found files, no shared state components, no Navbar relocation. The continuation slice is strictly Phase 2.
 
 ---
 
