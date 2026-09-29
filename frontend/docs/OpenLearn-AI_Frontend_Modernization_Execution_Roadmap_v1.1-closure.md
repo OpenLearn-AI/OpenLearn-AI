@@ -1,8 +1,8 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 IN PROGRESS — Patch 1 (Profile foundation) closure recorded 2026-09-29 (§9 Patch 1 record)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 IN PROGRESS — Patch 1 (Profile + auth feature migration onto Phase 2 foundation + Field wrapper) lands as `phase4_patch1.patch` on top of `8635a48`, locally verified. Patches 2–9 pending. Phases 5–6 NOT STARTED.
-> **Branch:** `feature/frontend-refactor` @ `8635a48` (HEAD after Phase 3 Step B; Phase 4 Patch 1 applied on top in this revision as `phase4_patch1.patch`, not yet committed to the remote branch).
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 IN PROGRESS — Patch 1 (Profile foundation) committed at `4a52fca`; Patch 3 (Dashboard) closure recorded 2026-09-29 (§9 Patch 3 record)
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 (Dashboard migration: real course data, fabricated stats removed, CourseCard, shared states, token styling) lands as `phase4_patch3.patch` on top of `4a52fca`, locally verified. Patches 4–9 pending. Phases 5–6 NOT STARTED.
+> **Branch:** `feature/frontend-refactor` @ `4a52fca` (HEAD after Phase 4 Patch 1; Phase 4 Patch 3 applied on top in this revision as `phase4_patch3.patch`, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
@@ -31,12 +31,12 @@ Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are ac
 
 | Field | Value |
 |---|---|
-| Phase | Phase 4 — Feature & Page Migration (Patch 1 record in §9) |
-| Status | IN PROGRESS — Patch 1 (Profile + auth feature migration onto Phase 2 foundation + Field wrapper + Textarea/Select primitives) lands as `phase4_patch1.patch` on top of `8635a48`, locally verified. TypeScript, ESLint, 22 unit tests, and production build all PASS. Patches 2–9 pending. |
+| Phase | Phase 4 — Feature & Page Migration (Patch 3 record in §9) |
+| Status | IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 (Dashboard migration: real course data via `useCourses`, fabricated statistics removed, shared `LoadingBlock`/`ErrorState`/`EmptyState`, new `CourseCard` component, token-only styling) lands as `phase4_patch3.patch` on top of `4a52fca`, locally verified. TypeScript, ESLint, 22 unit tests, and production build all PASS. Patches 4–9 pending. |
 | Objective | Migrate profile, dashboard, home, and the remaining course pages onto the Phase 2 + Phase 3 foundation; remove fabricated data; surface the existing backend delete-course capability; add usable mobile navigation |
-| Current Task | Patch 1 handoff — `phase4_patch1.patch` (see §9 Patch 1 record for the gap analysis and verification table) |
-| Blocked By | Phase 4 is not blocked by external dependencies. Manual profile upsert round-trip (fresh account create → edit → reload) requires a running local backend + Keycloak stack and has not been re-run by the GLM executor |
-| Next Gate | Phase 4 phase gate (§9) — automated items for Patch 1 CLOSED; manual profile upsert verification pending user verification on a local running stack |
+| Current Task | Patch 3 handoff — `phase4_patch3.patch` (see §9 Patch 3 record for the verification table) |
+| Blocked By | Phase 4 is not blocked by external dependencies. Manual dashboard verification (real course data, empty/loading/error states, dark mode, mobile) requires a running local backend + Keycloak stack and has not been re-run by the GLM executor |
+| Next Gate | Phase 4 phase gate (§9) — automated items for Patch 3 CLOSED; manual dashboard verification pending user verification on a local running stack |
 
 ---
 
@@ -657,7 +657,7 @@ Of the seven Phase 2 phase-gate items:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS (2026-09-29) — Patch 1 (Profile + auth feature migration + Field wrapper) landed in this revision, locally verified; Patches 2–9 pending (see Patch 1 record below) | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
+| IN PROGRESS (2026-09-29) — Patch 1 committed at `4a52fca`; Patch 3 (Dashboard migration + CourseCard) landed in this revision, locally verified; Patches 4–9 pending (see Patch 3 record below) | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
 
 **Parallel note.** Routes migrate one-per-PR and parallelize across the two engineers (one: profile + auth hooks; one: dashboard + home + Navbar).
 
@@ -674,11 +674,11 @@ Of the seven Phase 2 phase-gate items:
 - [x] Profile: `app/profile/page.tsx` + `ProfileForm.tsx` to token styling (fixes the zero-dark-variants page), `ApiError` status mapping, the Field wrapper — DONE in Patch 1: profile page migrated to token-only styling (zero raw `slate-`/`indigo-` classes), dark-mode correct (token-based `bg-card`/`border-border`/`text-card-foreground`), shared `LoadingBlock`/`ErrorState` for loading/error states, fabricated subscription card removed (deferred to Deferred Backlog); `ProfileForm.tsx` migrated to `Field` wrapper (label + control + error) + `Select` primitive + `ApiError` status mapping (401/404/422); `ProfileApiError` class deleted (collapsed into shared `ApiError`)
 - [x] Profile: `features/profile` hooks onto `apiFetch` + response schemas + keys — upsert semantics preserved exactly (protected functionality) — DONE in Patch 1: added `profileResponseSchema` (Zod, cross-checked against `backend/app/schemas/profile.py` `ProfileResponse`); `Profile = z.infer<typeof profileResponseSchema>`; `profileKeys` factory (`all` / `current()`); `useProfile` migrated to `apiFetch` + `profileResponseSchema` + `profileKeys.current()` with 404→null preserved (the upsert "create if not exists" contract is intact); `useUpdateProfile` migrated to `apiFetch` PUT with `profileResponseSchema` + invalidates `profileKeys.all` on success
 - [x] Auth: `features/auth` (`useMe`) onto the same pattern; Me schema the single source; `features/auth/types.ts` deleted per Section 9.1 — DONE in Patch 1: added `meResponseSchema` (Zod, cross-checked against `backend/app/api/auth.py` `/auth/me` response: `id`/`email`/`settings`/`roles[]`/`keycloak.{issuer,subject}`); `Me = z.infer<typeof meResponseSchema>`; `authKeys` factory (`all` / `me()`); `useMe` migrated to `apiFetch` + `meResponseSchema` + `authKeys.me()` + `queryOptions` pattern; `features/auth/types.ts` DELETED
-- [ ] Dashboard: real data where endpoints exist (e.g., actual course count via the courses query), honest coming-soon placeholders where they do not; the fabricated stats card (4 Courses / 142 Concepts) removed — Patch 3
+- [x] Dashboard: real data where endpoints exist (e.g., actual course count via the courses query), honest coming-soon placeholders where they do not; the fabricated stats card (4 Courses / 142 Concepts) removed — DONE in Patch 3: dashboard now consumes `useCourses()` for the real course count; the 4 fabricated stat cards (4 Courses / 12 Queries / 8 Quizzes / 142 Concepts) replaced with one real course-count card + 3 honest "Coming soon / Not available yet" cards; the fabricated "Active Context: Advanced Software Architecture.pdf" replaced with "Coming soon"; the fabricated "Interactive graph nodes preview placeholder" replaced with "Coming soon"; a "Your Courses" section now displays up to 4 real courses via `CourseCard` with shared `LoadingBlock`/`ErrorState`/`EmptyState` for loading/error/empty states; header banner migrated from raw `indigo-` gradient to token `primary` gradient
 - [ ] Home: token-dialect hero; decorative input made functional or removed; dead comment block and `as any` gone if Phase 1 did not take them — Patch 4
 - [ ] Course detail + edit: shared state components; invalid ID → `notFound()` — Patches 5–6
 - [ ] Navbar: mobile menu below 768px, honest labels, UserName extraction per Section 9.1 — Patch 9
-- [ ] New shared `components/CourseCard.tsx` used by the courses list and the dashboard — Patch 7
+- [x] New shared `components/CourseCard.tsx` used by the courses list and the dashboard — DONE in Patch 3: `components/CourseCard.tsx` created (presentational only, no API calls, token-only styling, dark-mode correct). Currently consumed by the dashboard's "Your Courses" section. The courses list page (`app/(app)/courses/page.tsx`) still uses its own inline card markup — migrating the courses list to consume `CourseCard` is deferred to the dedicated courses-list patch (Patch 7) to keep this patch scoped to dashboard only, per the one-route-per-PR discipline.
 - [ ] Delete-course action: confirmation, mutation, list invalidation — closing the frontend/backend contract gap — Patch 8
 
 **Work — recommended:**
@@ -794,6 +794,89 @@ Deleted files:
 5. Only after the manual round trip is green does Patch 2 begin.
 
 **Phase 5 is NOT started by Patch 1.** No Arabic/RTL, no accessibility audit, no i18n. Patch 1 is strictly Phase 4.
+
+### Phase 4 Patch 3 — Dashboard migration closure record (2026-09-29)
+
+**Patch 3 purpose.** Migrate the dashboard onto the Phase 2/3 foundation: remove all fabricated statistics, use real course data from the existing `useCourses()` query, add the shared `CourseCard` component, use shared state components (`LoadingBlock`/`ErrorState`/`EmptyState`), and migrate styling to the token-only dialect with dark-mode correctness.
+
+**Baseline.** Branch `feature/frontend-refactor` @ `4a52fca` (HEAD after Phase 4 Patch 1). Patch 3 rides on top of `4a52fca` as `phase4_patch3.patch` and is not yet committed to the remote branch.
+
+**Implementation outcome (repository state after `git apply phase4_patch3.patch` on top of `4a52fca`):**
+
+New files:
+- `frontend/components/CourseCard.tsx` — shared presentational course card (D2/D9). Renders a `Course` with title, description, created date, and Edit/Open-Hub buttons. No API calls, no business logic, no mutation hooks. Token-only styling (zero raw `slate-`/`indigo-` classes). Dark-mode correct via token-based `bg-card`/`border-border`/`text-foreground`. Consumed by the dashboard's "Your Courses" section; the courses list will adopt it in Patch 7.
+
+Modified files:
+- `frontend/app/(app)/dashboard/page.tsx` — full migration:
+  - **Fabricated data removed:** the 4 fabricated stat cards ("4 Courses", "12 Queries", "8 Quizzes", "142 Concepts", "Avg. Score: 85%", "2 updated recently", "Fully mapped") are gone. Replaced with one real course-count card (derived from `useCourses()` data) + 3 honest "Coming soon / Not available yet" cards for RAG Sessions, Generated Quizzes, and Knowledge Nodes (no backend endpoints exist for these yet).
+  - **Real data integration:** the dashboard now consumes `useCourses()` (the existing Phase 2 query — no new API call, no duplicated key, no `process.env`, no `getAccessToken`). The course count is derived from `courses.length`. Up to 4 real courses are displayed in a "Your Courses" section using `CourseCard`.
+  - **Shared state components:** loading → `LoadingBlock`; error → `ErrorState` (with retry via `refetch`); empty → `EmptyState` (with "Create your first course" CTA linking to `/courses/new`).
+  - **Fabricated "Active Context" removed:** the "Active Context: Advanced Software Architecture.pdf" + "Ready" badge replaced with "Coming soon" + "Planned" badge.
+  - **Fabricated graph placeholder replaced:** "Interactive graph nodes preview placeholder" → "Coming soon".
+  - **Token migration:** header banner migrated from raw `from-indigo-900 via-indigo-800 to-indigo-700` + `text-indigo-100` to token `from-primary to-primary/80` + `text-primary-foreground`. All raw `indigo-` and `slate-` classes removed from the dashboard.
+  - **UserInfo + LogoutButton preserved** in the right column, unchanged.
+- `frontend/docs/OpenLearn-AI_Frontend_Modernization_Execution_Roadmap_v1.1-closure.md` — this file. Header, §1 Current Focus, §9 Phase 4 status/checkboxes, and this Patch 3 closure record updated.
+
+**Behavior deltas:**
+1. The dashboard no longer displays fabricated statistics. The "Active Materials" card now shows the real course count (0, 1, or N). The other 3 stat cards show "Coming soon" honestly.
+2. The dashboard now has a "Your Courses" section that displays real courses (up to 4) using `CourseCard`. Previously the dashboard had no course list at all.
+3. The dashboard now uses shared `LoadingBlock`/`ErrorState`/`EmptyState` for the courses section instead of no loading/error/empty handling at all (the old dashboard was a static page with no data fetching).
+4. The header banner uses token `primary` gradient instead of raw `indigo-` gradient — dark-mode correct.
+
+**What was NOT touched (scope guard):** `lib/api.ts`, `lib/config.ts`, `lib/keycloak.ts`, `lib/auth-context.tsx`, `lib/query-provider.tsx`, all Phase 1/2/3 files. No `features/` hooks modified (the dashboard reuses the existing `useCourses()` hook as-is). No course detail/edit pages. No courses list page migration (deferred to Patch 7). No home page. No Navbar. No delete-course UI. No Phase 5/6 surface. No new dependencies.
+
+**CourseCard integration note:** The courses list page (`app/(app)/courses/page.tsx`) still uses its own inline card markup. Migrating the courses list to consume `CourseCard` is deferred to Patch 7 (the dedicated courses-list patch) to keep this patch scoped to dashboard only, per the one-route-per-PR discipline. This is documented in the roadmap's required-work checkbox for CourseCard.
+
+**Verification performed (on the Patch 3 tree):**
+
+| Check | Command | Result |
+|---|---|---|
+| Working-tree hygiene | `git diff --check` | PASS (EXIT 0) |
+| Forward apply (clean `4a52fca`) | `git apply --check phase4_patch3.patch` | PASS (EXIT 0) |
+| Forward apply (actual) | `git apply phase4_patch3.patch` | PASS (EXIT 0; 3 files: 1 new, 2 modified) |
+| Reverse check (patched tree) | `git apply --check --reverse phase4_patch3.patch` | PASS (EXIT 0) |
+| Reverse apply (patched tree) | `git apply --reverse phase4_patch3.patch` | PASS (tree restored to `4a52fca`) |
+| TypeScript strict | `npx tsc --noEmit` (5 env vars set) | PASS (EXIT 0) |
+| Full ESLint | `npm run lint` | PASS (EXIT 0, zero errors, zero warnings) |
+| Unit tests | `npm run test` | PASS (22/22 across 3 files — unchanged) |
+| Next.js production build | `npm run build` (5 env vars set) | PASS (EXIT 0; all 10 routes compiled) |
+| Styling audit: no `slate-`/`indigo-` in dashboard | `grep -nE "slate-\|indigo-" frontend/app/(app)/dashboard/page.tsx` | PASS (zero matches) |
+| Fabricated-data audit | `grep -nE "4 Courses\|142 Concepts\|12 Queries\|8 Quizzes\|85%\|Advanced Software Architecture" dashboard/page.tsx` | PASS (zero matches) |
+| Scope audit: no `fetch`/`process.env`/`getAccessToken` in dashboard | `grep -nE '\bfetch(\|process\.env\|getAccessToken' dashboard/page.tsx` | PASS (zero matches) |
+| CourseCard audit: no raw legacy classes | `grep -nE "slate-\|indigo-" CourseCard.tsx` (excluding docstring) | PASS (zero class matches) |
+| Route verification | build output | PASS (all 10 routes present with unchanged public URLs) |
+| Manual dashboard verification | not run (GLM executor has no running backend + Keycloak stack) | NOT RUN — user must verify on local `setup-dev.sh` environment |
+
+**Protected functionality audit:**
+- Course API contract unchanged — the dashboard reuses the existing `useCourses()` hook; no new API call, no duplicated key, no bypassed architecture.
+- Keycloak auth protocol untouched — `lib/keycloak.ts` unchanged.
+- `AuthGuard` remains the single guard — no page-level auth guard reintroduced (the dashboard page has no `useEffect` redirect).
+- Provider order untouched — `ThemeProvider → AppQueryProvider → AuthProvider` unchanged.
+- `UserInfo` + `LogoutButton` preserved in the right column, unchanged.
+
+**Manual verification checklist (user must run locally):**
+1. Authenticated user can open `/dashboard` — loads normally.
+2. Real course data appears when courses exist — "Your Courses" section shows real courses via `CourseCard`.
+3. Course count in "Active Materials" stat card is derived from real data (`courses.length`).
+4. Empty state appears when the user has no courses — `EmptyState` with "Create your first course" CTA.
+5. No fabricated statistics are visible — "Coming soon" for RAG/Quizzes/Knowledge Nodes.
+6. Loading state renders correctly — `LoadingBlock` while `useCourses` is fetching.
+7. Error state renders correctly — `ErrorState` with "Try again" retry button.
+8. `CourseCard` navigation works — Edit and Open Hub buttons link to the right routes.
+9. Light mode works — token-only styling renders correctly.
+10. Dark mode works — token-based `bg-card`/`border-border`/`text-foreground` correct in dark mode.
+11. Mobile viewport does not introduce horizontal scrolling — responsive grid.
+
+**Phase 4 gate status after Patch 3: IN PROGRESS.** Of the 9 required Phase 4 work items, 5 are now DONE (profile page+ProfileForm+Field wrapper; profile hooks+schemas+keys; auth useMe+Me schema+types.ts deleted; dashboard real data + fabricated stats removed; CourseCard created). The remaining 4 (home, course detail+edit, Navbar+mobile menu, delete-course) are pending in Patches 4–9.
+
+**Next Phase 4 action (after Patch 3 is applied locally).**
+
+1. User applies `phase4_patch3.patch` to a clean checkout of `feature/frontend-refactor` at `4a52fca` and commits the result. Recommended commit message: `refactor(frontend): migrate dashboard to real course data and token architecture (Phase 4 Patch 3)`.
+2. User runs `npm run test`, `npm run lint`, `npx tsc --noEmit`, and `npm run build` locally to confirm the green state.
+3. User starts the local backend + Keycloak stack and performs the manual dashboard verification checklist above.
+4. Only after the manual verification is green does Patch 4 begin.
+
+**Phase 5 is NOT started by Patch 3.** No Arabic/RTL, no accessibility audit, no i18n. Patch 3 is strictly Phase 4.
 
 ---
 
