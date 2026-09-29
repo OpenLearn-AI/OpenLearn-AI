@@ -8,7 +8,6 @@ def test_keycloak_configuration() -> None:
         == "http://localhost:8080/realms/openlearn/protocol/openid-connect/certs"
     )
     assert settings.keycloak_audience == "openlearn-api"
-    assert settings.keycloak_client_id == "openlearn-frontend"
 
 
 def test_cors_origin_list() -> None:

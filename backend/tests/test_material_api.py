@@ -7,12 +7,9 @@ verify behavior, not storage internals.
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
@@ -37,44 +34,10 @@ from app.models.material import (
 from app.models.user import User
 from app.schemas.material import MaterialResponse, MaterialStatusResponse
 from app.services import material_service, storage
-from app.services.auth import oidc as oidc_module
+from conftest import _create_material, _create_user
 
 ISSUER = settings.keycloak_issuer
 AUDIENCE = settings.keycloak_audience
-
-
-@pytest.fixture
-def rsa_keypair():
-    private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-    )
-
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("utf-8")
-
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
-
-    return private_pem, public_pem
-
-
-@pytest.fixture
-def fake_jwks(rsa_keypair, monkeypatch):
-    _, public_pem = rsa_keypair
-
-    class FakeJwksClient:
-        def get_signing_key_from_jwt(self, token):
-            return SimpleNamespace(key=public_pem)
-
-    monkeypatch.setattr(oidc_module, "_JWK_CLIENT", FakeJwksClient())
-
-    return FakeJwksClient
 
 
 class FakeS3Client:
@@ -152,27 +115,6 @@ def _build_token(private_key: str, *, sub: str, roles: list[str]) -> str:
     return jwt.encode(payload, private_key, algorithm="RS256")
 
 
-async def _create_user(db, subject: str, email: str) -> User:
-    result = await db.execute(
-        select(User).where(User.keycloak_subject == subject)
-    )
-    for user in result.scalars():
-        await db.delete(user)
-    await db.commit()
-
-    user = User(
-        keycloak_issuer=ISSUER,
-        keycloak_subject=subject,
-        email=email,
-    )
-
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return user
-
-
 async def _create_course(
     db,
     owner: User,
@@ -188,26 +130,6 @@ async def _create_course(
     await db.commit()
     await db.refresh(course)
     return course
-
-
-async def _create_material(
-    db,
-    course: Course,
-    owner: User,
-    *,
-    status: str = PENDING_STATUS,
-) -> Material:
-    material = Material(
-        course_id=course.id,
-        title="Lecture Slides",
-        s3_key=f"courses/{course.id}/materials/{uuid.uuid4()}-slides.pdf",
-        uploaded_by=owner.id,
-        status=status,
-    )
-    db.add(material)
-    await db.commit()
-    await db.refresh(material)
-    return material
 
 
 @asynccontextmanager

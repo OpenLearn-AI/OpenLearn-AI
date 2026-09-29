@@ -34,33 +34,7 @@ from app.services.material_service import (
     get_material_by_id,
     transition_material_status,
 )
-
-ISSUER = "http://localhost:8080/realms/openlearn"
-
-
-async def _delete_user_by_subject(db, subject: str) -> None:
-    result = await db.execute(
-        select(User).where(User.keycloak_subject == subject)
-    )
-    for user in result.scalars():
-        await db.delete(user)
-    await db.commit()
-
-
-async def _create_user(db, subject: str, email: str) -> User:
-    await _delete_user_by_subject(db, subject)
-
-    user = User(
-        keycloak_issuer=ISSUER,
-        keycloak_subject=subject,
-        email=email,
-    )
-
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return user
+from conftest import _create_material, _create_user
 
 
 async def _create_course(db, owner: User) -> Course:
@@ -74,25 +48,6 @@ async def _create_course(db, owner: User) -> Course:
     await db.refresh(course)
     return course
 
-
-async def _create_material(
-    db,
-    course: Course,
-    owner: User,
-    *,
-    status: str = PENDING_STATUS,
-) -> Material:
-    material = Material(
-        course_id=course.id,
-        title="Lecture Slides",
-        s3_key=f"courses/{course.id}/materials/{uuid.uuid4()}-slides.pdf",
-        uploaded_by=owner.id,
-        status=status,
-    )
-    db.add(material)
-    await db.commit()
-    await db.refresh(material)
-    return material
 
 
 def _spy_on_flush(db):

@@ -48,7 +48,6 @@ from app.config import settings  # noqa: E402
 from app.models.course import Course  # noqa: E402
 from app.models.material import (  # noqa: E402
     FAILED_STATUS,
-    PENDING_STATUS,
     PROCESSING_STATUS,
     READY_STATUS,
     Material,
@@ -57,9 +56,11 @@ from app.models.user import User  # noqa: E402
 from app.services.material_service import claim_pending_material  # noqa: E402
 from app.workers import publishing  # noqa: E402
 from app.workers.tasks import material_tasks  # noqa: E402
-
-ISSUER = "http://localhost:8080/realms/openlearn"
-
+from conftest import (  # noqa: E402
+    _create_material,
+    _create_user,
+    _delete_user_by_subject,
+)
 
 @pytest_asyncio.fixture
 async def worker_session_factory():
@@ -75,31 +76,6 @@ async def worker_session_factory():
         await engine.dispose()
 
 
-async def _delete_user_by_subject(db, subject: str) -> None:
-    result = await db.execute(
-        select(User).where(User.keycloak_subject == subject)
-    )
-    for user in result.scalars():
-        await db.delete(user)
-    await db.commit()
-
-
-async def _create_user(db, subject: str, email: str) -> User:
-    await _delete_user_by_subject(db, subject)
-
-    user = User(
-        keycloak_issuer=ISSUER,
-        keycloak_subject=subject,
-        email=email,
-    )
-
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return user
-
-
 async def _create_course(db, owner: User) -> Course:
     course = Course(
         owner_id=owner.id,
@@ -110,26 +86,6 @@ async def _create_course(db, owner: User) -> Course:
     await db.commit()
     await db.refresh(course)
     return course
-
-
-async def _create_material(
-    db,
-    course: Course,
-    owner: User,
-    *,
-    status: str = PENDING_STATUS,
-) -> Material:
-    material = Material(
-        course_id=course.id,
-        title="Lecture Slides",
-        s3_key=f"courses/{course.id}/materials/{uuid.uuid4()}-slides.pdf",
-        uploaded_by=owner.id,
-        status=status,
-    )
-    db.add(material)
-    await db.commit()
-    await db.refresh(material)
-    return material
 
 
 async def _read_material_status(material_id: uuid.UUID) -> str:

@@ -1,4 +1,4 @@
-"""Phase 5 tests for the Course CRUD API (/v1/courses).
+"""Tests for the Course CRUD API (/v1/courses).
 
 Mirrors the authenticated-endpoint test setup in test_oidc.py / test_profile_api.py
 (fake JWKS + dependency-overridden database session).
@@ -6,12 +6,9 @@ Mirrors the authenticated-endpoint test setup in test_oidc.py / test_profile_api
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -21,44 +18,10 @@ from app.db.session import get_db
 from app.main import app
 from app.models.course import Course
 from app.models.user import User
-from app.services.auth import oidc as oidc_module
+from conftest import _create_user
 
 ISSUER = settings.keycloak_issuer
 AUDIENCE = settings.keycloak_audience
-
-
-@pytest.fixture
-def rsa_keypair():
-    private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-    )
-
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("utf-8")
-
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
-
-    return private_pem, public_pem
-
-
-@pytest.fixture
-def fake_jwks(rsa_keypair, monkeypatch):
-    _, public_pem = rsa_keypair
-
-    class FakeJwksClient:
-        def get_signing_key_from_jwt(self, token):
-            return SimpleNamespace(key=public_pem)
-
-    monkeypatch.setattr(oidc_module, "_JWK_CLIENT", FakeJwksClient())
-
-    return FakeJwksClient
 
 
 def _build_token(private_key: str, *, sub: str, roles: list[str]) -> str:
@@ -75,27 +38,6 @@ def _build_token(private_key: str, *, sub: str, roles: list[str]) -> str:
     }
 
     return jwt.encode(payload, private_key, algorithm="RS256")
-
-
-async def _create_user(db, subject: str, email: str) -> User:
-    result = await db.execute(
-        select(User).where(User.keycloak_subject == subject)
-    )
-    for user in result.scalars():
-        await db.delete(user)
-    await db.commit()
-
-    user = User(
-        keycloak_issuer=ISSUER,
-        keycloak_subject=subject,
-        email=email,
-    )
-
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return user
 
 
 async def _create_course(
@@ -176,7 +118,7 @@ async def test_instructor_can_create_course(db_session, rsa_keypair, fake_jwks):
 
 
 @pytest.mark.asyncio
-async def test_student_cannot_create_course(db_session, rsa_keypair, fake_jwks):
+async def test_student_can_create_course(db_session, rsa_keypair, fake_jwks):
     private_key, _ = rsa_keypair
     student = await _create_user(
         db_session,
@@ -192,7 +134,23 @@ async def test_student_cannot_create_course(db_session, rsa_keypair, fake_jwks):
             headers=headers,
         )
 
-    assert response.status_code == 403
+    assert response.status_code == 201
+
+    body = response.json()
+
+    assert body["owner_id"] == str(student.id)
+    assert body["title"] == "Intro to AI"
+    assert body["description"] == "A first course in artificial intelligence."
+    uuid.UUID(body["id"])
+    assert body["created_at"] is not None
+
+    result = await db_session.execute(
+        select(Course).where(Course.id == uuid.UUID(body["id"]))
+    )
+    stored = result.scalar_one()
+    assert stored.owner_id == student.id
+    assert stored.title == "Intro to AI"
+    assert stored.description == "A first course in artificial intelligence."
 
     await db_session.delete(student)
     await db_session.commit()
@@ -571,13 +529,14 @@ async def test_create_course_rejects_unknown_fields(db_session, rsa_keypair, fak
 
 
 @pytest.mark.asyncio
-async def test_admin_without_instructor_role_cannot_create_course(
+async def test_admin_can_create_course(
     db_session,
     rsa_keypair,
     fake_jwks,
 ):
-    """Documents Phase 5 admin behavior: Keycloak roles are discrete authority;
-    ``admin`` alone does not grant instructor privileges (no invented override)."""
+    """Documents the open-creation behavior: course creation is open to any
+    authenticated user, so ``admin`` alone is sufficient and the course is
+    owned by the admin who created it."""
     private_key, _ = rsa_keypair
     admin = await _create_user(
         db_session,
@@ -593,7 +552,23 @@ async def test_admin_without_instructor_role_cannot_create_course(
             headers=headers,
         )
 
-    assert response.status_code == 403
+    assert response.status_code == 201
+
+    body = response.json()
+
+    assert body["owner_id"] == str(admin.id)
+    assert body["title"] == "Intro to AI"
+    assert body["description"] == "A first course in artificial intelligence."
+    uuid.UUID(body["id"])
+    assert body["created_at"] is not None
+
+    result = await db_session.execute(
+        select(Course).where(Course.id == uuid.UUID(body["id"]))
+    )
+    stored = result.scalar_one()
+    assert stored.owner_id == admin.id
+    assert stored.title == "Intro to AI"
+    assert stored.description == "A first course in artificial intelligence."
 
     await db_session.delete(admin)
     await db_session.commit()
