@@ -5,12 +5,14 @@ import Link from "next/link";
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import { useProfile } from "@/features/profile/api/useProfile";
 import { useMe } from "@/features/auth/api/useMe";
+import { useUserName } from "@/components/UserName";
 import { LoadingBlock } from "@/components/state/LoadingBlock";
 import { ErrorState } from "@/components/state/ErrorState";
 import { Button } from "@/components/ui/button";
 
 export default function ProfilePage() {
     const { data: me, isLoading: meLoading } = useMe();
+    const { name: profileName, initial: profileInitial } = useUserName();
     const {
         data: profile,
         isLoading: profileLoading,
@@ -45,12 +47,6 @@ export default function ProfilePage() {
             </main>
         );
     }
-
-    const profileName = me?.email || "User";
-    const profileInitial =
-        typeof profileName === "string"
-            ? profileName.charAt(0).toUpperCase()
-            : "U";
 
     return (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8 bg-background min-h-screen">

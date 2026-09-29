@@ -1,8 +1,8 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 IN PROGRESS — Patches 1/3/4 committed; Batch 2 (Patches 5–8: course detail/edit/list/delete) closure recorded 2026-09-29 (§9 Patch 5–8 records)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 IN PROGRESS — Patches 1/3/4 committed; Batch 2 (Patches 5–8: course detail + edit + courses list + CourseCard + delete flow) locally verified, ready for commit. Patch 9 (Navbar mobile menu) pending. Phases 5–6 NOT STARTED.
-> **Branch:** `feature/frontend-refactor` @ `9fd3335` (HEAD after Phase 4 Patch 4; Phase 4 Batch 2 applied on top, not yet committed to the remote branch).
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 COMPLETE — closure recorded 2026-09-29 (§9 Patch 9–10 records)
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified. Patch 9 (Navbar + UserName) + Patch 10 (final gate) land in this final batch. Manual browser/backend verification pending user. Phases 5–6 NOT STARTED.
+> **Branch:** `feature/frontend-refactor` @ `3bfe85a` (HEAD after Phase 4 Batch 2; Phase 4 final batch applied on top, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
@@ -31,12 +31,12 @@ Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are ac
 
 | Field | Value |
 |---|---|
-| Phase | Phase 4 — Feature & Page Migration (Batch 2: Patches 5–8 records in §9) |
-| Status | IN PROGRESS — Patches 1/3/4 committed; Batch 2 (Patches 5–8: course detail + edit + courses list + CourseCard + delete flow) locally verified, ready for commit. 8 of 9 required Phase 4 items DONE. Patch 9 (Navbar mobile menu) pending. |
+| Phase | Phase 4 — Feature & Page Migration (COMPLETE — Patch 9–10 records in §9) |
+| Status | COMPLETE. All 9 required Phase 4 work items implemented and verified. Patch 9 (Navbar + UserName) + Patch 10 (final gate) land in this final batch. TypeScript, ESLint, 22 unit tests, and production build all PASS. Manual browser/backend verification pending user. |
 | Objective | Migrate profile, dashboard, home, and the remaining course pages onto the Phase 2 + Phase 3 foundation; remove fabricated data; surface the existing backend delete-course capability; add usable mobile navigation |
-| Current Task | Batch 2 handoff — Patches 5–8 complete, ready for review + commit |
-| Blocked By | Phase 4 is not blocked by external dependencies. Manual course CRUD + delete verification requires a running local backend + Keycloak stack and has not been re-run by the GLM executor |
-| Next Gate | Phase 4 phase gate (§9) — 8 of 9 automated items CLOSED; Patch 9 (Navbar mobile menu) pending; manual course CRUD + delete verification pending user verification on a local running stack |
+| Current Task | Phase 4 final batch handoff — Patches 9–10 complete, ready for review + commit |
+| Blocked By | Phase 4 is not blocked by external dependencies. Manual browser/backend verification (login, CRUD round-trip, dark-mode, mobile, delete) requires a running local backend + Keycloak stack and has not been performed by the GLM executor |
+| Next Gate | Phase 5 phase gate (§10) — Phase 4 is COMPLETE; Phase 5 may begin after user confirms manual verification |
 
 ---
 
@@ -657,7 +657,7 @@ Of the seven Phase 2 phase-gate items:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS (2026-09-29) — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 committed at `9fd3335`; Patches 5–8 (course detail + edit + courses list + CourseCard integration + delete flow) landed in Batch 2, locally verified; Patch 9 (Navbar mobile menu) pending (see Patch 8 record below) | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
+| COMPLETE (2026-09-29) — All 9 required Phase 4 work items implemented and verified. Patches 1/3/4 committed; Batch 2 (Patches 5–8) committed; Patch 9 (Navbar + UserName) + Patch 10 (final gate) landed in final batch. Phase 4 phase gate automated items CLOSED. Manual browser/backend verification pending user. | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
 
 **Parallel note.** Routes migrate one-per-PR and parallelize across the two engineers (one: profile + auth hooks; one: dashboard + home + Navbar).
 
@@ -677,7 +677,7 @@ Of the seven Phase 2 phase-gate items:
 - [x] Dashboard: real data where endpoints exist (e.g., actual course count via the courses query), honest coming-soon placeholders where they do not; the fabricated stats card (4 Courses / 142 Concepts) removed — DONE in Patch 3: dashboard now consumes `useCourses()` for the real course count; the 4 fabricated stat cards (4 Courses / 12 Queries / 8 Quizzes / 142 Concepts) replaced with one real course-count card + 3 honest "Coming soon / Not available yet" cards; the fabricated "Active Context: Advanced Software Architecture.pdf" replaced with "Coming soon"; the fabricated "Interactive graph nodes preview placeholder" replaced with "Coming soon"; a "Your Courses" section now displays up to 4 real courses via `CourseCard` with shared `LoadingBlock`/`ErrorState`/`EmptyState` for loading/error/empty states; header banner migrated from raw `indigo-` gradient to token `primary` gradient
 - [x] Home: token-dialect hero; decorative input made functional or removed; dead comment block and `as any` gone if Phase 1 did not take them — DONE in Patch 4: hero section migrated from raw `indigo-` gradient to token `primary` gradient; decorative search `<input>` removed (it had no backend search endpoint and was fake UX — "prefer honesty over fake UX"); all raw `slate-`/`indigo-` classes replaced with token classes (`bg-card`/`border-border`/`text-card-foreground`/`text-muted-foreground`/`primary`/`secondary`); CTA buttons migrated from raw `<Link>` styling to shared `Button` component with `render={<Link>}`; dark-mode correct (token-based colors resolve in both themes); no `as any` (already removed in Phase 1 closure); no dead comments (already removed in Phase 1 closure)
 - [x] Course detail + edit: shared state components; invalid ID → `notFound()` — DONE in Patches 5–6: course detail and edit pages migrated to shared `LoadingBlock`/`ErrorState`; `notFound()` called only on actual 404 `ApiError` (not network/500/auth errors); `CourseForm` migrated to `Field` wrapper + `Textarea` primitive; token-only styling; update behavior preserved
-- [ ] Navbar: mobile menu below 768px, honest labels, UserName extraction per Section 9.1 — Patch 9
+- [x] Navbar: mobile menu below 768px, honest labels, UserName extraction per Section 9.1 — DONE in Patch 9: Navbar migrated to token-only styling (zero `slate-`/`indigo-`); mobile hamburger menu with `Menu`/`X` icons from lucide-react, `aria-expanded`/`aria-label`, closes on link click; `useUserName()` hook extracted to `components/UserName.tsx` (§9.1 — eliminates three duplications: Navbar, profile page, home page each re-implemented email-or-fallback + initial computation); "Sign In" CTA uses shared `Button` component; honest labels ("RAG Chat"/"Knowledge Graph" both pointed to `/dashboard` which doesn't have those features — consolidated into single "Dashboard" link)
 - [x] New shared `components/CourseCard.tsx` used by the courses list and the dashboard — DONE in Patch 3 (created) + Patch 7 (courses list migrated to consume it): `components/CourseCard.tsx` is now used by both the dashboard's "Your Courses" section and the courses list page. Presentational only, token-only styling, dark-mode correct.
 - [x] Delete-course action: confirmation, mutation, list invalidation — closing the frontend/backend contract gap — DONE in Patch 8: `useDeleteCourse()` mutation added (`apiFetch` DELETE, invalidates `courseKeys.all`); `DeleteCourseButton` component with inline confirmation panel (destructive action, Cancel/Delete buttons, double-submission prevention, `ApiError` status mapping 404/403); integrated into course detail page; after deletion → navigate to `/courses` (not left on broken detail page); no `window.location.reload()`
 
@@ -1059,6 +1059,94 @@ Modified files:
 - Direct `fetch`/`process.env`/`getAccessToken` audit: zero matches in course surfaces
 
 **Manual verification NOT RUN** — requires browser + backend + Keycloak stack.
+
+### Phase 4 Patch 9 — Navbar modernization closure record (2026-09-29)
+
+**Patch 9 purpose.** Finish the Phase 4 Navbar requirements: mobile menu below 768px, token-only styling, UserName extraction per §9.1, shared `Button` component for auth CTA, honest labels, dark-mode correctness, and no horizontal overflow.
+
+**Baseline.** Branch `feature/frontend-refactor` @ `3bfe85a` (HEAD after Phase 4 Batch 2). Patch 9 is part of the final Phase 4 batch (Patches 9–10).
+
+**Implementation outcome:**
+
+New files:
+- `frontend/components/UserName.tsx` — shared `useUserName()` hook (§9.1 extraction). Returns `{ name, initial, isLoading }` from the canonical `Me` response (`user.email` || `"User"`). Eliminates the three duplications identified in the architecture document (Navbar, profile page, home page each re-implemented the email-or-fallback + initial computation).
+
+Modified files:
+- `frontend/components/Navbar.tsx` — full migration:
+  - **Token-only styling:** all raw `slate-`/`indigo-` classes replaced with token classes (`bg-card`, `border-border`, `text-foreground`, `text-muted-foreground`, `primary`, `bg-primary/10`, `text-primary`). Zero legacy palette classes remain.
+  - **Mobile menu:** hamburger button (lucide-react `Menu`/`X` icons) visible below `md` breakpoint; collapsible nav panel with all navigation links; menu closes when a link is clicked; `aria-label` and `aria-expanded` on the toggle button; keyboard accessible (standard button semantics).
+  - **Desktop navigation preserved:** `hidden md:flex` nav with the same links; desktop user menu and theme toggle preserved.
+  - **UserName extraction:** Navbar now uses `useUserName()` hook from `components/UserName.tsx` instead of its own inline `user?.email || "My Profile"` + `charAt(0).toUpperCase()` computation.
+  - **Shared `Button` component:** "Sign In" CTA migrated from raw `<Link>` with inline `indigo-` styling to `Button` with `render={<Link>}`.
+  - **Honest labels:** nav links simplified to "Home", "My Materials", "Dashboard", "Profile & Settings" — the previous "RAG Chat" and "Knowledge Graph" labels both pointed to `/dashboard` (which doesn't have those features yet), so they're consolidated into one honest "Dashboard" link.
+  - **Dark-mode correct:** all token-based colors resolve correctly in both themes.
+  - **No horizontal overflow:** mobile layout uses `max-w-7xl` + responsive padding; the mobile menu panel is full-width within the container.
+- `frontend/app/(app)/profile/page.tsx` — migrated to use `useUserName()` hook, removing the duplicated `me?.email || "User"` + `charAt(0).toUpperCase()` computation. The `useMe()` import is preserved for the `me?.email` display in the header subtitle.
+- `frontend/docs/OpenLearn-AI_Frontend_Modernization_Execution_Roadmap_v1.1-closure.md` — this file. Header, §1 Current Focus, §9 Phase 4 status/checkboxes, Patch 9 + Patch 10 closure records updated.
+
+**Verification:**
+- `npx tsc --noEmit` PASS (EXIT 0)
+- `npm run lint` PASS (EXIT 0, zero errors, zero warnings)
+- `npm run test` PASS (22/22 tests)
+- `npm run build` PASS (EXIT 0, all 10 routes compiled)
+- Navbar legacy styling audit: zero `slate-`/`indigo-`/`gray-`/`blue-` matches
+- Navbar direct fetch/env/getAccessToken audit: zero matches
+- `window.location.reload()` audit: zero matches
+- Fabricated data audit: zero matches
+
+**Manual verification NOT RUN** — requires browser + backend + Keycloak stack.
+
+### Phase 4 Patch 10 — Final integration gate closure record (2026-09-29)
+
+**Patch 10 purpose.** Final Phase 4 gate verification. No new implementation — only verification and roadmap closure.
+
+**Full verification suite:**
+
+| Check | Command | Result |
+|---|---|---|
+| `git diff --check` | `git diff --check` | PASS (EXIT 0) |
+| TypeScript strict | `npx tsc --noEmit` (5 env vars) | PASS (EXIT 0) |
+| Full ESLint | `npm run lint` | PASS (EXIT 0, 0 errors, 0 warnings) |
+| Unit tests | `npm run test` | PASS (22/22 across 3 files) |
+| Production build | `npm run build` (5 env vars) | PASS (EXIT 0, 10 routes) |
+| Legacy styling audit | `grep -RnE "slate-\|indigo-" frontend/app frontend/components frontend/features` | Remaining matches only in non-Phase-4 files: root layout body, auth layout, login/register pages, ThemeToggle, LogoutButton — all pre-existing and not part of Phase 4 migration scope |
+| Fabricated data audit | `grep -RnE "4 Courses\|142 Concepts\|12 Queries\|8 Quizzes\|85%\|Advanced Software Architecture"` | PASS (zero matches) |
+| `window.location.reload()` | `grep -rn "window.location.reload" frontend/` | PASS (zero matches) |
+| Direct API/auth bypass | `grep -RnE "\bfetch(\|process\.env\|getAccessToken" frontend/app frontend/components frontend/features` | Remaining matches only in `lib/api.ts` (the API boundary itself) and `lib/keycloak.ts` (the auth boundary itself) — both legitimate infrastructure |
+| Route verification | build output | PASS (all 10 routes present) |
+
+**Phase 4 gate checklist:**
+- [x] Profile migrated (Patch 1)
+- [x] Auth feature migration complete (Patch 1)
+- [x] Dashboard migrated (Patch 3)
+- [x] Home migrated (Patch 4)
+- [x] Course detail migrated (Patch 5)
+- [x] Course edit migrated (Patch 6)
+- [x] Courses list migrated (Patch 7)
+- [x] Shared CourseCard used (Patch 3 + Patch 7)
+- [x] Delete course surfaced in UI (Patch 8)
+- [x] Navbar mobile menu implemented (Patch 9)
+- [x] UserName extraction implemented per §9.1 (Patch 9)
+- [x] Dark-mode source audit complete (token-based colors throughout migrated surfaces)
+- [x] Mobile source audit complete (responsive grids, no fixed widths, mobile menu)
+- [x] No fabricated statistics (grep-verified)
+- [x] No legacy styling in migrated surfaces (grep-verified — remaining matches are non-Phase-4 files)
+- [x] No direct API/auth bypass in UI (grep-verified — only `lib/api.ts` and `lib/keycloak.ts` have legitimate infrastructure access)
+- [x] TypeScript passes
+- [x] ESLint passes
+- [x] Tests pass (22/22)
+- [x] Production build passes (10 routes)
+- [x] Delete flow verified by source/audit (confirmation panel, single mutation, invalidation, navigation, error handling)
+- [x] CRUD behavior preserved (create/read/update/delete all via established `apiFetch` + TanStack Query architecture)
+- [x] Profile upsert behavior preserved (404→null, `apiFetch` PUT, invalidation)
+
+**Manual verification status:** NOT RUN — the GLM executor has no browser, no Docker daemon, and no running backend + Keycloak stack. All manual checks (browser login, CRUD round-trip, dark-mode visual, mobile viewport, delete confirmation) require the user's local environment.
+
+**Phase 4 status: COMPLETE (repository-side).** All 9 required Phase 4 work items are implemented and verified. The Phase 4 phase gate's automated items are all closed. The only remaining items are manual browser/backend verification, which the user must perform locally.
+
+**Remaining work after Phase 4:**
+- Phase 5 — Arabic/RTL Readiness & Accessibility Baseline (NOT STARTED)
+- Phase 6 — Testing & Observability Hardening (NOT STARTED)
 
 ---
 
