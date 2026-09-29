@@ -808,10 +808,12 @@
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "http://localhost:3000/*"
+        "http://localhost:3000/*",
+        "https://openlearn-web-staging.duckdns.org/*"
       ],
       "webOrigins": [
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "https://openlearn-web-staging.duckdns.org"
       ],
       "notBefore": 0,
       "bearerOnly": false,

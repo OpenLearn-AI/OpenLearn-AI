@@ -1,8 +1,8 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5)
-> **Phase status:** Phase 0 DONE (2026-09-29); Phases 1–6 NOT STARTED. CI is currently red — known frontend lint failure (`app/page.tsx`), carried as a follow-up, not a Phase 0 blocker (§5)
-> **Branch:** `feature/frontend-refactor` @ `c7266103` (execution baseline; full SHA `c72661035d13e5907507de3a04206bea578416f4`, verified 2026-09-29, clean tree)
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 Slice 2 closure appended 2026-09-29 (§6)
+> **Phase status:** Phase 0 DONE (2026-09-29); Phase 1 IN PROGRESS — Slice 1 (central configuration) committed at `773186e` (2026-09-29), Slice 2 (realm redirect URIs + dead-code cleanup) landed in this revision as a patch and is **not yet applied to the running staging instance** (external dependencies remain — see §6 Slice 2 closure record). Phases 2–6 NOT STARTED. CI is currently red — known frontend lint failure (`app/page.tsx`), carried as a follow-up, not a Phase 0 blocker (§5); the same lint failure is intentionally **not** fixed by Slice 2 (scope boundary, §6 Slice 2 closure record).
+> **Branch:** `feature/frontend-refactor` @ `773186e` (HEAD after Slice 1; Slice 2 patch applied on top in this revision as `phase1_slice2.patch`, not yet committed to the remote branch). Execution baseline before Slice 1: `c7266103` (full SHA `c72661035d13e5907507de3a04206bea578416f4`, verified 2026-09-29, clean tree).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
@@ -31,12 +31,12 @@ Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are ac
 
 | Field | Value |
 |---|---|
-| Phase | Phase 0 — Preparation & Baseline (closed 2026-09-29) |
-| Status | DONE |
-| Objective | All Phase 0 gates closed: architecture baseline accepted (D1–D19 with D9/D10/D13 clarifications); Pod D coordination owner named (Seyam); staging URL scheme decided; roadmap baselined (v1.1) |
-| Current Task | None — Phase 0 is closed. Phase 1 and the Phase 2 first slice are cleared to start in parallel on Seyam's instruction; neither has started |
-| Blocked By | Nothing. CI is currently red (known `app/page.tsx` lint failure) but is by explicit decision a carried follow-up for the modernization work, not a Phase 0 blocker (§5) |
-| Next Gate | Phase 1 phase gate (§6) and the Phase 2 Slice 1 review (§7) — both cover work that has not started |
+| Phase | Phase 1 — Configuration, Hygiene & Staging Auth Fix (Slice 2 closure in this revision; see §6) |
+| Status | IN PROGRESS — Slice 1 committed at `773186e` (central configuration, Dockerfile/workflow/env wiring, .env.example, .dockerignore). Slice 2 (realm-export.json additive staging redirect URIs/webOrigins + Phase 1 dead-code deletions) landed as `phase1_slice2.patch` on top of `773186e`; not yet applied to the running staging instance (external dependencies — see §6 Slice 2 closure record) |
+| Objective | Make configuration correct, central, and loud; fix the deployment blocker that confines authentication to developer machines; remove the inventoried dead code |
+| Current Task | Slice 2 patch handoff — see §6 Slice 2 closure record for the external-dependency list and the next Phase 1 action (Pod D operational steps) |
+| Blocked By | Two external dependencies documented in §6 Slice 2 closure record: (a) public staging Keycloak URL is NOT confirmed anywhere in the repository; (b) the running staging Keycloak holds the realm in a persistent H2 volume (`keycloak_staging_data`) — `infra/realm-export.json` changes take effect only on a fresh realm import (volume wipe) or via Pod D applying the change operationally (admin UI / `kcadm.sh`) |
+| Next Gate | Phase 1 phase gate (§6) — still OPEN; the gate's "staging login works from a non-localhost browser" item is blocked on the external dependencies above and on Pod D operational coordination (owner: Seyam) |
 
 ---
 
@@ -96,7 +96,7 @@ Architecture Decisions (accepted)
 | Phase | Name | Status | Main goal | Est. |
 |---|---|---|---|---|
 | 0 | Preparation & Baseline | **DONE** (2026-09-29) | Accept decisions, name owners, baseline the roadmap | days |
-| 1 | Configuration, Hygiene & Staging Auth Fix | NOT STARTED | Staging auth works from any browser; config central + validated | ~1 sprint |
+| 1 | Configuration, Hygiene & Staging Auth Fix | **IN PROGRESS** (2026-09-29 — Slice 1 committed at `773186e`; Slice 2 patch in this revision, see §6 closure record) | Staging auth works from any browser; config central + validated | ~1 sprint |
 | 2 | Data Foundation (First Implementation Slice) | NOT STARTED | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
 | 3 | Application Shell & Route Patterns | NOT STARTED | One guarded (app) group; shared state components; route fallbacks | ~1 sprint |
 | 4 | Feature & Page Migration | NOT STARTED | All routes on the foundation; fake data gone; delete works; mobile menu | 2–3 sprints |
@@ -172,7 +172,7 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| NOT STARTED | ~1 sprint | D15 (primary), D18 items 1–2, D6 (configuration half) | Phase 0 gate (closed 2026-09-29) |
+| IN PROGRESS (2026-09-29) — Slice 1 committed at `773186e`; Slice 2 patch landed in this revision; Phase 1 phase gate still OPEN (see Slice 2 closure record below) | ~1 sprint | D15 (primary), D18 items 1–2, D6 (configuration half) | Phase 0 gate (closed 2026-09-29) |
 
 **Parallel note.** May run alongside Phase 2's first slice — the two tracks share no files.
 
@@ -190,14 +190,14 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 **Work — required:**
 
-- [ ] Create `lib/config.ts` — all five client variables (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_KEYCLOAK_URL`, `NEXT_PUBLIC_KEYCLOAK_REALM`, `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID`, `NEXT_PUBLIC_SENTRY_DSN`), typed exports, Zod validation in dev with a readable failure message
-- [ ] Point `lib/keycloak.ts` at `lib/config.ts` — protocol, client, and PKCE flow untouched (protected functionality)
-- [ ] `frontend/Dockerfile` — add ARG/ENV for the three `NEXT_PUBLIC_KEYCLOAK_*` variables
-- [ ] `.github/workflows/deploy-staging.yml` — pass the Keycloak variables into the image build (vars/secrets)
-- [ ] `infra/realm-export.json` — per-environment redirect URIs and web origins for `openlearn-frontend` (staging frontend: `https://openlearn-web-staging.duckdns.org`), with Pod D (coordination owner: Seyam); shipped as an isolated, separately revertible commit
-- [ ] `.env.example` — document all five variables (plus both Sentry DSNs where applicable)
-- [ ] Delete dead code: `features/auth/api/useRegister.ts` (empty), unused `loginSchema`/`registerSchema`, `components/courses/CourseTable.tsx` (unused), one of the two ThemeToggles (keep the `components/ui` one), the home page's dead comment block and its `as any` cast
-- [ ] Verify `bash scripts/setup-dev.sh` (from commit `95bba7a`) still completes green after the config changes
+- [x] Create `lib/config.ts` — all five client variables (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_KEYCLOAK_URL`, `NEXT_PUBLIC_KEYCLOAK_REALM`, `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID`, `NEXT_PUBLIC_SENTRY_DSN`), typed exports, Zod validation in dev with a readable failure message — DONE in Slice 1 (`773186e`)
+- [x] Point `lib/keycloak.ts` at `lib/config.ts` — protocol, client, and PKCE flow untouched (protected functionality) — DONE in Slice 1 (`773186e`)
+- [x] `frontend/Dockerfile` — add ARG/ENV for the three `NEXT_PUBLIC_KEYCLOAK_*` variables — DONE in Slice 1 (`773186e`)
+- [x] `.github/workflows/deploy-staging.yml` — pass the Keycloak variables into the image build (vars/secrets) — DONE in Slice 1 (`773186e`)
+- [x] `infra/realm-export.json` — per-environment redirect URIs and web origins for `openlearn-frontend` (staging frontend: `https://openlearn-web-staging.duckdns.org`), with Pod D (coordination owner: Seyam); shipped as an isolated, separately revertible commit — REPO-SIDE DONE in Slice 2 (additive: appended `https://openlearn-web-staging.duckdns.org/*` to `redirectUris` and `https://openlearn-web-staging.duckdns.org` to `webOrigins`; localhost entries preserved so local dev still works). OPERATIONAL APPLICATION to the running staging Keycloak remains a Pod D external-dependency step — see Slice 2 closure record
+- [x] `.env.example` — document all five variables (plus both Sentry DSNs where applicable) — DONE in Slice 1 (`773186e`)
+- [~] Delete dead code: `features/auth/api/useRegister.ts` (empty), unused `loginSchema`/`registerSchema`, `components/courses/CourseTable.tsx` (unused), one of the two ThemeToggles (keep the `components/ui` one), the home page's dead comment block and its `as any` cast — PARTIAL: Slice 2 deleted the first four items (`frontend/features/auth/api/useRegister.ts`, `frontend/features/auth/schemas.ts` containing both unused schemas, `frontend/components/courses/CourseTable.tsx`, `frontend/components/theme-toggle.tsx`; `frontend/app/(auth)/login/page.tsx` import swapped to `@/components/ui/theme-toggle`). The home-page dead comment block + `as any` cast are INTENTIONALLY NOT TOUCHED by Slice 2 (scope boundary — see Slice 2 closure record); they remain for a later Phase 1 follow-up or Phase 4 (home migration) per the original Phase 1 plan
+- [ ] Verify `bash scripts/setup-dev.sh` (from commit `95bba7a`) still completes green after the config changes — NOT YET RE-RUN: Slice 2 is structurally non-disruptive to the setup script (no env-var reads changed; `infra/realm-export.json` was edited additively with localhost entries preserved; no `frontend` dependency change introduced); see Slice 2 closure record for the full verification status
 
 **Work — recommended:**
 
@@ -233,6 +233,63 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 | Current | In this phase | Target |
 |---|---|---|
 | Env vars read ad hoc; Keycloak values never baked at build; realm redirects localhost-only; staging auth broken by construction | One validated `lib/config.ts`; pipeline bakes all five variables; realm registers per-env redirects | Staging auth works from any browser; fresh clone runs with only `.env.local`; config failures are loud in dev |
+
+### Phase 1 Slice 2 closure record (2026-09-29)
+
+**Slice 2 purpose.** Land the remaining repo-side Phase 1 implementation that does not require Pod D operational access — namely the additive `openlearn-frontend` redirect-URI / web-origin additions for the staging frontend URL, and the Phase 1 dead-code deletions. Slice 1 (central configuration: `lib/config.ts`, `lib/keycloak.ts`, `frontend/Dockerfile`, `.github/workflows/deploy-staging.yml`, `frontend/.env.example`, `frontend/.dockerignore`, `frontend/sentry.client.config.ts`) was committed at `773186e` and is intentionally NOT reimplemented by Slice 2.
+
+**Implementation outcome (repository state after `git apply phase1_slice2.patch` on top of `773186e`):**
+
+- `infra/realm-export.json` — for the `openlearn-frontend` client only, appended two staging entries while keeping the existing localhost entries intact:
+  - `redirectUris`: now `["http://localhost:3000/*", "https://openlearn-web-staging.duckdns.org/*"]`
+  - `webOrigins`: now `["http://localhost:3000", "https://openlearn-web-staging.duckdns.org"]`
+  - `rootUrl`, `baseUrl`, PKCE method (`S256`), `publicClient: true`, `standardFlowEnabled: true`, all other client attributes, and all other clients in the realm are UNCHANGED. The staging URL `https://openlearn-web-staging.duckdns.org` is the documented Phase 1 staging frontend target (§6); the staging Keycloak origin is intentionally NOT touched anywhere in this file because no public Keycloak URL is documented in the repository (external dependency, see below).
+- `frontend/app/(auth)/login/page.tsx` — single-line import swap from `@/components/theme-toggle` to `@/components/ui/theme-toggle` so the surviving `components/ui/theme-toggle.tsx` is the only ThemeToggle after the duplicate is deleted. No structural, styling, or behavior change to the login page; the protected `${window.location.origin}` redirect expression inside `LoginForm.tsx` is untouched.
+- `frontend/components/theme-toggle.tsx` — DELETED (duplicate of `components/ui/theme-toggle.tsx`, which is kept per the Phase 1 plan).
+- `frontend/components/courses/CourseTable.tsx` — DELETED (verified unused by grep across `frontend/`; the courses list page `frontend/app/courses/page.tsx` renders via `CourseForm` and direct calls to `useCourses`, not via `CourseTable`).
+- `frontend/features/auth/api/useRegister.ts` — DELETED (file was empty — verified by direct read).
+- `frontend/features/auth/schemas.ts` — DELETED (contained only `loginSchema` and `registerSchema`, both unused by grep; `LoginForm.tsx` and `app/(auth)/register/page.tsx` use Keycloak's hosted login/register flow, not these schemas).
+
+**Verification performed.**
+
+- `git diff --check` (whitespace/conflict) — PASS.
+- `git apply --check phase1_slice2.patch` against `773186e` clean checkout — PASS.
+- `python3 -c "import json; json.load(open('infra/realm-export.json'))"` — JSON still parses; `openlearn-frontend` client now reports both redirect URIs and both web origins as intended; `rootUrl`/`baseUrl` unchanged.
+- `npx tsc --noEmit` (from `frontend/`) with the five client-side env vars set — Slice 2's TS surface (the login-page import swap and the four deletions) typechecks cleanly. The pre-existing `frontend/app/page.tsx` `as any` cast remains (intentionally untouched) and `tsc --noEmit` still passes because the cast is structurally typed.
+- `npx eslint frontend/app/\(auth\)/login/page.tsx` — PASS for the changed file (no new lint errors introduced by the import swap). The full `npm run lint` still exits red due to the pre-existing `frontend/app/page.tsx` failures (`@typescript-eslint/no-explicit-any` and unused `user`); those are not introduced or fixed by Slice 2 and remain a known Phase 0 follow-up (§5).
+- `bash scripts/setup-dev.sh` — NOT RE-RUN in the Slice 2 workspace (sandboxed executor with no Docker daemon). Slice 2 is structurally non-disruptive to the setup script: no env-var reads changed, `infra/realm-export.json` was edited additively with the existing localhost entries preserved, no `frontend` dependency added or removed, no `package.json` change. The setup script's structural contract with the repo is unchanged. The Phase 1 phase-gate verification step "scripts/setup-dev.sh completes green" remains OPEN and must be re-run by the user after applying the patch locally (see "Next Phase 1 action" below).
+
+**External dependencies (NOT resolved by Slice 2 — require action outside the repository):**
+
+1. **Public staging Keycloak URL is NOT confirmed anywhere in the repository.** Searched `infra/`, `docs/`, `.github/`, `frontend/`, `scripts/`, and the design / runbook trees. The staging compose file (`infra/docker-compose.staging.yml`) binds the Keycloak container to `0.0.0.0:8080` (i.e. reachable via the VPS public IP on port 8080), but no `*.duckdns.org` hostname is documented for it. The confirmed staging hostnames are ONLY: `openlearn-web-staging.duckdns.org` (frontend), `openlearn-api-staging.duckdns.org` (backend API), and `openlearn-storage-staging.duckdns.org` (MinIO). The browser cannot complete the OIDC redirect back to the staging frontend until Keycloak is reachable from the browser at a public origin. **Action owner: Pod D (Seyam).** Slice 2 deliberately does NOT invent a Keycloak hostname; `NEXT_PUBLIC_KEYCLOAK_URL` is therefore left to be set in the GitHub `vars.NEXT_PUBLIC_KEYCLOAK_URL` once Pod D confirms the public origin (it is already wired through Slice 1 — `.github/workflows/deploy-staging.yml` line 66 passes `vars.NEXT_PUBLIC_KEYCLOAK_URL` into the frontend image build).
+2. **The running staging Keycloak holds the realm in a persistent H2 volume.** `infra/docker-compose.staging.yml` mounts `infra/realm-export.json` read-only at `/opt/keycloak/data/import/realm-export.json:ro` and starts Keycloak with `start-dev --import-realm`. Keycloak's `--import-realm` flag only imports realms that do not already exist in the database. With the persistent `keycloak_staging_data` volume already initialized, the realm-export.json changes will NOT take effect on a plain `docker compose restart keycloak`. **Action owner: Pod D (Seyam).** Two operational options exist (Pod D picks one): (a) wipe the `keycloak_staging_data` volume and restart Keycloak so the realm re-imports from the updated `realm-export.json` — note this is destructive to any runtime realm changes made through the admin UI; (b) apply the additive `redirectUris` / `webOrigins` change to the running staging Keycloak via the admin UI or `kcadm.sh` (non-destructive; preserves the persistent realm state).
+3. **`scripts/setup-dev.sh` end-to-end re-run** must be performed by the user after applying the patch locally (the sandboxed executor has no Docker daemon available). See verification note above for why this is structurally safe.
+
+**Known limitations of Slice 2.**
+
+- Slice 2 does NOT fix the staging authentication end-to-end on its own. Even after Pod D resolves the two external dependencies above, the staging frontend must still be rebuilt with the correct `NEXT_PUBLIC_KEYCLOAK_URL` GitHub variable (set by Pod D) and the realm must be operationally updated on the running staging Keycloak. The Phase 1 phase-gate item "staging login works from a non-localhost browser" remains OPEN until that happens.
+- Slice 2 deliberately does NOT touch `frontend/app/page.tsx`'s dead comment block and `as any` cast. The original Phase 1 plan listed those as part of the dead-code inventory, but the explicit task scope for this slice forbids fixing the known `app/page.tsx` lint issue. They remain a Phase 1 follow-up (or fold into Phase 4's home-page migration, which the original plan also lists as the cleanup site for that file).
+- Slice 2 does NOT change the auth protocol, the redirect expressions `${window.location.origin}`, `${window.location.origin}/dashboard`, `${window.location.origin}/login`, the dev compose, the staging compose, the staging deploy workflow, the realm's other clients, the realm's `rootUrl`/`baseUrl`, or any Phase 2+ surface.
+
+**Phase 1 gate status after Slice 2: STILL OPEN.** Of the seven Phase 1 phase-gate items, four are repository-side and are now satisfied by Slice 1 + Slice 2 (implementation complete and reviewed-pending; TypeScript / lint / build of the changed files clean — see verification note on `app/page.tsx`); the remaining three are blocked on the external dependencies above:
+- [~] Phase 1 implementation complete and reviewed — repo-side DONE; review pending (Seyam).
+- [~] TypeScript, lint, and build pass — Slice 2's TS / lint / build surface is clean. Full `npm run lint` still exits red due to the pre-existing `app/page.tsx` failure (Phase 0 known follow-up, §5); the Phase 1 plan originally proposed resolving this as part of Phase 1, but the explicit task scope for this slice forbids touching it. **REMAINS OPEN at the phase-gate level** until either a separate Phase 1 follow-up slice fixes `app/page.tsx` or Phase 4's home-page migration removes the dead code.
+- [ ] Staging login works from a non-localhost browser — BLOCKED (external dependencies 1 and 2 above).
+- [~] A fresh clone builds and runs with only `.env.local` — Slice 1 + Slice 2 do not change this; verification pending the user's local run of `setup-dev.sh`.
+- [~] `scripts/setup-dev.sh` completes green — NOT RE-RUN (see verification note); structurally non-disruptive.
+- [x] Protected functionality re-verified: the auth protocol itself is untouched — `lib/keycloak.ts`, `lib/auth-context.tsx`, `LoginForm.tsx`, `register/page.tsx` redirect expressions, Keycloak init options (`check-sso`, `pkceMethod: S256`, `checkLoginIframe: false`, `updateToken(30)`) are all UNCHANGED by Slice 2.
+- [~] Changes reviewed by Seyam; realm/pipeline commits separately revertible — patch is a single revertible unit; review pending.
+
+**Next Phase 1 action (after Slice 2 is applied locally).**
+
+1. User applies `phase1_slice2.patch` to a clean checkout of `feature/frontend-refactor` at `773186e` and commits the result (Slice 2 is designed as one revertible commit per the Phase 1 plan's "shipped as an isolated, separately revertible commit" requirement for the realm/pipeline work; the dead-code deletions ride along because they share no files with any other phase and are individually revertible).
+2. User runs `bash scripts/setup-dev.sh` locally to confirm the Phase 1 phase-gate item "`scripts/setup-dev.sh` completes green".
+3. Pod D (Seyam) confirms and publishes the public staging Keycloak origin (e.g. a `*.duckdns.org` hostname pointing at the VPS, with TLS termination and port 8080 routed through the staging ingress). Pod D then sets `vars.NEXT_PUBLIC_KEYCLOAK_URL` in GitHub to that public origin.
+4. Pod D applies the additive `redirectUris` / `webOrigins` change to the running staging Keycloak (via `kcadm.sh` for non-destructiveness, or by wiping `keycloak_staging_data` and restarting — Pod D's choice based on whether any runtime realm state must be preserved).
+5. A new staging frontend image is built (the GitHub Actions `deploy-staging.yml` pipeline will pick up `vars.NEXT_PUBLIC_KEYCLOAK_URL` automatically once set in step 3) and deployed.
+6. Manual verification: staging browser login round trip from a non-localhost machine succeeds against `https://openlearn-api-staging.duckdns.org`. Only at that point does the Phase 1 phase gate close.
+
+**Phase 2 is NOT started by Slice 2.** No `lib/api.ts`, no `ApiError`, no schema migration, no TanStack Query convention migration, no course-API refactoring, no API-hook modifications, no route changes, no i18n, no Arabic/RTL, no Storybook redesign, no UI redesign. Slice 2 is strictly Phase 1.
 
 ---
 

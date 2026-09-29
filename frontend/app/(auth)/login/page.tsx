@@ -1,5 +1,5 @@
 import { LoginForm } from "@/components/auth/LoginForm";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export default function LoginPage() {
     return (
