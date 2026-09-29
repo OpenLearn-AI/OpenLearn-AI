@@ -7,10 +7,10 @@ import {
     type CourseFormValues,
 } from "@/features/courses/schemas";
 import {
-    CourseApiError,
     useCreateCourse,
     useUpdateCourse,
 } from "@/features/courses/api/useCourseMutations";
+import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,14 +105,16 @@ export function CourseForm({
         createCourse.error ?? updateCourse.error;
 
     const mutationErrorMessage =
-        mutationError instanceof CourseApiError
+        mutationError instanceof ApiError
             ? mutationError.status === 401
                 ? "Your session has expired. Please log in again."
                 : mutationError.status === 403
                   ? "You do not have permission to perform this action."
                   : mutationError.status === 404
                     ? "The course was not found."
-                    : mutationError.message
+                    : mutationError.status === 422
+                      ? "The submitted values are invalid."
+                      : mutationError.message
             : mutationError instanceof Error
               ? mutationError.message
               : null;

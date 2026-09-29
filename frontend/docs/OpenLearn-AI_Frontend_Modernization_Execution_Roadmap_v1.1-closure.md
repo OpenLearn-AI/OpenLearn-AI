@@ -1,8 +1,8 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 Slice 2 closure recorded 2026-09-29 (§6); Phase 1 final closure recorded 2026-09-29 (§6 final closure record)
-> **Phase status:** Phase 0 DONE (2026-09-29); Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED — Slice 1 committed at `773186e`, Slice 2 committed at `c6e7b3f`, final closure (app/page.tsx lint fix) lands as `phase1_final_closure.patch` on top of `c6e7b3f`. Staging browser login remains an EXTERNAL OPERATIONAL DEPENDENCY (public Keycloak origin not yet published; persistent staging realm not yet operationally updated) — see §6 final closure record. Phases 2–6 NOT STARTED. CI lint is now GREEN (the Phase 0 known `app/page.tsx` follow-up is closed by the final closure slice).
-> **Branch:** `feature/frontend-refactor` @ `c6e7b3f` (HEAD after Slice 2; final closure patch applied on top in this revision as `phase1_final_closure.patch`, not yet committed to the remote branch). Slice 1 baseline: `773186e`. Pre-Slice-1 baseline: `c7266103` (full SHA `c72661035d13e5907507de3a04206bea578416f4`, verified 2026-09-29, clean tree).
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 Slice 1 (Courses foundation) closure recorded 2026-09-29 (§7)
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`; staging browser login remains an external operational dependency); Phase 2 IN PROGRESS — Slice 1 (apiFetch + ApiError + course schemas + keys + query defaults + course hook migrations + CourseForm ApiError + unit tests) lands as `phase2_courses_foundation.patch` on top of `d9d1c53`, locally verified. Phases 3–6 NOT STARTED.
+> **Branch:** `feature/frontend-refactor` @ `d9d1c53` (HEAD after Phase 1 final closure; Phase 2 Slice 1 patch applied on top in this revision as `phase2_courses_foundation.patch`, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
@@ -31,12 +31,12 @@ Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are ac
 
 | Field | Value |
 |---|---|
-| Phase | Phase 1 — Configuration, Hygiene & Staging Auth Fix (final closure record in §6) |
-| Status | REPOSITORY COMPLETE + LOCALLY VERIFIED. Slice 1 committed at `773186e`; Slice 2 committed at `c6e7b3f`; final closure (app/page.tsx lint fix) lands as `phase1_final_closure.patch` on top of `c6e7b3f`. TypeScript, ESLint, and production build all PASS locally. Staging browser login remains an EXTERNAL OPERATIONAL DEPENDENCY — see §6 final closure record. |
-| Objective | Make configuration correct, central, and loud; fix the deployment blocker that confines authentication to developer machines; remove the inventoried dead code; close the Phase 0 known `app/page.tsx` lint follow-up |
-| Current Task | Final closure patch handoff — `phase1_final_closure.patch` (see §6 final closure record for the external-dependency list and the next Phase 1 action: Pod D operational steps) |
-| Blocked By | Two external dependencies documented in §6 final closure record: (a) public staging Keycloak URL is NOT confirmed anywhere in the repository; (b) the running staging Keycloak holds the realm in a persistent H2 volume (`keycloak_staging_data`) — `infra/realm-export.json` changes take effect only on a fresh realm import (volume wipe) or via Pod D applying the change operationally (admin UI / `kcadm.sh`) |
-| Next Gate | Phase 1 phase gate (§6) — REPOSITORY-SIDE items CLOSED; the gate's "staging login works from a non-localhost browser" item is BLOCKED on the external dependencies above and on Pod D operational coordination (owner: Seyam) |
+| Phase | Phase 2 — Data Foundation (Courses pilot); Slice 1 closure record in §7 |
+| Status | IN PROGRESS — Slice 1 (apiFetch + ApiError + course response schema + course key factory + explicit QueryClient defaults + useCourses/useCourse/useCourseMutations migration + CourseForm ApiError + unit tests for apiFetch and the key factory) lands as `phase2_courses_foundation.patch` on top of `d9d1c53`, locally verified. Phase 1 is committed at `d9d1c53` and remains REPOSITORY COMPLETE + LOCALLY VERIFIED (staging browser login still external). |
+| Objective | Establish the single API boundary (`apiFetch` + `ApiError`), Zod schemas as the source of response types, a centralized course query-key factory, explicit TanStack Query defaults, and real mutation invalidation — proven on the courses feature as the reference implementation every later migration copies |
+| Current Task | Slice 1 patch handoff — `phase2_courses_foundation.patch` (see §7 Slice 1 closure record for the verification table and the next Phase 2 action) |
+| Blocked By | Phase 2 is not blocked by Phase 1's external staging dependencies (by design — the two tracks share no files). Phase 2 Slice 1 is locally verified; the Phase 2 phase gate's manual courses-CRUD round-trip item requires a running local backend + Keycloak (the user's `setup-dev.sh` environment) and has not been re-run by the GLM executor in this slice |
+| Next Gate | Phase 2 phase gate (§7) — automated items CLOSED (TypeScript / lint / build / unit tests all PASS); manual courses-CRUD round-trip item pending user verification on a running local stack |
 
 ---
 
@@ -97,7 +97,7 @@ Architecture Decisions (accepted)
 |---|---|---|---|---|
 | 0 | Preparation & Baseline | **DONE** (2026-09-29) | Accept decisions, name owners, baseline the roadmap | days |
 | 1 | Configuration, Hygiene & Staging Auth Fix | **REPOSITORY COMPLETE + LOCALLY VERIFIED** (2026-09-29 — Slice 1 committed at `773186e`; Slice 2 committed at `c6e7b3f`; final closure patch in this revision; staging browser login remains an external operational dependency — see §6 final closure record) | Staging auth works from any browser; config central + validated | ~1 sprint |
-| 2 | Data Foundation (First Implementation Slice) | NOT STARTED | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
+| 2 | Data Foundation (First Implementation Slice) | **IN PROGRESS** (2026-09-29 — Slice 1 patch in this revision, see §7 closure record) | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
 | 3 | Application Shell & Route Patterns | NOT STARTED | One guarded (app) group; shared state components; route fallbacks | ~1 sprint |
 | 4 | Feature & Page Migration | NOT STARTED | All routes on the foundation; fake data gone; delete works; mobile menu | 2–3 sprints |
 | 5 | Arabic/RTL Readiness & Accessibility Baseline | NOT STARTED | RTL rails verified; axe-clean primitives; keyboard checks | ~1 sprint |
@@ -359,7 +359,7 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| NOT STARTED | ~1 sprint | D3, D4, D5, D8 (error half) | Phase 0 gate only (closed 2026-09-29) — deliberately **not** gated on Phase 1 |
+| IN PROGRESS (2026-09-29) — Slice 1 patch landed in this revision, locally verified; Phase 2 phase gate automated items CLOSED, manual CRUD round-trip pending user verification (see Slice 1 closure record below) | ~1 sprint | D3, D4, D5, D8 (error half) | Phase 0 gate only (closed 2026-09-29) — deliberately **not** gated on Phase 1 |
 
 **Parallel note.** Shares no files with Phase 1's deployment track; both may run after Phase 0. If Phase 1 already landed `lib/config.ts`, reuse it; if not, Slice 1 carries the module itself, exactly as architecture document Section 12 defines.
 
@@ -371,25 +371,25 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 **Work — required (Slice 1: one PR, exactly as specified in architecture document Section 12):**
 
-- [ ] `lib/config.ts` (skip if Phase 1 already delivered it)
-- [ ] `lib/api.ts` — `ApiError` and `apiFetch(path, { method, body, schema })`; ~80 lines with comments; hard 150-line cap
-- [ ] `features/courses/schemas.ts` — add the course response schema; `Course` becomes `z.infer` of it
-- [ ] `features/courses/keys.ts` — the course key factory
-- [ ] `lib/query-provider.tsx` — explicit QueryClient defaults (staleTime, retry, refetchOnWindowFocus), deltas listed in the PR body
-- [ ] `features/courses/api/useCourses.ts` migrated onto all of the above
-- [ ] Unit tests for `apiFetch` error mapping and the key factory
-- [ ] `app/courses/page.tsx` — unchanged except whatever the type changes require (nothing, by design)
+- [x] `lib/config.ts` (skip if Phase 1 already delivered it) — Phase 1 delivered it at `773186e`; reused unchanged
+- [x] `lib/api.ts` — `ApiError` and `apiFetch(path, { method, body, schema })`; ~80 lines with comments; hard 150-line cap — DONE in Slice 1 (`frontend/lib/api.ts`, 145 total lines / 105 code lines). `ApiError` carries `status` + `message` + `body`; `apiFetch` centralizes URL construction (from `config.apiUrl`), token acquisition (via `getAccessToken()`), Authorization header, JSON body serialization, non-OK → `ApiError` mapping with FastAPI `detail` extraction (string + 422 array shapes), optional Zod response validation, and 204 No Content handling
+- [x] `features/courses/schemas.ts` — add the course response schema; `Course` becomes `z.infer` of it — DONE in Slice 1. Added `courseResponseSchema` (Zod object: `id`/`owner_id` as UUID strings, `title` 1–255 chars, `description` nullable, `created_at` ISO datetime with offset) cross-checked against `backend/app/schemas/course.py` `CourseResponse` and `backend/app/models/course.py` `DateTime(timezone=True)`. `Course` is now `z.infer<typeof courseResponseSchema>`. The existing form-input `courseSchema` / `CourseFormValues` is preserved unchanged
+- [x] `features/courses/keys.ts` — the course key factory — DONE in Slice 1. `courseKeys.all` / `.lists()` / `.list(filters?)` / `.details()` / `.detail(id)` — hierarchical, stable, copyable per-domain convention
+- [x] `lib/query-provider.tsx` — explicit QueryClient defaults (staleTime, retry, refetchOnWindowFocus), deltas listed in the PR body — DONE in Slice 1. Defaults: `staleTime: 30_000` (was 0), `retry: 1` (was 3), `refetchOnWindowFocus: false` (was true). Behavior deltas documented in the provider file's docstring and in the Slice 1 closure record below
+- [x] `features/courses/api/useCourses.ts` migrated onto all of the above — DONE in Slice 1. Now calls `apiFetch<Course[]>("/v1/courses", { schema: courseResponseSchema.array() })` and uses `courseKeys.lists()`
+- [x] Unit tests for `apiFetch` error mapping and the key factory — DONE in Slice 1. `frontend/lib/api.test.ts` (12 tests: auth/no-token, success/GET/POST/204, error mapping 404/422/403/500/network/schema-validation) and `frontend/features/courses/keys.test.ts` (5 tests: stability, list-vs-detail distinguishability, per-id detail, invalidation strategy, filter-scoped list keys). Added a `unit` vitest project (plain node, no browser) and a `test` script to `package.json`
+- [x] `app/courses/page.tsx` — unchanged except whatever the type changes require (nothing, by design) — CONFIRMED unchanged. The page imports only `useCourses` (not the `Course` type directly), so the type moving from a hand-written interface in `useCourses.ts` to `z.infer` in `schemas.ts` required zero page-level edits
 
 **Work — required (follow-up PRs, one file at a time):**
 
-- [ ] Migrate `features/courses/api/useCourse.ts` (copy-adapt of the approved pattern — a five-minute exercise by design)
-- [ ] Migrate `features/courses/api/useCourseMutations.ts`; create/update invalidate the courses list keys (closes the no-invalidation problem for this domain)
-- [ ] `components/courses/CourseForm.tsx` drops its private status mapping — 401/404/422 rendering goes through `ApiError` status
+- [x] Migrate `features/courses/api/useCourse.ts` (copy-adapt of the approved pattern — a five-minute exercise by design) — DONE in Slice 1. Now calls `apiFetch<Course>("/v1/courses/${courseId}", { schema: courseResponseSchema })` and uses `courseKeys.detail(courseId)`; imports `Course` from `schemas.ts` instead of re-importing from `useCourses.ts`
+- [x] Migrate `features/courses/api/useCourseMutations.ts`; create/update invalidate the courses list keys (closes the no-invalidation problem for this domain) — DONE in Slice 1. Both mutations use `apiFetch` with the response schema. `useCreateCourse` invalidates `courseKeys.lists()` on success. `useUpdateCourse` invalidates both `courseKeys.lists()` and `courseKeys.detail(courseId)` on success. The `CourseApiError` class is deleted (collapsed into the shared `ApiError` per D8). Navigation on success is preserved (the form still pushes to `/courses`) — invalidation handles cache consistency, navigation handles the viewport
+- [x] `components/courses/CourseForm.tsx` drops its private status mapping — 401/404/422 rendering goes through `ApiError` status — DONE in Slice 1. Imports `ApiError` from `@/lib/api` instead of `CourseApiError` from the mutations file. The 401/403/404 status branches are preserved unchanged; a 422 branch was added (the roadmap explicitly called out 401/404/422). No UI redesign, no validation-UX change
 
 **Work — recommended:**
 
-- [ ] Cross-check the response schema against FastAPI auto-docs once, before merging the schema PR
-- [ ] Before/after screenshots of the courses list — the page must be visually identical
+- [x] Cross-check the response schema against FastAPI auto-docs once, before merging the schema PR — DONE: inspected `backend/app/api/courses.py` (response_model=`CourseResponse` / `list[CourseResponse]`), `backend/app/schemas/course.py` (`CourseResponse`: `id`/`owner_id` UUID, `title` str, `description` str|None, `created_at` datetime), and `backend/app/models/course.py` (`DateTime(timezone=True)`). Schema matches
+- [ ] Before/after screenshots of the courses list — the page must be visually identical — NOT RUN: the GLM executor has no browser; the user should verify visually after applying the patch locally. The page itself (`app/courses/page.tsx`) is unchanged by design; only the data-access path under it changed
 
 **Deferred from this phase.** `useMe` and profile hooks → Phase 4. Generated API client → Deferred Backlog (trigger: ~25+ endpoints).
 
@@ -405,13 +405,13 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 ### Phase gate — before starting Phase 3
 
-- [ ] Slice 1 merged and explicitly reviewed as the reference implementation
-- [ ] Remaining course hooks migrated onto the pattern
-- [ ] TypeScript, lint, and build pass
-- [ ] Courses CRUD manual round trip green (create, read, update — delete arrives in Phase 4)
-- [ ] Invalidation verified — no manual refresh needed after mutations
-- [ ] Protected functionality: course create/read/update behavior and API contract unchanged
-- [ ] Changes reviewed by Seyam
+- [~] Slice 1 merged and explicitly reviewed as the reference implementation — Slice 1 patch landed in this revision; review by Seyam pending
+- [x] Remaining course hooks migrated onto the pattern — `useCourse.ts` and `useCourseMutations.ts` both migrated in Slice 1; `CourseForm.tsx` consumes `ApiError`
+- [x] TypeScript, lint, and build pass — VERIFIED locally on the Slice 1 tree: `npx tsc --noEmit` EXIT 0; `npm run lint` EXIT 0 (zero errors, zero warnings); `npm run build` EXIT 0 (all 10 routes compiled). New unit tests pass: `npm run test` → 17/17 tests pass across `lib/api.test.ts` (12) and `features/courses/keys.test.ts` (5)
+- [ ] Courses CRUD manual round trip green (create, read, update — delete arrives in Phase 4) — NOT RUN: the GLM executor has no running backend + Keycloak stack; the user must verify on their local `setup-dev.sh` environment after applying the patch
+- [~] Invalidation verified — no manual refresh needed after mutations — DESIGNED and code-reviewed (create invalidates `courseKeys.lists()`; update invalidates `courseKeys.lists()` + `courseKeys.detail(courseId)`); manual verification pending the CRUD round-trip above
+- [x] Protected functionality: course create/read/update behavior and API contract unchanged — VERIFIED by inspection: API paths (`/v1/courses`, `/v1/courses/{id}`), HTTP methods (GET/POST/PUT), request body shape (`CourseFormValues`), response shape (`CourseResponse`), and the form's navigation-on-success behavior are all preserved. The `CourseApiError` class is deleted but its status-mapping logic lives on in `CourseForm.tsx` via `ApiError` (same 401/403/404 messages, plus a new 422 message)
+- [~] Changes reviewed by Seyam — review pending
 
 **Owner / execution model.** GLM implements — the slice is a single instructed task; follow-up hooks one task each. ChatGPT can prepare the implementation prompt from architecture Section 12. Seyam reviews the slice as the abstraction-level judgment. BigPickle optional (e.g., inventorying remaining fetch sites).
 
@@ -420,6 +420,81 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 | Current | In this phase | Target |
 |---|---|---|
 | Three hook files with inline fetch, hand-written interfaces, library-default queries, mutations that navigate instead of invalidating | One boundary (`apiFetch` + `ApiError`), inferred types, explicit defaults, real invalidation — courses only | The Section 9 data flow — hook, queryOptions, key, apiFetch, schema — as the pattern every domain copies |
+
+### Phase 2 Slice 1 — Courses foundation closure record (2026-09-29)
+
+**Slice 1 purpose.** Establish the frontend's data-access foundation using the Courses feature as the pilot/reference implementation, exactly as specified in architecture document Section 12. The slice implements D3 (single `apiFetch` boundary + `ApiError`), D4 (Zod response schemas as the source of `Course` type), D5 (explicit `QueryClient` defaults + per-domain key factory + mutation invalidation), and the error half of D8 (shared `ApiError` consumed by `CourseForm`).
+
+**Baseline.** Branch `feature/frontend-refactor` @ `d9d1c53` (HEAD after Phase 1 final closure). The Slice 1 patch rides on top of `d9d1c53` as `phase2_courses_foundation.patch` and is not yet committed to the remote branch.
+
+**Implementation outcome (repository state after `git apply phase2_courses_foundation.patch` on top of `d9d1c53`):**
+
+New files:
+- `frontend/lib/api.ts` (145 lines) — `ApiError` class (carries `status`, `message`, `body`) + `apiFetch<T>(path, { method, body, schema })` helper. Centralizes: API base URL (from `config.apiUrl`), bearer token (from `getAccessToken()`), Authorization header, JSON body serialization, non-OK → `ApiError` mapping with FastAPI `detail` extraction (string HTTPException shape + 422 array-of-`{msg,loc}` shape), optional Zod response validation (failure throws `ApiError` with status 0), and 204 No Content handling (resolves to `undefined`).
+- `frontend/lib/api.test.ts` (12 tests) — covers: no-token → `ApiError(401)`; successful GET with bearer header attachment; schema-validated response; POST body serialization + Content-Type; 204 → `undefined`; 404 with `detail` preservation; 422 FastAPI array `msg` extraction; 403 non-JSON fallback; 500 empty body fallback; network failure → `ApiError(0)`; schema validation failure → `ApiError(0)`.
+- `frontend/features/courses/keys.ts` — `courseKeys` factory: `.all` / `.lists()` / `.list(filters?)` / `.details()` / `.detail(id)`. Hierarchical, stable, copyable.
+- `frontend/features/courses/keys.test.ts` (5 tests) — covers: stable `all` root; list vs detail distinguishability; per-id detail keys; invalidation strategy (list key prefix does not match detail key); filter-scoped list keys.
+
+Modified files:
+- `frontend/features/courses/schemas.ts` — added `courseResponseSchema` (Zod: `id`/`owner_id` UUID, `title` 1–255, `description` nullable, `created_at` ISO datetime with offset) + `Course = z.infer<typeof courseResponseSchema>`. Existing form-input `courseSchema` / `CourseFormValues` preserved.
+- `frontend/features/courses/api/useCourses.ts` — migrated to `apiFetch<Course[]>("/v1/courses", { schema: courseResponseSchema.array() })` + `courseKeys.lists()`. Removed: inline `fetch`, `getAccessToken`, `process.env.NEXT_PUBLIC_API_URL`, hand-written `Course` interface, `Error` throw.
+- `frontend/features/courses/api/useCourse.ts` — migrated to `apiFetch<Course>("/v1/courses/${courseId}", { schema: courseResponseSchema })` + `courseKeys.detail(courseId)`. `Course` now imported from `schemas.ts`.
+- `frontend/features/courses/api/useCourseMutations.ts` — both mutations migrated to `apiFetch` with response schema. `useCreateCourse` invalidates `courseKeys.lists()`. `useUpdateCourse` invalidates `courseKeys.lists()` + `courseKeys.detail(courseId)`. `CourseApiError` class deleted (collapsed into shared `ApiError`). Navigation-on-success preserved in `CourseForm.tsx`.
+- `frontend/components/courses/CourseForm.tsx` — imports `ApiError` from `@/lib/api` instead of `CourseApiError` from the mutations file. Status mapping: 401/403/404 branches preserved unchanged; 422 branch added. No UI redesign.
+- `frontend/lib/query-provider.tsx` — explicit `QueryClient` defaults: `staleTime: 30_000` (was 0), `retry: 1` (was 3), `refetchOnWindowFocus: false` (was true). Provider order (`ThemeProvider → AppQueryProvider → AuthProvider`) and `useState` singleton construction preserved.
+- `frontend/vitest.config.ts` — added a `unit` project (plain node, no browser) alongside the existing `storybook` browser project. Resolves the `@/*` path alias the same way the app does.
+- `frontend/package.json` — added `"test": "vitest run --project unit"` and `"test:storybook": "vitest run --project storybook"` scripts.
+
+**Behavior deltas (D5 requires these to be documented in the PR body):**
+
+1. `staleTime: 0 → 30_000` — course list and detail queries are now considered fresh for 30 seconds. A user navigating away from `/courses` and back within 30s will see cached data without a refetch. After 30s, the next mount refetches. This is the intended D5 behavior ("around 30s for read models").
+2. `retry: 3 → 1` — failed queries now retry once instead of three times. A logged-out visitor's 401 from `useMe` no longer retries 3x with exponential backoff before the UI gives up. This is the intended D5 behavior ("retry: 1 or status-aware retry").
+3. `refetchOnWindowFocus: true → false` — alt-tabbing back to the browser tab no longer refetches `/auth/me` and `/v1/courses`. This is the intended D5 behavior ("refetchOnWindowFocus: false for this app's usage").
+4. `CourseApiError` deleted — the private error class in `useCourseMutations.ts` is replaced by the shared `ApiError` from `lib/api.ts`. `CourseForm.tsx`'s status mapping (401/403/404) is preserved; a 422 branch is added. The user-facing messages are unchanged for 401/403/404.
+5. Mutation invalidation added — `useCreateCourse` and `useUpdateCourse` now invalidate `courseKeys.lists()` (and `courseKeys.detail(id)` for update) on success. Previously, the form navigated to `/courses` and the list refetched only because `staleTime` was 0. Now the list refetches because the mutation explicitly invalidated it — this is the intended D5 behavior and is robust to future `staleTime` changes.
+
+**What was NOT touched (scope guard).** `lib/config.ts`, `lib/keycloak.ts`, `lib/auth-context.tsx`, `sentry.client.config.ts`, `frontend/Dockerfile`, `frontend/.env.example`, `frontend/.dockerignore`, `.github/workflows/deploy-staging.yml`, `infra/realm-export.json`, all Phase 1 files. No `app/` page files (the courses pages are unchanged by design). No auth/profile hooks (`useMe`, `useProfile`, `useProfileMutation` — those are Phase 4). No Phase 3 surface (route groups, AuthGuard, loading/error/not-found files, shared state components). No Phase 5/6 surface. No generated API client. No new dependencies added to `package.json` (vitest + zod were already installed).
+
+**Verification performed (on the Slice 1 tree).**
+
+| Check | Command | Result |
+|---|---|---|
+| Working-tree hygiene | `git diff --check` | PASS (EXIT 0) |
+| Forward apply (clean `d9d1c53`) | `git apply --check phase2_courses_foundation.patch` | PASS (EXIT 0) |
+| Forward apply (actual) | `git apply phase2_courses_foundation.patch` | PASS (EXIT 0; 12 files: 4 new, 8 modified) |
+| Reverse check (patched tree) | `git apply --check --reverse phase2_courses_foundation.patch` | PASS (EXIT 0) |
+| Reverse apply (patched tree) | `git apply --reverse phase2_courses_foundation.patch` | PASS (EXIT 0; tree restored to `d9d1c53`) |
+| TypeScript strict | `npx tsc --noEmit` (with 5 env vars set) | PASS (EXIT 0) |
+| Full ESLint | `npm run lint` | PASS (EXIT 0, zero errors, zero warnings) |
+| Unit tests | `npm run test` | PASS (17/17 tests across 2 files) |
+| Next.js production build | `npm run build` (with 5 env vars set) | PASS (EXIT 0; all 10 routes compiled) |
+| Scope audit: no direct `fetch` in `features/courses` | `grep -rn '\bfetch(' frontend/features/courses/` | PASS (zero matches) |
+| Scope audit: no `process.env` in `features/courses` | `grep -rn 'process\.env' frontend/features/courses/` | PASS (zero matches) |
+| Scope audit: no `getAccessToken` direct calls in `features/courses` | `grep -rn 'getAccessToken' frontend/features/courses/` | PASS (zero matches) |
+| Schema cross-check vs backend | inspected `backend/app/api/courses.py` + `backend/app/schemas/course.py` + `backend/app/models/course.py` | PASS (`courseResponseSchema` matches `CourseResponse`: UUID id/owner_id, str title, nullable description, timezone-aware datetime created_at) |
+| Manual courses CRUD round trip | not run (GLM executor has no running backend + Keycloak stack) | NOT RUN — user must verify on local `setup-dev.sh` environment |
+| Before/after screenshots | not run (GLM executor has no browser) | NOT RUN — user must verify visually; `app/courses/page.tsx` is unchanged by design |
+
+**Phase 2 gate status after Slice 1: AUTOMATED ITEMS CLOSED; MANUAL ITEMS PENDING USER VERIFICATION.**
+
+Of the seven Phase 2 phase-gate items:
+- [~] Slice 1 merged and reviewed — patch landed; review pending.
+- [x] Remaining course hooks migrated — DONE.
+- [x] TypeScript, lint, build pass — DONE (plus unit tests).
+- [ ] Courses CRUD manual round trip — PENDING user verification on local stack.
+- [~] Invalidation verified — code-reviewed; manual verification pending the CRUD round-trip.
+- [x] Protected functionality — course API contract and form behavior preserved.
+- [~] Reviewed by Seyam — pending.
+
+**Next Phase 2 action (after Slice 1 is applied locally).**
+
+1. User applies `phase2_courses_foundation.patch` to a clean checkout of `feature/frontend-refactor` at `d9d1c53` and commits the result. Recommended commit message: `feat(frontend): establish data-access foundation on courses (Phase 2 Slice 1)`.
+2. User runs `npm run test`, `npm run lint`, `npx tsc --noEmit`, and `npm run build` locally to confirm the green state.
+3. User starts the local backend + Keycloak stack (`bash scripts/setup-dev.sh` if not already running) and performs the manual courses CRUD round trip: create a course → verify it appears in the list without a manual refresh (invalidation); edit the course → verify both the detail page and the list update; verify a logged-out state shows the 401 message; verify an invalid course ID shows the 404 message.
+4. User visually confirms the courses list page is identical before/after (no UI changes by design).
+5. Only after the manual round trip is green does the Phase 2 phase gate close and Phase 3 become unblocked.
+
+**Phase 3 is NOT started by Slice 1.** No route-group restructure, no AuthGuard, no loading/error/not-found files, no shared state components, no Navbar relocation. Slice 1 is strictly Phase 2.
 
 ---
 
