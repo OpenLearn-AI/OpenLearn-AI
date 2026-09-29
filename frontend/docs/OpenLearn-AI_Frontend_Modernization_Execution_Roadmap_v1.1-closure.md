@@ -1,8 +1,8 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 IN PROGRESS — Patch 1 (Profile foundation) committed at `4a52fca`; Patch 3 (Dashboard) closure recorded 2026-09-29 (§9 Patch 3 record)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 (Dashboard migration: real course data, fabricated stats removed, CourseCard, shared states, token styling) lands as `phase4_patch3.patch` on top of `4a52fca`, locally verified. Patches 4–9 pending. Phases 5–6 NOT STARTED.
-> **Branch:** `feature/frontend-refactor` @ `4a52fca` (HEAD after Phase 4 Patch 1; Phase 4 Patch 3 applied on top in this revision as `phase4_patch3.patch`, not yet committed to the remote branch).
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 (Home) closure recorded 2026-09-29 (§9 Patch 4 record)
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 (Home page migration: token-only styling, decorative input removed, shared Button, dark-mode correct) lands as `phase4_patch4.patch` on top of `ba148c1`, locally verified. Patches 5–9 pending. Phases 5–6 NOT STARTED.
+> **Branch:** `feature/frontend-refactor` @ `ba148c1` (HEAD after Phase 4 Patch 3; Phase 4 Patch 4 applied on top in this revision as `phase4_patch4.patch`, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
@@ -31,12 +31,12 @@ Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are ac
 
 | Field | Value |
 |---|---|
-| Phase | Phase 4 — Feature & Page Migration (Patch 3 record in §9) |
-| Status | IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 (Dashboard migration: real course data via `useCourses`, fabricated statistics removed, shared `LoadingBlock`/`ErrorState`/`EmptyState`, new `CourseCard` component, token-only styling) lands as `phase4_patch3.patch` on top of `4a52fca`, locally verified. TypeScript, ESLint, 22 unit tests, and production build all PASS. Patches 4–9 pending. |
+| Phase | Phase 4 — Feature & Page Migration (Patch 4 record in §9) |
+| Status | IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 (Home page migration: token-only styling, decorative input removed, shared Button component, dark-mode correct) lands as `phase4_patch4.patch` on top of `ba148c1`, locally verified. TypeScript, ESLint, 22 unit tests, and production build all PASS. Patches 5–9 pending. |
 | Objective | Migrate profile, dashboard, home, and the remaining course pages onto the Phase 2 + Phase 3 foundation; remove fabricated data; surface the existing backend delete-course capability; add usable mobile navigation |
-| Current Task | Patch 3 handoff — `phase4_patch3.patch` (see §9 Patch 3 record for the verification table) |
-| Blocked By | Phase 4 is not blocked by external dependencies. Manual dashboard verification (real course data, empty/loading/error states, dark mode, mobile) requires a running local backend + Keycloak stack and has not been re-run by the GLM executor |
-| Next Gate | Phase 4 phase gate (§9) — automated items for Patch 3 CLOSED; manual dashboard verification pending user verification on a local running stack |
+| Current Task | Patch 4 handoff — `phase4_patch4.patch` (see §9 Patch 4 record for the verification table) |
+| Blocked By | Phase 4 is not blocked by external dependencies. Manual home page verification (light/dark mode, mobile viewport, no horizontal scroll) requires a running local browser and has not been re-run by the GLM executor |
+| Next Gate | Phase 4 phase gate (§9) — automated items for Patch 4 CLOSED; manual home page verification pending user verification on a local running stack |
 
 ---
 
@@ -657,7 +657,7 @@ Of the seven Phase 2 phase-gate items:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS (2026-09-29) — Patch 1 committed at `4a52fca`; Patch 3 (Dashboard migration + CourseCard) landed in this revision, locally verified; Patches 4–9 pending (see Patch 3 record below) | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
+| IN PROGRESS (2026-09-29) — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 (Home page migration) landed in this revision, locally verified; Patches 5–9 pending (see Patch 4 record below) | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
 
 **Parallel note.** Routes migrate one-per-PR and parallelize across the two engineers (one: profile + auth hooks; one: dashboard + home + Navbar).
 
@@ -675,7 +675,7 @@ Of the seven Phase 2 phase-gate items:
 - [x] Profile: `features/profile` hooks onto `apiFetch` + response schemas + keys — upsert semantics preserved exactly (protected functionality) — DONE in Patch 1: added `profileResponseSchema` (Zod, cross-checked against `backend/app/schemas/profile.py` `ProfileResponse`); `Profile = z.infer<typeof profileResponseSchema>`; `profileKeys` factory (`all` / `current()`); `useProfile` migrated to `apiFetch` + `profileResponseSchema` + `profileKeys.current()` with 404→null preserved (the upsert "create if not exists" contract is intact); `useUpdateProfile` migrated to `apiFetch` PUT with `profileResponseSchema` + invalidates `profileKeys.all` on success
 - [x] Auth: `features/auth` (`useMe`) onto the same pattern; Me schema the single source; `features/auth/types.ts` deleted per Section 9.1 — DONE in Patch 1: added `meResponseSchema` (Zod, cross-checked against `backend/app/api/auth.py` `/auth/me` response: `id`/`email`/`settings`/`roles[]`/`keycloak.{issuer,subject}`); `Me = z.infer<typeof meResponseSchema>`; `authKeys` factory (`all` / `me()`); `useMe` migrated to `apiFetch` + `meResponseSchema` + `authKeys.me()` + `queryOptions` pattern; `features/auth/types.ts` DELETED
 - [x] Dashboard: real data where endpoints exist (e.g., actual course count via the courses query), honest coming-soon placeholders where they do not; the fabricated stats card (4 Courses / 142 Concepts) removed — DONE in Patch 3: dashboard now consumes `useCourses()` for the real course count; the 4 fabricated stat cards (4 Courses / 12 Queries / 8 Quizzes / 142 Concepts) replaced with one real course-count card + 3 honest "Coming soon / Not available yet" cards; the fabricated "Active Context: Advanced Software Architecture.pdf" replaced with "Coming soon"; the fabricated "Interactive graph nodes preview placeholder" replaced with "Coming soon"; a "Your Courses" section now displays up to 4 real courses via `CourseCard` with shared `LoadingBlock`/`ErrorState`/`EmptyState` for loading/error/empty states; header banner migrated from raw `indigo-` gradient to token `primary` gradient
-- [ ] Home: token-dialect hero; decorative input made functional or removed; dead comment block and `as any` gone if Phase 1 did not take them — Patch 4
+- [x] Home: token-dialect hero; decorative input made functional or removed; dead comment block and `as any` gone if Phase 1 did not take them — DONE in Patch 4: hero section migrated from raw `indigo-` gradient to token `primary` gradient; decorative search `<input>` removed (it had no backend search endpoint and was fake UX — "prefer honesty over fake UX"); all raw `slate-`/`indigo-` classes replaced with token classes (`bg-card`/`border-border`/`text-card-foreground`/`text-muted-foreground`/`primary`/`secondary`); CTA buttons migrated from raw `<Link>` styling to shared `Button` component with `render={<Link>}`; dark-mode correct (token-based colors resolve in both themes); no `as any` (already removed in Phase 1 closure); no dead comments (already removed in Phase 1 closure)
 - [ ] Course detail + edit: shared state components; invalid ID → `notFound()` — Patches 5–6
 - [ ] Navbar: mobile menu below 768px, honest labels, UserName extraction per Section 9.1 — Patch 9
 - [x] New shared `components/CourseCard.tsx` used by the courses list and the dashboard — DONE in Patch 3: `components/CourseCard.tsx` created (presentational only, no API calls, token-only styling, dark-mode correct). Currently consumed by the dashboard's "Your Courses" section. The courses list page (`app/(app)/courses/page.tsx`) still uses its own inline card markup — migrating the courses list to consume `CourseCard` is deferred to the dedicated courses-list patch (Patch 7) to keep this patch scoped to dashboard only, per the one-route-per-PR discipline.
@@ -877,6 +877,80 @@ Modified files:
 4. Only after the manual verification is green does Patch 4 begin.
 
 **Phase 5 is NOT started by Patch 3.** No Arabic/RTL, no accessibility audit, no i18n. Patch 3 is strictly Phase 4.
+
+### Phase 4 Patch 4 — Home page migration closure record (2026-09-29)
+
+**Patch 4 purpose.** Migrate the home page (`app/page.tsx`) onto the Phase 2/3 foundation: token-only styling (D9), remove the decorative fake search input, use the shared `Button` component for CTAs, and ensure dark-mode correctness. Cleanup + migration only — no new features, no API calls, no new state.
+
+**Baseline.** Branch `feature/frontend-refactor` @ `ba148c1` (HEAD after Phase 4 Patch 3). Patch 4 rides on top of `ba148c1` as `phase4_patch4.patch` and is not yet committed to the remote branch.
+
+**Implementation outcome (repository state after `git apply phase4_patch4.patch` on top of `ba148c1`):**
+
+Modified files:
+- `frontend/app/page.tsx` — full migration:
+  - **Token migration:** hero section migrated from raw `from-indigo-900 to-indigo-700` + `text-indigo-100` to token `from-primary to-primary/80` + `text-primary-foreground`. All raw `slate-`/`indigo-` classes replaced with token classes: `bg-card`, `border-border`, `text-card-foreground`, `text-muted-foreground`, `primary`, `secondary`, `bg-secondary/50`.
+  - **Decorative input removed:** the fake search `<input>` ("e.g., Advanced Software Architecture, Machine Learning...") was removed entirely. It had no `onChange`/`onSubmit` handler, no state, no backend search endpoint — it was pure decorative fake UX. Per the requirement: "Prefer honesty over fake UX. No fabricated interactions." The "Create Course" button now links directly to `/courses/new` (the real course creation flow) instead of sitting next to a fake input.
+  - **Shared Button component:** all CTA buttons migrated from raw `<Link>` elements with inline `className` styling to the shared `Button` component with `render={<Link href="..." />}`. This includes the "Go to Dashboard" / "Get Started - Sign In" hero CTAs, the "Create Course" / "View My Materials" buttons, and ensures consistent button styling across the app.
+  - **Dark-mode correct:** all token-based colors (`bg-card`, `border-border`, `text-card-foreground`, `text-muted-foreground`, `primary`, `secondary`) resolve correctly in both light and dark themes. The previous raw `bg-white dark:bg-slate-900` dual-class approach is replaced by the single token `bg-card` which the token system resolves per theme.
+  - **No `as any`:** confirmed removed (Phase 1 closure already took this).
+  - **No dead comments:** confirmed removed (Phase 1 closure already took the trailing `/* cd frontend / npm run dev / ... */` block).
+  - **No new state, no API calls, no new features:** the home page still uses `useAuth()` + `useMe()` for the auth-gated CTA (unchanged). No new hooks, no new state, no `useState`, no `fetch`, no `process.env`.
+- `frontend/docs/OpenLearn-AI_Frontend_Modernization_Execution_Roadmap_v1.1-closure.md` — this file. Header, §1 Current Focus, §9 Phase 4 status/checkboxes, and this Patch 4 closure record updated.
+
+**Behavior deltas:**
+1. The decorative search input is gone. The "Materials & RAG" card now has two buttons ("Create Course" → `/courses/new`, "View My Materials" → `/courses`) instead of a fake input + two links.
+2. All CTAs now use the shared `Button` component (consistent styling, hover, focus, disabled states) instead of raw `<Link>` with ad-hoc classes.
+3. The hero and feature cards use token-based colors that resolve correctly in dark mode. Previously the cards used `bg-white dark:bg-slate-900` which is the old dual-class approach; now they use `bg-card` (single token).
+
+**What was NOT touched (scope guard):** `lib/api.ts`, `lib/config.ts`, `lib/keycloak.ts`, `lib/auth-context.tsx`, `lib/query-provider.tsx`, all Phase 1/2/3 files. No `features/` hooks. No course detail/edit pages. No dashboard. No Navbar. No delete-course UI. No routing changes. No auth changes. No provider changes. No Phase 5/6 surface. No new dependencies.
+
+**Verification performed (on the Patch 4 tree):**
+
+| Check | Command | Result |
+|---|---|---|
+| Working-tree hygiene | `git diff --check` | PASS (EXIT 0) |
+| Forward apply (clean `ba148c1`) | `git apply --check phase4_patch4.patch` | PASS (EXIT 0) |
+| Forward apply (actual) | `git apply phase4_patch4.patch` | PASS (EXIT 0; 2 files modified) |
+| Reverse check (patched tree) | `git apply --check --reverse phase4_patch4.patch` | PASS (EXIT 0) |
+| Reverse apply (patched tree) | `git apply --reverse phase4_patch4.patch` | PASS (tree restored to `ba148c1`) |
+| TypeScript strict | `npx tsc --noEmit` (5 env vars set) | PASS (EXIT 0) |
+| Full ESLint | `npm run lint` | PASS (EXIT 0, zero errors, zero warnings) |
+| Unit tests | `npm run test` | PASS (22/22 across 3 files — unchanged) |
+| Next.js production build | `npm run build` (5 env vars set) | PASS (EXIT 0; all 10 routes compiled) |
+| Styling audit: no `slate-`/`indigo-`/`gray-`/`blue-` | `grep -nE "slate-\|indigo-\|gray-\|blue-" frontend/app/page.tsx` | PASS (zero matches) |
+| `as any` audit | `grep -n "as any" frontend/app/page.tsx` | PASS (zero matches) |
+| Decorative input audit | `grep -n "<input" frontend/app/page.tsx` | PASS (zero matches) |
+| Dead comment audit | `grep -n "TODO\|FIXME\|HACK\|placeholder" frontend/app/page.tsx` | PASS (zero matches) |
+| Route verification | build output | PASS (all 10 routes present with unchanged public URLs) |
+| Manual home page verification | not run (GLM executor has no browser) | NOT RUN — user must verify locally |
+
+**Protected functionality audit:**
+- No API calls added — the home page still uses `useAuth()` + `useMe()` only (unchanged).
+- Keycloak auth protocol untouched — `lib/keycloak.ts` unchanged.
+- Provider order untouched — `ThemeProvider → AppQueryProvider → AuthProvider` unchanged.
+- No routing changes — all links (`/dashboard`, `/login`, `/courses`, `/courses/new`) unchanged.
+- No auth changes — the auth-gated CTA logic (`!isLoading && (isAuthenticated ? ... : ...)`) is preserved exactly.
+
+**Manual verification checklist (user must run locally):**
+1. Home page renders correctly in light mode — token-only styling.
+2. Home page renders correctly in dark mode — token-based colors resolve correctly.
+3. Mobile viewport — no horizontal scrolling; responsive grid.
+4. Hero CTA buttons work — "Go to Dashboard" (authenticated) / "Get Started - Sign In" (unauthenticated).
+5. "Create Course" button links to `/courses/new`.
+6. "View My Materials" button links to `/courses`.
+7. No decorative/fake input visible.
+8. RAG Chat / Knowledge Graph links work → `/dashboard`.
+
+**Phase 4 gate status after Patch 4: IN PROGRESS.** Of the 9 required Phase 4 work items, 6 are now DONE (profile page+ProfileForm+Field wrapper; profile hooks+schemas+keys; auth useMe+Me schema+types.ts deleted; dashboard real data + fabricated stats removed; CourseCard created; home page migrated). The remaining 3 (course detail+edit, Navbar+mobile menu, delete-course) are pending in Patches 5–9.
+
+**Next Phase 4 action (after Patch 4 is applied locally).**
+
+1. User applies `phase4_patch4.patch` to a clean checkout of `feature/frontend-refactor` at `ba148c1` and commits the result. Recommended commit message: `refactor(frontend): migrate home page to token architecture (Phase 4 Patch 4)`.
+2. User runs `npm run test`, `npm run lint`, `npx tsc --noEmit`, and `npm run build` locally to confirm the green state.
+3. User verifies the home page visually in both light and dark mode, and on mobile viewport.
+4. Only after the manual verification is green does Patch 5 begin.
+
+**Phase 5 is NOT started by Patch 4.** No Arabic/RTL, no accessibility audit, no i18n. Patch 4 is strictly Phase 4.
 
 ---
 
