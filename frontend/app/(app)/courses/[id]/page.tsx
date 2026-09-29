@@ -1,44 +1,66 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 
 import { useCourse } from "@/features/courses/api/useCourse";
+import { LoadingBlock } from "@/components/state/LoadingBlock";
+import { ErrorState } from "@/components/state/ErrorState";
+import { DeleteCourseButton } from "@/components/courses/DeleteCourseButton";
+import { Button } from "@/components/ui/button";
+import { ApiError } from "@/lib/api";
 
 export default function CourseDetailPage() {
     const params = useParams<{ id: string }>();
     const courseId = params.id;
 
-    const { data: course, isLoading, isError, error } = useCourse(courseId);
+    const {
+        data: course,
+        isLoading,
+        isError,
+        error,
+    } = useCourse(courseId);
 
     if (isLoading) {
         return (
             <main className="min-h-screen bg-background px-4 py-8">
                 <div className="mx-auto max-w-3xl">
-                    <p className="text-sm text-muted-foreground">
-                        Loading course...
-                    </p>
+                    <LoadingBlock message="Loading course..." />
                 </div>
             </main>
         );
+    }
+
+    // Only an actual 404 from the API means "course not found".
+    // Network errors, 500s, auth errors etc. are shown as error states.
+    if (
+        isError &&
+        error instanceof ApiError &&
+        error.status === 404
+    ) {
+        notFound();
     }
 
     if (isError || !course) {
         return (
             <main className="min-h-screen bg-background px-4 py-8">
                 <div className="mx-auto max-w-3xl space-y-4">
-                    <p className="text-sm text-destructive">
-                        {error instanceof Error
-                            ? error.message
-                            : "Failed to load course."}
-                    </p>
-
-                    <Link
-                        href="/courses"
-                        className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-sm font-medium hover:bg-muted"
-                    >
-                        Back to Courses
-                    </Link>
+                    <ErrorState
+                        message={
+                            error instanceof Error
+                                ? error.message
+                                : "Failed to load course."
+                        }
+                    />
+                    <div className="text-center">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            render={<Link href="/courses" />}
+                        >
+                            Back to Courses
+                        </Button>
+                    </div>
                 </div>
             </main>
         );
@@ -49,7 +71,7 @@ export default function CourseDetailPage() {
             <div className="mx-auto max-w-3xl space-y-6">
                 <div className="flex items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight">
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground">
                             {course.title}
                         </h1>
 
@@ -58,18 +80,19 @@ export default function CourseDetailPage() {
                         </p>
                     </div>
 
-                    <Link
-                        href={`/courses/${course.id}/edit`}
-                        className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        render={<Link href={`/courses/${course.id}/edit`} />}
                     >
                         Edit Course
-                    </Link>
+                    </Button>
                 </div>
 
-                <section className="rounded-xl border bg-card p-6 shadow-sm">
+                <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
                     <div className="space-y-6">
                         <div>
-                            <h2 className="text-sm font-medium">
+                            <h2 className="text-sm font-medium text-card-foreground">
                                 Description
                             </h2>
 
@@ -79,7 +102,9 @@ export default function CourseDetailPage() {
                         </div>
 
                         <div>
-                            <h2 className="text-sm font-medium">Created</h2>
+                            <h2 className="text-sm font-medium text-card-foreground">
+                                Created
+                            </h2>
 
                             <p className="mt-2 text-sm text-muted-foreground">
                                 {new Date(
@@ -90,12 +115,20 @@ export default function CourseDetailPage() {
                     </div>
                 </section>
 
-                <Link
-                    href="/courses"
-                    className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-sm font-medium hover:bg-muted"
+                {/* Delete action — confirmation dialog + invalidation */}
+                <DeleteCourseButton
+                    courseId={course.id}
+                    courseTitle={course.title}
+                    redirectTo="/courses"
+                />
+
+                <Button
+                    variant="outline"
+                    size="sm"
+                    render={<Link href="/courses" />}
                 >
                     Back to Courses
-                </Link>
+                </Button>
             </div>
         </main>
     );

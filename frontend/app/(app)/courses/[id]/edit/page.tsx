@@ -1,36 +1,54 @@
 "use client";
 
+import { notFound, useParams } from "next/navigation";
+
 import { CourseForm } from "@/components/courses/CourseForm";
 import { useCourse } from "@/features/courses/api/useCourse";
-import { useParams } from "next/navigation";
+import { LoadingBlock } from "@/components/state/LoadingBlock";
+import { ErrorState } from "@/components/state/ErrorState";
+import { ApiError } from "@/lib/api";
 
 export default function EditCoursePage() {
     const params = useParams<{ id: string }>();
     const courseId = params.id;
 
-    const { data: course, isLoading, isError, error } = useCourse(courseId);
+    const {
+        data: course,
+        isLoading,
+        isError,
+        error,
+    } = useCourse(courseId);
 
     if (isLoading) {
         return (
             <main className="min-h-screen bg-background px-4 py-8">
                 <div className="mx-auto max-w-2xl">
-                    <p className="text-sm text-muted-foreground">
-                        Loading course...
-                    </p>
+                    <LoadingBlock message="Loading course..." />
                 </div>
             </main>
         );
+    }
+
+    // Only an actual 404 from the API means "course not found".
+    if (
+        isError &&
+        error instanceof ApiError &&
+        error.status === 404
+    ) {
+        notFound();
     }
 
     if (isError || !course) {
         return (
             <main className="min-h-screen bg-background px-4 py-8">
                 <div className="mx-auto max-w-2xl">
-                    <p className="text-sm text-destructive">
-                        {error instanceof Error
-                            ? error.message
-                            : "Failed to load course."}
-                    </p>
+                    <ErrorState
+                        message={
+                            error instanceof Error
+                                ? error.message
+                                : "Failed to load course."
+                        }
+                    />
                 </div>
             </main>
         );
@@ -40,7 +58,7 @@ export default function EditCoursePage() {
         <main className="min-h-screen bg-background px-4 py-8">
             <div className="mx-auto max-w-2xl space-y-6">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">
                         Edit Course
                     </h1>
 

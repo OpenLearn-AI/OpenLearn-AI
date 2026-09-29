@@ -1,8 +1,8 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 (Home) closure recorded 2026-09-29 (§9 Patch 4 record)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 (Home page migration: token-only styling, decorative input removed, shared Button, dark-mode correct) lands as `phase4_patch4.patch` on top of `ba148c1`, locally verified. Patches 5–9 pending. Phases 5–6 NOT STARTED.
-> **Branch:** `feature/frontend-refactor` @ `ba148c1` (HEAD after Phase 4 Patch 3; Phase 4 Patch 4 applied on top in this revision as `phase4_patch4.patch`, not yet committed to the remote branch).
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 IN PROGRESS — Patches 1/3/4 committed; Batch 2 (Patches 5–8: course detail/edit/list/delete) closure recorded 2026-09-29 (§9 Patch 5–8 records)
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 IN PROGRESS — Patches 1/3/4 committed; Batch 2 (Patches 5–8: course detail + edit + courses list + CourseCard + delete flow) locally verified, ready for commit. Patch 9 (Navbar mobile menu) pending. Phases 5–6 NOT STARTED.
+> **Branch:** `feature/frontend-refactor` @ `9fd3335` (HEAD after Phase 4 Patch 4; Phase 4 Batch 2 applied on top, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
@@ -31,12 +31,12 @@ Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are ac
 
 | Field | Value |
 |---|---|
-| Phase | Phase 4 — Feature & Page Migration (Patch 4 record in §9) |
-| Status | IN PROGRESS — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 (Home page migration: token-only styling, decorative input removed, shared Button component, dark-mode correct) lands as `phase4_patch4.patch` on top of `ba148c1`, locally verified. TypeScript, ESLint, 22 unit tests, and production build all PASS. Patches 5–9 pending. |
+| Phase | Phase 4 — Feature & Page Migration (Batch 2: Patches 5–8 records in §9) |
+| Status | IN PROGRESS — Patches 1/3/4 committed; Batch 2 (Patches 5–8: course detail + edit + courses list + CourseCard + delete flow) locally verified, ready for commit. 8 of 9 required Phase 4 items DONE. Patch 9 (Navbar mobile menu) pending. |
 | Objective | Migrate profile, dashboard, home, and the remaining course pages onto the Phase 2 + Phase 3 foundation; remove fabricated data; surface the existing backend delete-course capability; add usable mobile navigation |
-| Current Task | Patch 4 handoff — `phase4_patch4.patch` (see §9 Patch 4 record for the verification table) |
-| Blocked By | Phase 4 is not blocked by external dependencies. Manual home page verification (light/dark mode, mobile viewport, no horizontal scroll) requires a running local browser and has not been re-run by the GLM executor |
-| Next Gate | Phase 4 phase gate (§9) — automated items for Patch 4 CLOSED; manual home page verification pending user verification on a local running stack |
+| Current Task | Batch 2 handoff — Patches 5–8 complete, ready for review + commit |
+| Blocked By | Phase 4 is not blocked by external dependencies. Manual course CRUD + delete verification requires a running local backend + Keycloak stack and has not been re-run by the GLM executor |
+| Next Gate | Phase 4 phase gate (§9) — 8 of 9 automated items CLOSED; Patch 9 (Navbar mobile menu) pending; manual course CRUD + delete verification pending user verification on a local running stack |
 
 ---
 
@@ -657,7 +657,7 @@ Of the seven Phase 2 phase-gate items:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS (2026-09-29) — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 (Home page migration) landed in this revision, locally verified; Patches 5–9 pending (see Patch 4 record below) | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
+| IN PROGRESS (2026-09-29) — Patch 1 committed at `4a52fca`; Patch 3 committed at `ba148c1`; Patch 4 committed at `9fd3335`; Patches 5–8 (course detail + edit + courses list + CourseCard integration + delete flow) landed in Batch 2, locally verified; Patch 9 (Navbar mobile menu) pending (see Patch 8 record below) | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
 
 **Parallel note.** Routes migrate one-per-PR and parallelize across the two engineers (one: profile + auth hooks; one: dashboard + home + Navbar).
 
@@ -676,10 +676,10 @@ Of the seven Phase 2 phase-gate items:
 - [x] Auth: `features/auth` (`useMe`) onto the same pattern; Me schema the single source; `features/auth/types.ts` deleted per Section 9.1 — DONE in Patch 1: added `meResponseSchema` (Zod, cross-checked against `backend/app/api/auth.py` `/auth/me` response: `id`/`email`/`settings`/`roles[]`/`keycloak.{issuer,subject}`); `Me = z.infer<typeof meResponseSchema>`; `authKeys` factory (`all` / `me()`); `useMe` migrated to `apiFetch` + `meResponseSchema` + `authKeys.me()` + `queryOptions` pattern; `features/auth/types.ts` DELETED
 - [x] Dashboard: real data where endpoints exist (e.g., actual course count via the courses query), honest coming-soon placeholders where they do not; the fabricated stats card (4 Courses / 142 Concepts) removed — DONE in Patch 3: dashboard now consumes `useCourses()` for the real course count; the 4 fabricated stat cards (4 Courses / 12 Queries / 8 Quizzes / 142 Concepts) replaced with one real course-count card + 3 honest "Coming soon / Not available yet" cards; the fabricated "Active Context: Advanced Software Architecture.pdf" replaced with "Coming soon"; the fabricated "Interactive graph nodes preview placeholder" replaced with "Coming soon"; a "Your Courses" section now displays up to 4 real courses via `CourseCard` with shared `LoadingBlock`/`ErrorState`/`EmptyState` for loading/error/empty states; header banner migrated from raw `indigo-` gradient to token `primary` gradient
 - [x] Home: token-dialect hero; decorative input made functional or removed; dead comment block and `as any` gone if Phase 1 did not take them — DONE in Patch 4: hero section migrated from raw `indigo-` gradient to token `primary` gradient; decorative search `<input>` removed (it had no backend search endpoint and was fake UX — "prefer honesty over fake UX"); all raw `slate-`/`indigo-` classes replaced with token classes (`bg-card`/`border-border`/`text-card-foreground`/`text-muted-foreground`/`primary`/`secondary`); CTA buttons migrated from raw `<Link>` styling to shared `Button` component with `render={<Link>}`; dark-mode correct (token-based colors resolve in both themes); no `as any` (already removed in Phase 1 closure); no dead comments (already removed in Phase 1 closure)
-- [ ] Course detail + edit: shared state components; invalid ID → `notFound()` — Patches 5–6
+- [x] Course detail + edit: shared state components; invalid ID → `notFound()` — DONE in Patches 5–6: course detail and edit pages migrated to shared `LoadingBlock`/`ErrorState`; `notFound()` called only on actual 404 `ApiError` (not network/500/auth errors); `CourseForm` migrated to `Field` wrapper + `Textarea` primitive; token-only styling; update behavior preserved
 - [ ] Navbar: mobile menu below 768px, honest labels, UserName extraction per Section 9.1 — Patch 9
-- [x] New shared `components/CourseCard.tsx` used by the courses list and the dashboard — DONE in Patch 3: `components/CourseCard.tsx` created (presentational only, no API calls, token-only styling, dark-mode correct). Currently consumed by the dashboard's "Your Courses" section. The courses list page (`app/(app)/courses/page.tsx`) still uses its own inline card markup — migrating the courses list to consume `CourseCard` is deferred to the dedicated courses-list patch (Patch 7) to keep this patch scoped to dashboard only, per the one-route-per-PR discipline.
-- [ ] Delete-course action: confirmation, mutation, list invalidation — closing the frontend/backend contract gap — Patch 8
+- [x] New shared `components/CourseCard.tsx` used by the courses list and the dashboard — DONE in Patch 3 (created) + Patch 7 (courses list migrated to consume it): `components/CourseCard.tsx` is now used by both the dashboard's "Your Courses" section and the courses list page. Presentational only, token-only styling, dark-mode correct.
+- [x] Delete-course action: confirmation, mutation, list invalidation — closing the frontend/backend contract gap — DONE in Patch 8: `useDeleteCourse()` mutation added (`apiFetch` DELETE, invalidates `courseKeys.all`); `DeleteCourseButton` component with inline confirmation panel (destructive action, Cancel/Delete buttons, double-submission prevention, `ApiError` status mapping 404/403); integrated into course detail page; after deletion → navigate to `/courses` (not left on broken detail page); no `window.location.reload()`
 
 **Work — recommended:**
 
@@ -951,6 +951,114 @@ Modified files:
 4. Only after the manual verification is green does Patch 5 begin.
 
 **Phase 5 is NOT started by Patch 4.** No Arabic/RTL, no accessibility audit, no i18n. Patch 4 is strictly Phase 4.
+
+### Phase 4 Patch 5 — Course Detail migration closure record (2026-09-29)
+
+**Patch 5 purpose.** Migrate the course detail page (`app/(app)/courses/[id]/page.tsx`) onto the Phase 2/3 foundation: shared state components (`LoadingBlock`/`ErrorState`), `notFound()` for invalid course IDs (404 only — not network/500/auth errors), shared `Button` component for all actions, and token-only styling.
+
+**Baseline.** Branch `feature/frontend-refactor` @ `9fd3335` (HEAD after Phase 4 Patch 4). Patch 5 is part of Batch 2 (Patches 5–8) and rides on top of `9fd3335`.
+
+**Implementation outcome:**
+
+Modified files:
+- `frontend/app/(app)/courses/[id]/page.tsx`:
+  - **Shared state components:** loading → `LoadingBlock`; error → `ErrorState` with "Back to Courses" button.
+  - **`notFound()` for 404 only:** `isError && error instanceof ApiError && error.status === 404` → `notFound()`. Network errors, 500s, auth errors, and other non-404 failures render the `ErrorState` instead — they are NOT converted to 404.
+  - **Shared `Button` component:** "Edit Course" and "Back to Courses" links migrated from raw `<Link>` with ad-hoc classes to `Button` with `render={<Link>}`.
+  - **Token migration:** all classes already token-based (`bg-background`, `bg-card`, `border-border`, `text-foreground`, `text-muted-foreground`, `text-card-foreground`, `primary`); no raw `slate-`/`indigo-` classes existed. Confirmed via grep.
+
+**Verification:**
+- `npx tsc --noEmit` PASS (EXIT 0)
+- `npm run lint` PASS (EXIT 0, zero errors, zero warnings)
+
+**Manual verification NOT RUN** — requires browser + backend.
+
+### Phase 4 Patch 6 — Course Edit migration closure record (2026-09-29)
+
+**Patch 6 purpose.** Migrate the course edit page (`app/(app)/courses/[id]/edit/page.tsx`) and the `CourseForm` component onto the Phase 2/3 foundation: shared state components (`LoadingBlock`/`ErrorState`), `notFound()` for 404 (same pattern as Patch 5), `Field` wrapper + `Textarea` primitive for form fields (replacing raw `<textarea>`), and token-only styling.
+
+**Baseline.** Part of Batch 2 (Patches 5–8), riding on top of `9fd3335`.
+
+**Implementation outcome:**
+
+Modified files:
+- `frontend/app/(app)/courses/[id]/edit/page.tsx`:
+  - **Shared state components:** loading → `LoadingBlock`; error → `ErrorState`.
+  - **`notFound()` for 404 only:** same pattern as Patch 5 — `isError && error instanceof ApiError && error.status === 404` → `notFound()`. Non-404 errors render `ErrorState`.
+  - **Token migration:** all classes already token-based; confirmed via grep.
+  - **Preserved update behavior:** `CourseForm` mode="edit" + `courseId` + `initialValues` unchanged; `useUpdateCourse` mutation unchanged; navigation to `/courses` on success unchanged.
+- `frontend/components/courses/CourseForm.tsx`:
+  - **`Field` wrapper + `Textarea` primitive:** the raw `<textarea>` with inline `className` styling migrated to the shared `Textarea` primitive (from Patch 1) wrapped in the `Field` component (label + control + error). Consistent with the ProfileForm pattern established in Patch 1.
+  - **Removed:** raw `<Label>` import and manual `<div className="space-y-2">` wrappers (replaced by `Field`).
+  - **Preserved:** all validation logic (`courseSchema.safeParse`), mutation behavior (`useCreateCourse`/`useUpdateCourse`), `ApiError` status mapping (401/403/404/422), navigation on success, `isPending` disabling.
+
+**Verification:**
+- `npx tsc --noEmit` PASS (EXIT 0)
+- `npm run lint` PASS (EXIT 0, zero errors, zero warnings)
+
+**Manual verification NOT RUN** — requires browser + backend.
+
+### Phase 4 Patch 7 — CourseCard + Courses List migration closure record (2026-09-29)
+
+**Patch 7 purpose.** Migrate the courses list page (`app/(app)/courses/page.tsx`) to consume the shared `CourseCard` component (created in Patch 3), replace duplicated inline card markup, use shared state components (`LoadingBlock`/`ErrorState`/`EmptyState`), and migrate to token-only styling.
+
+**Baseline.** Part of Batch 2 (Patches 5–8), riding on top of `9fd3335`.
+
+**Implementation outcome:**
+
+Modified files:
+- `frontend/app/(app)/courses/page.tsx`:
+  - **`CourseCard` integration:** the 50+ lines of inline per-course card markup (`<div className="bg-card rounded-2xl ...">` with title/description/created-at/Edit/Open-Hub buttons) replaced by `<CourseCard key={course.id} course={course} />`. The courses list and dashboard now use the same presentational component.
+  - **Shared state components:** loading → `LoadingBlock` (was inline `<p>Loading courses...</p>`); error → `ErrorState` with `refetch` retry (was inline `<p>` with error message); empty → `EmptyState` with "Create your first course" CTA when no search filter is active (was inline `<p>No courses found.</p>`).
+  - **Shared `Button` component:** "Create New Course" link migrated from `<Link><Button>` wrapper to `Button render={<Link>}` pattern.
+  - **Token migration:** all classes already token-based (`bg-background`, `bg-card`, `border-border`, `text-foreground`, `text-muted-foreground`); no raw `slate-`/`indigo-` classes existed.
+  - **Preserved:** search input + filtering logic, `useCourses()` query, `useState` for search, navigation links.
+
+**Verification:**
+- `npx tsc --noEmit` PASS (EXIT 0)
+- `npm run lint` PASS (EXIT 0, zero errors, zero warnings)
+
+**Manual verification NOT RUN** — requires browser + backend.
+
+### Phase 4 Patch 8 — Delete Course flow closure record (2026-09-29)
+
+**Patch 8 purpose.** Surface the existing backend DELETE course endpoint in the frontend, closing the contract gap. Implements: confirmation UX, DELETE mutation via `apiFetch`, query invalidation (course disappears from list without page refresh), navigation after deletion, error handling via `ApiError`, and double-submission prevention.
+
+**Backend DELETE contract verified:**
+- `DELETE /v1/courses/{course_id}` — returns 204 No Content on success
+- 404 if course doesn't exist; 403 if user is not the owner
+- Bearer-authenticated (via `getAccessToken()` in `apiFetch`)
+- Verified in `backend/app/api/courses.py` lines 104–126
+
+**Baseline.** Part of Batch 2 (Patches 5–8), riding on top of `9fd3335`.
+
+**Implementation outcome:**
+
+New files:
+- `frontend/components/courses/DeleteCourseButton.tsx` — delete action with inline confirmation panel:
+  - Renders a "Delete Course" button (variant="destructive").
+  - On click → reveals a confirmation panel (`role="alertdialog"`) showing the course title, a warning that deletion is permanent, Cancel + "Yes, delete it" buttons.
+  - Double-submission prevention: both buttons disabled while `deleteCourse.isPending`.
+  - Error handling: `ApiError` status mapping — 404 → "This course no longer exists."; 403 → "You do not have permission to delete this course."; other → `error.message`. Error rendered via `aria-live="assertive"`.
+  - On success → `router.push(redirectTo)` (defaults to `/courses`); the mutation's `onSuccess` invalidates `courseKeys.all` so the courses list refreshes without `window.location.reload()`.
+
+Modified files:
+- `frontend/features/courses/api/useCourseMutations.ts` — added `useDeleteCourse()`:
+  - `mutationFn`: `apiFetch<void>("/v1/courses/${courseId}", { method: "DELETE" })` — returns `undefined` (204 No Content, handled by `apiFetch`).
+  - `onSuccess`: `queryClient.invalidateQueries({ queryKey: courseKeys.all })` — invalidates the entire course domain (both list and detail) so the deleted course disappears from every surface.
+- `frontend/app/(app)/courses/[id]/page.tsx` — added `<DeleteCourseButton>` after the detail section, before the "Back to Courses" button. After successful deletion, the user is redirected to `/courses` (not left on a broken detail page for a deleted course).
+
+**Verification (full suite):**
+- `git diff --check` PASS
+- `npx tsc --noEmit` PASS (EXIT 0)
+- `npm run lint` PASS (EXIT 0, zero errors, zero warnings)
+- `npm run test` PASS (22/22 tests)
+- `npm run build` PASS (EXIT 0, all 10 routes compiled)
+- Legacy styling audit: zero `slate-`/`indigo-`/`gray-`/`blue-` matches in course surfaces
+- `window.location.reload()` audit: zero matches
+- Direct `fetch`/`process.env`/`getAccessToken` audit: zero matches in course surfaces
+
+**Manual verification NOT RUN** — requires browser + backend + Keycloak stack.
 
 ---
 

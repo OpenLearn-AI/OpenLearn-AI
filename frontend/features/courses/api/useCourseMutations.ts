@@ -61,3 +61,31 @@ export function useUpdateCourse() {
         },
     });
 }
+
+/**
+ * Delete a course (D5 invalidation convention).
+ *
+ * `DELETE /v1/courses/{course_id}` returns 204 No Content on success.
+ * On success the entire course cache is invalidated — both the list
+ * (so the deleted course disappears without a manual refresh) and
+ * the detail (so an open detail/edit page doesn't serve stale data).
+ *
+ * The backend returns 404 if the course doesn't exist and 403 if the
+ * authenticated user is not the owner. These surface as `ApiError`
+ * via `apiFetch`; callers map them to user-facing messages.
+ */
+export function useDeleteCourse() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (courseId: string) =>
+            apiFetch<void>(`/v1/courses/${courseId}`, {
+                method: "DELETE",
+            }),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({
+                queryKey: courseKeys.all,
+            });
+        },
+    });
+}
