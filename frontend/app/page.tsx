@@ -6,7 +6,7 @@ import { useMe } from "@/features/auth/api/useMe";
 
 export default function Home() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { data: user, isLoading: userLoading } = useMe() as { data: any; isLoading: boolean };
+  const { isLoading: userLoading } = useMe();
 
   const isLoading = authLoading || userLoading;
 
@@ -92,12 +92,3 @@ export default function Home() {
     </div>
   );
 }
-
-/*
-cd frontend
-npm run dev  
-Local: http://localhost:3000
-document.documentElement.classList.add("dark")
-.\.venv\Scripts\Activate.ps1
-uvicorn app.main:app --host 0.0.0.0 --port 8000  (backend)
-*/
