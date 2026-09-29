@@ -1,8 +1,8 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 Slice 1 (Courses foundation) closure recorded 2026-09-29 (§7); Phase 2 continuation (queryOptions pattern) closure recorded 2026-09-29 (§7 continuation record)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`; staging browser login remains an external operational dependency); Phase 2 REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN — Slice 1 committed at `af43728`; continuation slice (D5 `queryOptions` pattern for course queries + query-options unit tests) lands as `phase2_continuation.patch` on top of `af43728`. Manual courses-CRUD round-trip pending user verification on a local running stack. Phases 3–6 NOT STARTED.
-> **Branch:** `feature/frontend-refactor` @ `af43728` (HEAD after Phase 2 Slice 1; continuation patch applied on top in this revision as `phase2_continuation.patch`, not yet committed to the remote branch).
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 IN PROGRESS — Patch 1 (Profile foundation) closure recorded 2026-09-29 (§9 Patch 1 record)
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 IN PROGRESS — Patch 1 (Profile + auth feature migration onto Phase 2 foundation + Field wrapper) lands as `phase4_patch1.patch` on top of `8635a48`, locally verified. Patches 2–9 pending. Phases 5–6 NOT STARTED.
+> **Branch:** `feature/frontend-refactor` @ `8635a48` (HEAD after Phase 3 Step B; Phase 4 Patch 1 applied on top in this revision as `phase4_patch1.patch`, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
@@ -31,12 +31,12 @@ Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are ac
 
 | Field | Value |
 |---|---|
-| Phase | Phase 2 — Data Foundation (Courses pilot); continuation record in §7 |
-| Status | REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN. Slice 1 committed at `af43728`; continuation slice (D5 `queryOptions` pattern for course queries + 5 new query-options unit tests) lands as `phase2_continuation.patch` on top of `af43728`. TypeScript, ESLint, unit tests (22), and production build all PASS. Manual courses-CRUD round-trip pending user verification on a local running stack. |
-| Objective | Establish the single API boundary (`apiFetch` + `ApiError`), Zod schemas as the source of response types, a centralized course query-key factory, explicit TanStack Query defaults, `queryOptions` objects next to the hooks (D5), and real mutation invalidation — proven on the courses feature as the reference implementation every later migration copies |
-| Current Task | Continuation patch handoff — `phase2_continuation.patch` (see §7 continuation record for the gap analysis and verification table) |
-| Blocked By | Phase 2 is not blocked by Phase 1's external staging dependencies. The Phase 2 phase gate's manual courses-CRUD round-trip item requires a running local backend + Keycloak (the user's `setup-dev.sh` environment) and has not been re-run by the GLM executor |
-| Next Gate | Phase 2 phase gate (§7) — automated items CLOSED (TypeScript / lint / build / 22 unit tests all PASS); manual courses-CRUD round-trip item pending user verification on a local running stack |
+| Phase | Phase 4 — Feature & Page Migration (Patch 1 record in §9) |
+| Status | IN PROGRESS — Patch 1 (Profile + auth feature migration onto Phase 2 foundation + Field wrapper + Textarea/Select primitives) lands as `phase4_patch1.patch` on top of `8635a48`, locally verified. TypeScript, ESLint, 22 unit tests, and production build all PASS. Patches 2–9 pending. |
+| Objective | Migrate profile, dashboard, home, and the remaining course pages onto the Phase 2 + Phase 3 foundation; remove fabricated data; surface the existing backend delete-course capability; add usable mobile navigation |
+| Current Task | Patch 1 handoff — `phase4_patch1.patch` (see §9 Patch 1 record for the gap analysis and verification table) |
+| Blocked By | Phase 4 is not blocked by external dependencies. Manual profile upsert round-trip (fresh account create → edit → reload) requires a running local backend + Keycloak stack and has not been re-run by the GLM executor |
+| Next Gate | Phase 4 phase gate (§9) — automated items for Patch 1 CLOSED; manual profile upsert verification pending user verification on a local running stack |
 
 ---
 
@@ -98,8 +98,8 @@ Architecture Decisions (accepted)
 | 0 | Preparation & Baseline | **DONE** (2026-09-29) | Accept decisions, name owners, baseline the roadmap | days |
 | 1 | Configuration, Hygiene & Staging Auth Fix | **REPOSITORY COMPLETE + LOCALLY VERIFIED** (2026-09-29 — Slice 1 committed at `773186e`; Slice 2 committed at `c6e7b3f`; final closure patch in this revision; staging browser login remains an external operational dependency — see §6 final closure record) | Staging auth works from any browser; config central + validated | ~1 sprint |
 | 2 | Data Foundation (First Implementation Slice) | **REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN** (2026-09-29 — Slice 1 committed at `af43728`; continuation `queryOptions` patch in this revision; manual CRUD round-trip pending user verification — see §7 continuation record) | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
-| 3 | Application Shell & Route Patterns | NOT STARTED | One guarded (app) group; shared state components; route fallbacks | ~1 sprint |
-| 4 | Feature & Page Migration | NOT STARTED | All routes on the foundation; fake data gone; delete works; mobile menu | 2–3 sprints |
+| 3 | Application Shell & Route Patterns | **REPOSITORY COMPLETE** (2026-09-29 — committed at `8635a48`; Step A route-group move + Step B AuthGuard/redirects/shared states/RTL rails) | One guarded (app) group; shared state components; route fallbacks | ~1 sprint |
+| 4 | Feature & Page Migration | **IN PROGRESS** (2026-09-29 — Patch 1: profile + auth feature migration in this revision; see §9 Patch 1 record) | All routes on the foundation; fake data gone; delete works; mobile menu | 2–3 sprints |
 | 5 | Arabic/RTL Readiness & Accessibility Baseline | NOT STARTED | RTL rails verified; axe-clean primitives; keyboard checks | ~1 sprint |
 | 6 | Testing & Observability Hardening | NOT STARTED | CI quality bar, three E2E flows, Sentry wired, README | ~1 sprint |
 
@@ -657,7 +657,7 @@ Of the seven Phase 2 phase-gate items:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| NOT STARTED | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates |
+| IN PROGRESS (2026-09-29) — Patch 1 (Profile + auth feature migration + Field wrapper) landed in this revision, locally verified; Patches 2–9 pending (see Patch 1 record below) | 2–3 sprints | D2 (rules applied), D9 (token dialect), D8 (Field wrapper), D10 (logical utilities) | Phase 2 + Phase 3 gates (both closed) |
 
 **Parallel note.** Routes migrate one-per-PR and parallelize across the two engineers (one: profile + auth hooks; one: dashboard + home + Navbar).
 
@@ -671,15 +671,15 @@ Of the seven Phase 2 phase-gate items:
 
 **Work — required:**
 
-- [ ] Profile: `app/profile/page.tsx` + `ProfileForm.tsx` to token styling (fixes the zero-dark-variants page), `ApiError` status mapping, the Field wrapper
-- [ ] Profile: `features/profile` hooks onto `apiFetch` + response schemas + keys — upsert semantics preserved exactly (protected functionality)
-- [ ] Auth: `features/auth` (`useMe`) onto the same pattern; Me schema the single source; `features/auth/types.ts` deleted per Section 9.1
-- [ ] Dashboard: real data where endpoints exist (e.g., actual course count via the courses query), honest coming-soon placeholders where they do not; the fabricated stats card (4 Courses / 142 Concepts) removed
-- [ ] Home: token-dialect hero; decorative input made functional or removed; dead comment block and `as any` gone if Phase 1 did not take them
-- [ ] Course detail + edit: shared state components; invalid ID → `notFound()`
-- [ ] Navbar: mobile menu below 768px, honest labels, UserName extraction per Section 9.1
-- [ ] New shared `components/CourseCard.tsx` used by the courses list and the dashboard
-- [ ] Delete-course action: confirmation, mutation, list invalidation — closing the frontend/backend contract gap
+- [x] Profile: `app/profile/page.tsx` + `ProfileForm.tsx` to token styling (fixes the zero-dark-variants page), `ApiError` status mapping, the Field wrapper — DONE in Patch 1: profile page migrated to token-only styling (zero raw `slate-`/`indigo-` classes), dark-mode correct (token-based `bg-card`/`border-border`/`text-card-foreground`), shared `LoadingBlock`/`ErrorState` for loading/error states, fabricated subscription card removed (deferred to Deferred Backlog); `ProfileForm.tsx` migrated to `Field` wrapper (label + control + error) + `Select` primitive + `ApiError` status mapping (401/404/422); `ProfileApiError` class deleted (collapsed into shared `ApiError`)
+- [x] Profile: `features/profile` hooks onto `apiFetch` + response schemas + keys — upsert semantics preserved exactly (protected functionality) — DONE in Patch 1: added `profileResponseSchema` (Zod, cross-checked against `backend/app/schemas/profile.py` `ProfileResponse`); `Profile = z.infer<typeof profileResponseSchema>`; `profileKeys` factory (`all` / `current()`); `useProfile` migrated to `apiFetch` + `profileResponseSchema` + `profileKeys.current()` with 404→null preserved (the upsert "create if not exists" contract is intact); `useUpdateProfile` migrated to `apiFetch` PUT with `profileResponseSchema` + invalidates `profileKeys.all` on success
+- [x] Auth: `features/auth` (`useMe`) onto the same pattern; Me schema the single source; `features/auth/types.ts` deleted per Section 9.1 — DONE in Patch 1: added `meResponseSchema` (Zod, cross-checked against `backend/app/api/auth.py` `/auth/me` response: `id`/`email`/`settings`/`roles[]`/`keycloak.{issuer,subject}`); `Me = z.infer<typeof meResponseSchema>`; `authKeys` factory (`all` / `me()`); `useMe` migrated to `apiFetch` + `meResponseSchema` + `authKeys.me()` + `queryOptions` pattern; `features/auth/types.ts` DELETED
+- [ ] Dashboard: real data where endpoints exist (e.g., actual course count via the courses query), honest coming-soon placeholders where they do not; the fabricated stats card (4 Courses / 142 Concepts) removed — Patch 3
+- [ ] Home: token-dialect hero; decorative input made functional or removed; dead comment block and `as any` gone if Phase 1 did not take them — Patch 4
+- [ ] Course detail + edit: shared state components; invalid ID → `notFound()` — Patches 5–6
+- [ ] Navbar: mobile menu below 768px, honest labels, UserName extraction per Section 9.1 — Patch 9
+- [ ] New shared `components/CourseCard.tsx` used by the courses list and the dashboard — Patch 7
+- [ ] Delete-course action: confirmation, mutation, list invalidation — closing the frontend/backend contract gap — Patch 8
 
 **Work — recommended:**
 
@@ -716,6 +716,84 @@ Of the seven Phase 2 phase-gate items:
 | Current | In this phase | Target |
 |---|---|---|
 | Two styling dialects; profile breaks in dark mode; dashboard shows fabricated numbers; delete endpoint never called | Token-only pages with the Field wrapper; honest data or honest placeholders; full CRUD surfaced; mobile menu | Every route on the foundation; grep-verifiable token-only rule; no fabricated content in the UI |
+
+### Phase 4 Patch 1 — Profile + auth feature migration closure record (2026-09-29)
+
+**Patch 1 purpose.** Migrate the profile and auth features onto the Phase 2 + Phase 3 foundation — the first route/feature migration in Phase 4. Implements D3 (apiFetch), D4 (Zod response schemas as single source), D5 (query keys + queryOptions + invalidation), D8 (Field wrapper + ApiError status mapping), and D9 (token-only styling with dark-mode correctness). Profile upsert semantics preserved exactly.
+
+**Baseline.** Branch `feature/frontend-refactor` @ `8635a48` (HEAD after Phase 3 Step B). Patch 1 rides on top of `8635a48` as `phase4_patch1.patch` and is not yet committed to the remote branch.
+
+**Implementation outcome (repository state after `git apply phase4_patch1.patch` on top of `8635a48`):**
+
+New files:
+- `frontend/features/auth/schemas.ts` — `meResponseSchema` (Zod: `id` UUID, `email`, `settings` record, `roles[]`, `keycloak.{issuer,subject}`) + `Me = z.infer<typeof meResponseSchema>`. Cross-checked against `backend/app/api/auth.py` `/auth/me` response.
+- `frontend/features/auth/keys.ts` — `authKeys` factory: `all` / `me()`. Follows `courseKeys` convention.
+- `frontend/features/profile/keys.ts` — `profileKeys` factory: `all` / `current()`.
+- `frontend/components/ui/field.tsx` — `Field` wrapper (D8): bundles label + control + error text into one accessible group. Reduces per-field boilerplate in manual controlled forms.
+- `frontend/components/ui/textarea.tsx` — `Textarea` primitive styled to match the Input token dialect.
+- `frontend/components/ui/select.tsx` — `Select` primitive (native `<select>`, token-styled).
+
+Modified files:
+- `frontend/features/auth/api/useMe.ts` — migrated to `apiFetch<Me>("/auth/me", { schema: meResponseSchema })` + `authKeys.me()` + `queryOptions` pattern (exported `meOptions`). Removed: inline `fetch`, `getAccessToken`, `process.env`, `MeResponse` import. The `enabled` gating on `me.isSuccess` in consumers is preserved (`useMe` now uses `queryOptions` with no `enabled` flag — consumers still gate on `me.isSuccess`).
+- `frontend/features/profile/schemas.ts` — added `profileResponseSchema` (Zod: `id`/`user_id` UUID, `education_level`, `major`, `preferred_language`, `university` nullable, `learning_style_vark` nullable, `daily_available_minutes` int) + `Profile = z.infer<typeof profileResponseSchema>`. Cross-checked against `backend/app/schemas/profile.py` `ProfileResponse`. Existing form-input `profileSchema` / `ProfileFormValues` preserved unchanged.
+- `frontend/features/profile/api/useProfile.ts` — migrated to `apiFetch` + `profileResponseSchema` + `profileKeys.current()` + `queryOptions` pattern. Preserves 404→null behavior (the upsert "create if not exists" contract) by catching `ApiError(404)` and returning `null`. `Profile` type now imported from `schemas.ts` instead of being a hand-written interface.
+- `frontend/features/profile/api/useProfileMutation.ts` — migrated to `apiFetch` PUT + `profileResponseSchema` + invalidates `profileKeys.all` on success. `ProfileApiError` class deleted (collapsed into shared `ApiError` per D8).
+- `frontend/components/profile/ProfileForm.tsx` — migrated to `Field` wrapper (label + control + error) for all 6 fields; `Select` primitive for preferred language; `ApiError` status mapping (401/404/422, replacing the deleted `ProfileApiError` mapping); success message uses `text-success-foreground` token instead of raw `text-green-600`.
+- `frontend/app/(app)/profile/page.tsx` — token-only styling (zero raw `slate-`/`indigo-` classes; dark-mode correct via token-based `bg-card`/`border-border`/`text-card-foreground`); shared `LoadingBlock`/`ErrorState` for loading/error states (replacing inline markup); fabricated subscription/plan card removed (deferred to Deferred Backlog per the roadmap); header banner uses `primary` token gradient; "Back to Dashboard" button uses `Button` primitive with `render={<Link>}`.
+
+Deleted files:
+- `frontend/features/auth/types.ts` — hand-written `MeResponse` interface. Replaced by `Me = z.infer<typeof meResponseSchema>` in `features/auth/schemas.ts`. All references verified: `useMe.ts` now imports from `schemas.ts`; `UserInfo.tsx` and `Navbar.tsx` consume `useMe()` and access `data.email`/`data.roles` via the inferred type — no direct `MeResponse` import.
+
+**Behavior deltas:**
+1. `ProfileApiError` deleted — replaced by shared `ApiError` from `lib/api.ts`. `ProfileForm.tsx`'s status mapping (401/404/422) is preserved; user-facing messages unchanged.
+2. Profile mutation now invalidates `profileKeys.all` on success — previously no invalidation existed (the page relied on `staleTime: 0` from the pre-Phase-2 defaults). Now invalidation is explicit and robust to future `staleTime` changes.
+3. `useMe` now uses `queryOptions` + `apiFetch` instead of inline fetch. The `["auth","me"]` key is replaced by `authKeys.me()` (same shape: `["auth","me"]`) — no cache invalidation impact.
+4. Profile page styling is now token-only — the previous raw `slate-`/`indigo-` classes that broke dark mode are gone. The header banner uses `from-primary to-primary/80` instead of `from-indigo-900 via-indigo-800 to-indigo-700`.
+5. Profile page loading/error states now use the shared `LoadingBlock`/`ErrorState` components instead of inline markup.
+
+**What was NOT touched (scope guard):** `lib/api.ts`, `lib/config.ts`, `lib/keycloak.ts`, `lib/auth-context.tsx`, `lib/query-provider.tsx`, all Phase 1/2/3 files. No `app/` page files other than `profile/page.tsx`. No course feature files (`features/courses/`, `components/courses/`, `app/(app)/courses/`). No dashboard, home, Navbar, or CourseCard (those are Patches 3–9). No Phase 5/6 surface. No new dependencies.
+
+**Verification performed (on the Patch 1 tree):**
+
+| Check | Command | Result |
+|---|---|---|
+| Working-tree hygiene | `git diff --check` | PASS (EXIT 0) |
+| Forward apply (clean `8635a48`) | `git apply --check phase4_patch1.patch` | PASS (EXIT 0) |
+| Forward apply (actual) | `git apply phase4_patch1.patch` | PASS (EXIT 0; 12 files: 6 new, 5 modified, 1 deleted) |
+| Reverse check (patched tree) | `git apply --check --reverse phase4_patch1.patch` | PASS (EXIT 0) |
+| Reverse apply (patched tree) | `git apply --reverse phase4_patch1.patch` | PASS (tree restored to `8635a48`) |
+| TypeScript strict | `npx tsc --noEmit` (5 env vars set) | PASS (EXIT 0) |
+| Full ESLint | `npm run lint` | PASS (EXIT 0, zero errors, zero warnings) |
+| Unit tests | `npm run test` | PASS (22/22 across 3 files — unchanged from Phase 3) |
+| Next.js production build | `npm run build` (5 env vars set) | PASS (EXIT 0; all 10 routes compiled) |
+| Styling audit: no `slate-`/`indigo-` in profile page | `grep -nE "slate-\|indigo-" "frontend/app/(app)/profile/page.tsx"` | PASS (zero matches) |
+| Styling audit: no `slate-`/`indigo-` in ProfileForm | `grep -nE "slate-\|indigo-" frontend/components/profile/ProfileForm.tsx` | PASS (zero matches) |
+| Scope audit: no direct `fetch`/`process.env`/`getAccessToken` in `features/profile/` | `grep -rn '\bfetch(\|process\.env\|getAccessToken' frontend/features/profile/` | PASS (zero matches) |
+| Scope audit: no direct `fetch`/`process.env`/`getAccessToken` in `features/auth/` | `grep -rn '\bfetch(\|process\.env\|getAccessToken' frontend/features/auth/` | PASS (zero matches) |
+| Scope audit: `ProfileApiError` fully removed | `grep -rn 'ProfileApiError' frontend/` | PASS (zero matches) |
+| Schema cross-check vs backend (auth) | inspected `backend/app/api/auth.py` `/auth/me` | PASS (`meResponseSchema` matches: `id`/`email`/`settings`/`roles[]`/`keycloak.{issuer,subject}`) |
+| Schema cross-check vs backend (profile) | inspected `backend/app/schemas/profile.py` `ProfileResponse` + `backend/app/api/users.py` | PASS (`profileResponseSchema` matches: UUID id/user_id, education_level, major, preferred_language, nullable university/learning_style_vark, int daily_available_minutes) |
+| Manual profile upsert round trip | not run (GLM executor has no running backend + Keycloak stack) | NOT RUN — user must verify on local `setup-dev.sh` environment |
+
+**Protected functionality audit:**
+- Profile upsert semantics preserved — `GET /v1/users/me` 404→null behavior intact (the "Create Your Profile" flow); `PUT /v1/users/me` upsert unchanged.
+- Keycloak auth protocol untouched — `lib/keycloak.ts` unchanged.
+- API contracts preserved — `GET /auth/me`, `GET /v1/users/me`, `PUT /v1/users/me` paths and payloads unchanged.
+- TanStack Query conventions preserved — `queryOptions` pattern, `queryKey` factory, invalidation convention all follow the Phase 2 course reference.
+- Provider order untouched — `ThemeProvider → AppQueryProvider → AuthProvider` in root layout unchanged.
+- No page-level auth guards reintroduced — `AuthGuard` in `(app)/layout.tsx` remains the single guard.
+
+**Phase 4 gate status after Patch 1: IN PROGRESS.** Of the 9 required Phase 4 work items, 3 are now DONE (profile page + ProfileForm + Field wrapper; profile hooks + schemas + keys; auth useMe + Me schema + types.ts deleted). The remaining 6 (dashboard, home, course detail+edit, Navbar+mobile menu, CourseCard, delete-course) are pending in Patches 2–9.
+
+**Next Phase 4 action (after Patch 1 is applied locally).**
+
+1. User applies `phase4_patch1.patch` to a clean checkout of `feature/frontend-refactor` at `8635a48` and commits the result. Recommended commit message: `refactor(frontend): migrate profile and auth to token architecture (Phase 4 Patch 1)`.
+2. User runs `npm run test`, `npm run lint`, `npx tsc --noEmit`, and `npm run build` locally to confirm the green state.
+3. User starts the local backend + Keycloak stack and performs the manual profile upsert round trip: fresh account → open `/profile` → form shows "Create Your Profile" → fill + submit → success message → reload → data persists (upsert intact) → edit → reload → data persists.
+4. User visually confirms the profile page renders correctly in both light and dark mode (the previous zero-dark-variants bug is fixed).
+5. Only after the manual round trip is green does Patch 2 begin.
+
+**Phase 5 is NOT started by Patch 1.** No Arabic/RTL, no accessibility audit, no i18n. Patch 1 is strictly Phase 4.
 
 ---
 

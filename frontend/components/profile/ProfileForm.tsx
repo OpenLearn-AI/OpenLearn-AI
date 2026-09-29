@@ -1,22 +1,26 @@
 "use client";
 
 import { useState } from "react";
+
 import {
     profileSchema,
     type ProfileFormValues,
 } from "@/features/profile/schemas";
-import {
-    ProfileApiError,
-    useUpdateProfile,
-} from "@/features/profile/api/useProfileMutation";
+import { useUpdateProfile } from "@/features/profile/api/useProfileMutation";
+import type { Profile } from "@/features/profile/schemas";
+import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import type { Profile } from "@/features/profile/api/useProfile";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
 
 interface ProfileFormProps {
     profile: Profile | null;
 }
+
+type FieldErrors = Partial<
+    Record<keyof ProfileFormValues, string>
+>;
 
 export function ProfileForm({ profile }: ProfileFormProps) {
     const updateProfile = useUpdateProfile();
@@ -28,7 +32,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     const [preferredLanguage, setPreferredLanguage] = useState<"en" | "ar">(
         profile?.preferred_language === "ar" ? "ar" : "en",
     );
-    const [university, setUniversity] = useState(profile?.university ?? "");
+    const [university, setUniversity] = useState(
+        profile?.university ?? "",
+    );
     const [learningStyle, setLearningStyle] = useState(
         profile?.learning_style_vark ?? "",
     );
@@ -36,20 +42,10 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         String(profile?.daily_available_minutes ?? 60),
     );
 
-    const [errors, setErrors] = useState<{
-        education_level?: string;
-        major?: string;
-        preferred_language?: string;
-        university?: string;
-        learning_style_vark?: string;
-        daily_available_minutes?: string;
-    }>({});
-
+    const [errors, setErrors] = useState<FieldErrors>({});
     const [successMessage, setSuccessMessage] = useState("");
 
-    const handleSubmit = (
-        event: React.FormEvent<HTMLFormElement>,
-    ) => {
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
         setSuccessMessage("");
@@ -60,29 +56,17 @@ export function ProfileForm({ profile }: ProfileFormProps) {
             preferred_language: preferredLanguage,
             university: university || null,
             learning_style_vark: learningStyle || null,
-            daily_available_minutes: Number(
-                dailyAvailableMinutes,
-            ),
+            daily_available_minutes: Number(dailyAvailableMinutes),
         };
 
         const result = profileSchema.safeParse(values);
 
         if (!result.success) {
-            const fieldErrors: typeof errors = {};
+            const fieldErrors: FieldErrors = {};
 
             for (const issue of result.error.issues) {
-                const field = issue.path[0];
-
-                if (
-                    field === "education_level" ||
-                    field === "major" ||
-                    field === "preferred_language" ||
-                    field === "university" ||
-                    field === "learning_style_vark" ||
-                    field === "daily_available_minutes"
-                ) {
-                    fieldErrors[field] = issue.message;
-                }
+                const field = issue.path[0] as keyof ProfileFormValues;
+                fieldErrors[field] = issue.message;
             }
 
             setErrors(fieldErrors);
@@ -105,29 +89,25 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     const mutationError = updateProfile.error;
 
     const mutationErrorMessage =
-        mutationError instanceof ProfileApiError
+        mutationError instanceof ApiError
             ? mutationError.status === 401
                 ? "Your session has expired. Please log in again."
                 : mutationError.status === 404
-                    ? "Unable to save the profile for this user."
-                    : mutationError.status === 422
-                        ? "Please check your profile information."
-                        : mutationError.message
+                  ? "Unable to save the profile for this user."
+                  : mutationError.status === 422
+                      ? "Please check your profile information."
+                      : mutationError.message
             : mutationError instanceof Error
                 ? mutationError.message
                 : null;
 
     return (
-        <form
-            onSubmit={handleSubmit}
-            className="space-y-6"
-            noValidate
-        >
-            <div className="space-y-2">
-                <Label htmlFor="education-level">
-                    Education Level
-                </Label>
-
+        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+            <Field
+                label="Education Level"
+                htmlFor="education-level"
+                error={errors.education_level}
+            >
                 <Input
                     id="education-level"
                     value={educationLevel}
@@ -135,44 +115,26 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                         setEducationLevel(event.target.value)
                     }
                     disabled={updateProfile.isPending}
-                    aria-invalid={Boolean(
-                        errors.education_level,
-                    )}
+                    aria-invalid={Boolean(errors.education_level)}
                 />
+            </Field>
 
-                {errors.education_level && (
-                    <p className="text-sm text-destructive">
-                        {errors.education_level}
-                    </p>
-                )}
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="major">Major</Label>
-
+            <Field label="Major" htmlFor="major" error={errors.major}>
                 <Input
                     id="major"
                     value={major}
-                    onChange={(event) =>
-                        setMajor(event.target.value)
-                    }
+                    onChange={(event) => setMajor(event.target.value)}
                     disabled={updateProfile.isPending}
                     aria-invalid={Boolean(errors.major)}
                 />
+            </Field>
 
-                {errors.major && (
-                    <p className="text-sm text-destructive">
-                        {errors.major}
-                    </p>
-                )}
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="preferred-language">
-                    Preferred Language
-                </Label>
-
-                <select
+            <Field
+                label="Preferred Language"
+                htmlFor="preferred-language"
+                error={errors.preferred_language}
+            >
+                <Select
                     id="preferred-language"
                     value={preferredLanguage}
                     onChange={(event) =>
@@ -181,27 +143,18 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                         )
                     }
                     disabled={updateProfile.isPending}
-                    aria-invalid={Boolean(
-                        errors.preferred_language,
-                    )}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    aria-invalid={Boolean(errors.preferred_language)}
                 >
                     <option value="en">English</option>
                     <option value="ar">Arabic</option>
-                </select>
+                </Select>
+            </Field>
 
-                {errors.preferred_language && (
-                    <p className="text-sm text-destructive">
-                        {errors.preferred_language}
-                    </p>
-                )}
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="university">
-                    University
-                </Label>
-
+            <Field
+                label="University"
+                htmlFor="university"
+                error={errors.university}
+            >
                 <Input
                     id="university"
                     value={university}
@@ -211,19 +164,13 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                     disabled={updateProfile.isPending}
                     aria-invalid={Boolean(errors.university)}
                 />
+            </Field>
 
-                {errors.university && (
-                    <p className="text-sm text-destructive">
-                        {errors.university}
-                    </p>
-                )}
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="learning-style">
-                    Learning Style (VARK)
-                </Label>
-
+            <Field
+                label="Learning Style (VARK)"
+                htmlFor="learning-style"
+                error={errors.learning_style_vark}
+            >
                 <Input
                     id="learning-style"
                     value={learningStyle}
@@ -231,23 +178,15 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                         setLearningStyle(event.target.value)
                     }
                     disabled={updateProfile.isPending}
-                    aria-invalid={Boolean(
-                        errors.learning_style_vark,
-                    )}
+                    aria-invalid={Boolean(errors.learning_style_vark)}
                 />
+            </Field>
 
-                {errors.learning_style_vark && (
-                    <p className="text-sm text-destructive">
-                        {errors.learning_style_vark}
-                    </p>
-                )}
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="daily-available-minutes">
-                    Daily Available Minutes
-                </Label>
-
+            <Field
+                label="Daily Available Minutes"
+                htmlFor="daily-available-minutes"
+                error={errors.daily_available_minutes}
+            >
                 <Input
                     id="daily-available-minutes"
                     type="number"
@@ -255,37 +194,23 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                     max={1440}
                     value={dailyAvailableMinutes}
                     onChange={(event) =>
-                        setDailyAvailableMinutes(
-                            event.target.value,
-                        )
+                        setDailyAvailableMinutes(event.target.value)
                     }
                     disabled={updateProfile.isPending}
                     aria-invalid={Boolean(
                         errors.daily_available_minutes,
                     )}
                 />
-
-                {errors.daily_available_minutes && (
-                    <p className="text-sm text-destructive">
-                        {errors.daily_available_minutes}
-                    </p>
-                )}
-            </div>
+            </Field>
 
             {mutationErrorMessage && (
-                <p
-                    role="alert"
-                    className="text-sm text-destructive"
-                >
+                <p role="alert" className="text-sm text-destructive">
                     {mutationErrorMessage}
                 </p>
             )}
 
             {successMessage && (
-                <p
-                    role="status"
-                    className="text-sm text-green-600"
-                >
+                <p role="status" className="text-sm text-success-foreground">
                     {successMessage}
                 </p>
             )}

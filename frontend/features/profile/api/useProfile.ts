@@ -1,52 +1,42 @@
-import { useQuery } from "@tanstack/react-query";
-import { getAccessToken } from "@/lib/keycloak";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+
+import { apiFetch, ApiError } from "@/lib/api";
 import { useMe } from "@/features/auth/api/useMe";
+import {
+    profileResponseSchema,
+    type Profile,
+} from "@/features/profile/schemas";
+import { profileKeys } from "@/features/profile/keys";
 
-export interface Profile {
-    id: string;
-    user_id: string;
-    education_level: string;
-    major: string;
-    preferred_language: string;
-    university: string | null;
-    learning_style_vark: string | null;
-    daily_available_minutes: number;
-}
-
-async function fetchProfile(): Promise<Profile | null> {
-    const token = await getAccessToken();
-
-    if (!token) {
-        throw new Error("Not authenticated");
-    }
-
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    const response = await fetch(`${baseUrl}/v1/users/me`, {
-        headers: {
-            Authorization: `Bearer ${token}`,
-        },
-    });
-
-    if (response.status === 404) {
-        return null;
-    }
-
-    if (!response.ok) {
-        throw new Error(
-            `Failed to fetch profile: ${response.status}`,
-        );
-    }
-
-    return response.json();
-}
+/**
+ * Query options for the current user's profile (D5).
+ *
+ * `GET /v1/users/me` returns 404 when the user has not yet created a
+ * profile. That is a legitimate application state (the form switches to
+ * "Create Your Profile" mode), so the queryFn catches `ApiError(404)`
+ * and resolves to `null` instead of throwing.
+ */
+export const profileOptions = queryOptions({
+    queryKey: profileKeys.current(),
+    queryFn: async (): Promise<Profile | null> => {
+        try {
+            return await apiFetch<Profile>("/v1/users/me", {
+                schema: profileResponseSchema,
+            });
+        } catch (error) {
+            if (error instanceof ApiError && error.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    },
+});
 
 export function useProfile() {
     const me = useMe();
 
     return useQuery({
-        queryKey: ["profile"],
-        queryFn: fetchProfile,
+        ...profileOptions,
         enabled: me.isSuccess,
     });
 }

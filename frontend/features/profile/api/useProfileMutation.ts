@@ -1,50 +1,35 @@
-import { useMutation } from "@tanstack/react-query";
-import { getAccessToken } from "@/lib/keycloak";
-import type { ProfileFormValues } from "../schemas";
-import type { Profile } from "./useProfile";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-export class ProfileApiError extends Error {
-    status: number;
+import { apiFetch } from "@/lib/api";
+import {
+    profileResponseSchema,
+    type Profile,
+} from "@/features/profile/schemas";
+import { profileKeys } from "@/features/profile/keys";
+import type { ProfileFormValues } from "@/features/profile/schemas";
 
-    constructor(message: string, status: number) {
-        super(message);
-        this.name = "ProfileApiError";
-        this.status = status;
-    }
-}
-
-
-async function updateProfile(
-    payload: ProfileFormValues,
-): Promise<Profile> {
-    const token = await getAccessToken();
-
-    if (!token) {
-        throw new ProfileApiError("Not authenticated", 401);
-    }
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    const response = await fetch(`${baseUrl}/v1/users/me`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-        throw new ProfileApiError(
-            `Failed to update profile: ${response.status}`,
-            response.status,
-        );
-    }
-
-    return response.json();
-}
-
+/**
+ * Profile upsert mutation (D5 invalidation convention).
+ *
+ * `PUT /v1/users/me` is an upsert: it creates the profile if it does
+ * not exist, or replaces it if it does. On success the profile query
+ * is invalidated so the page reflects the new state without a manual
+ * refresh.
+ */
 export function useUpdateProfile() {
+    const queryClient = useQueryClient();
+
     return useMutation({
-        mutationFn: updateProfile,
+        mutationFn: (payload: ProfileFormValues) =>
+            apiFetch<Profile>("/v1/users/me", {
+                method: "PUT",
+                body: payload,
+                schema: profileResponseSchema,
+            }),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({
+                queryKey: profileKeys.all,
+            });
+        },
     });
 }
