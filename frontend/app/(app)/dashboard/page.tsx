@@ -1,33 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/lib/auth-context";
 import { UserInfo } from "@/components/auth/UserInfo";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 
 export default function DashboardPage() {
-    const { isAuthenticated, isLoading } = useAuth();
-    const router = useRouter();
-
-    useEffect(() => {
-        if (!isLoading && !isAuthenticated) {
-            router.replace("/login");
-        }
-    }, [isLoading, isAuthenticated, router]);
-
-    if (isLoading || !isAuthenticated) {
-        return (
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
-                <div className="bg-card rounded-2xl border border-border p-8 shadow-xs text-muted-foreground max-w-md mx-auto flex items-center justify-center gap-3">
-                    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <span>Loading your learning hub...</span>
-                </div>
-            </main>
-        );
-    }
-
     return (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8 bg-background min-h-screen">
             

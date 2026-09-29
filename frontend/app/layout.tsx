@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Sans_Arabic } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/lib/auth-context";
 import { AppQueryProvider } from "@/lib/query-provider";
-import { Navbar } from "@/components/Navbar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,6 +14,16 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// D10 RTL/font rail: Arabic-capable font so the layout can render
+// Arabic text without glyphs falling back to a system default. LTR
+// and English remain the baseline; this only activates when Arabic
+// content or `dir="rtl"` is present.
+const notoSansArabic = Noto_Sans_Arabic({
+  variable: "--font-arabic",
+  subsets: ["arabic"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -33,8 +42,9 @@ export default function RootLayout({ children }: LayoutProps) {
   return (
     <html
       lang="en"
+      dir="ltr"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${notoSansArabic.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors">
         <ThemeProvider
@@ -45,18 +55,15 @@ export default function RootLayout({ children }: LayoutProps) {
         >
           <AppQueryProvider>
             <AuthProvider>
-              {/* الـ Navbar محطوط هنا بره أي حاجة عشان يفضل ثابت تماماً */}
-              <Navbar />
-
-              {/* محتوى الصفحات */}
+              {/*
+                Global providers only. The Navbar, footer, and
+                AuthGuard now live in app/(app)/layout.tsx so that
+                public routes (/login, /register) render without the
+                authenticated application shell.
+              */}
               <div className="flex-grow flex flex-col">
                 {children}
               </div>
-
-              {/* الفوتر */}
-              <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-500 dark:text-slate-400 mt-auto">
-                <p>OpenLearn AI Adaptive Learning Platform</p>
-              </footer>
             </AuthProvider>
           </AppQueryProvider>
         </ThemeProvider>

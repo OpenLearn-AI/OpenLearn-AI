@@ -13,7 +13,8 @@ export default function RegisterPage() {
     };
 
     return (
-        <main className="relative min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4">
+        <>
+            {/* Brand Header */}
             <div className="text-center mb-8">
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-wider text-white">OPENLEARN</h1>
             </div>
@@ -32,6 +33,6 @@ export default function RegisterPage() {
                     Create account
                 </Button>
             </div>
-        </main>
+        </>
     );
 }

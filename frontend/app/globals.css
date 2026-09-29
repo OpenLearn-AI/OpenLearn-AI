@@ -84,9 +84,13 @@
      TYPOGRAPHY
      ======================================================= */
 
-   --font-sans: var(--font-geist-sans);
+   /* D10: Geist is the Latin/LTR baseline; Noto Sans Arabic is the
+      Arabic-capable fallback so glyphs render correctly when Arabic
+      content or dir="rtl" is present. English/LTR is unchanged. */
+   --font-sans: var(--font-geist-sans), var(--font-arabic), sans-serif;
    --font-mono: var(--font-geist-mono);
    --font-heading: var(--font-sans);
+   --font-arabic: var(--font-arabic);
 
    --text-xs: 0.75rem;
    --text-xs--line-height: 1rem;
