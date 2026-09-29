@@ -1,7 +1,9 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
-> **Version:** v1.0 — 2026-09-28
-> **Branch:** `fix/frontend-pre-week7-integration` @ `95bba7a` (verified, clean tree)
+> **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5)
+> **Phase status:** Phase 0 DONE (2026-09-29); Phases 1–6 NOT STARTED. CI is currently red — known frontend lint failure (`app/page.tsx`), carried as a follow-up, not a Phase 0 blocker (§5)
+> **Branch:** `feature/frontend-refactor` @ `c7266103` (execution baseline; full SHA `c72661035d13e5907507de3a04206bea578416f4`, verified 2026-09-29, clean tree)
+> **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
 > **How to use:** update after every phase — tick checkboxes, change statuses, record deviations, re-run the gate, then start the next phase.
 
@@ -11,7 +13,17 @@
 
 This is the living execution roadmap for the OpenLearn-AI frontend modernization. It is derived directly from the architecture decision document and does not repeat that document's reasoning: every phase traces back to a decision or a verified problem. The team returns here after every completed phase.
 
-**Repository state (verified 2026-09-28):** branch `fix/frontend-pre-week7-integration` at commit `95bba7a`, clean tree. Since the architecture study (`62c9358`), exactly one commit landed — `95bba7a` "chore: improve local development setup" — which adds only `scripts/LOCAL_SETUP.md` and `scripts/setup-dev.sh` and touches no frontend source file. No architecture decision changes as a result; it is folded in as two tasks (Phase 1 keeps the setup script green; the Phase 6 README references it). The top finding was re-verified at the new head: `frontend/Dockerfile` still bakes only `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SENTRY_DSN`, and the realm client `openlearn-frontend` still registers localhost-only redirect URIs — staging auth remains broken by construction.
+**Repository state (verified 2026-09-29):** the current execution baseline is branch `feature/frontend-refactor` at commit `c7266103` (full SHA `c72661035d13e5907507de3a04206bea578416f4`, "added Modernization and Roadmap" — the two docs files in `frontend/docs/`), clean tree. All modernization work starts from this branch. Older branch names seen in git history, the architecture study, or earlier planning material — e.g., `fix/frontend-pre-week7-integration`, where the architecture study (`62c9358`) and `95bba7a` "chore: improve local development setup" (adds `scripts/LOCAL_SETUP.md` + `scripts/setup-dev.sh`, no frontend source changes) landed — are **historical context, not migration errors**; only `feature/frontend-refactor` is the execution baseline. No architecture decision changes as a result of the lineage since the study; the local-setup work remains folded in as two tasks (Phase 1 keeps the setup script green; the Phase 6 README references it). The top finding was re-verified at the current head: `frontend/Dockerfile` still bakes only `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SENTRY_DSN`, and the realm client `openlearn-frontend` still registers localhost-only redirect URIs — staging auth remains broken by construction, and Phase 1's fix is unchanged. The staging targets Phase 1 will configure are now decided (2026-09-29): staging frontend `https://openlearn-web-staging.duckdns.org`, staging backend API `https://openlearn-api-staging.duckdns.org` — the current problem, the known targets, and the Phase 1 fix are kept as three distinct states in §6. CI on this branch is currently red from a known frontend lint failure in `app/page.tsx` (`npm run lint` exits 1); by explicit decision it is recorded as a known follow-up carried into the modernization work, not a Phase 0 blocker (§5).
+
+### Architecture baseline — ACCEPTED WITH AMENDMENTS (2026-09-29)
+
+Seyam accepted the architecture document's Section 8 baseline: **D1–D19 are accepted; no decision was rejected.** Three decisions carry explicit clarifications. Each clarification is an interpretation of an accepted decision — **not a new architecture decision** — and the affected phases carry short operational notes implementing them.
+
+| Decision | Clarification | Operational notes |
+|---|---|---|
+| **D9 — design tokens / visual system** | The current token system, styling foundation, colors, and visual language establish **architectural consistency and a stable styling/token foundation — not the final visual design**. A later part of the modernization intentionally redesigns UI/UX, visual identity, colors, typography where appropriate, spacing and visual hierarchy, component appearance, and the overall product look and feel — **on top of that stable foundation**. Nothing in this roadmap freezes the current visual design as final. | Phase 4; Scope Guard |
+| **D10 — LTR, Arabic, and RTL** | The model is **English + LTR as the baseline** and **Arabic + RTL prepared as a first-class supported direction**. LTR remains the default/current baseline; English remains supported and is not removed, replaced, or deprioritized. Prepare, do not convert: use `dir` appropriately, Arabic-capable typography/fonts, logical CSS properties/utilities where appropriate, and verify layouts in both LTR and RTL. Do not introduce a full i18n/translation system prematurely (its trigger stays in the Deferred Backlog) and do not translate the product to Arabic as part of this baseline. Arabic does not replace English; RTL does not replace LTR. | Phases 3 and 5 |
+| **D13 — Storybook** | Storybook is **development and verification infrastructure**: shared UI/component development; component, state, dark-mode, RTL, accessibility, and visual-regression verification where applicable; documenting reusable component behavior. It does **not** establish or freeze the final visual design — the later visual redesign can proceed on top of it. | Phases 4 and 6 (Phase 5 uses the same bench for RTL verification) |
 
 **Investigation reports:** the BigPickle report has still not been provided as a file. This roadmap rests on direct code inspection, which outranks investigation reports in the source-of-truth hierarchy anyway. If it arrives later: cross-check against code; code wins.
 
@@ -19,12 +31,12 @@ This is the living execution roadmap for the OpenLearn-AI frontend modernization
 
 | Field | Value |
 |---|---|
-| Phase | Phase 0 — Preparation & Baseline |
-| Status | IN PROGRESS |
-| Objective | Accept the architecture baseline and unblock both parallel start tracks |
-| Current Task | Pod session: Seyam reviews and accepts (or amends) the Section 8 decision baseline |
-| Blocked By | Two assignment decisions: Pod D coordination owner; staging URL scheme |
-| Next Gate | Phase 0 exit criteria — baseline accepted, owners named, roadmap baselined |
+| Phase | Phase 0 — Preparation & Baseline (closed 2026-09-29) |
+| Status | DONE |
+| Objective | All Phase 0 gates closed: architecture baseline accepted (D1–D19 with D9/D10/D13 clarifications); Pod D coordination owner named (Seyam); staging URL scheme decided; roadmap baselined (v1.1) |
+| Current Task | None — Phase 0 is closed. Phase 1 and the Phase 2 first slice are cleared to start in parallel on Seyam's instruction; neither has started |
+| Blocked By | Nothing. CI is currently red (known `app/page.tsx` lint failure) but is by explicit decision a carried follow-up for the modernization work, not a Phase 0 blocker (§5) |
+| Next Gate | Phase 1 phase gate (§6) and the Phase 2 Slice 1 review (§7) — both cover work that has not started |
 
 ---
 
@@ -35,7 +47,7 @@ The modernization runs on a mixed human/model team with unequal access and autho
 | Role | Does | Does not |
 |---|---|---|
 | **Seyam** — human, project lead | Owns final decisions; accepts/amends the baseline; reviews and approves; decides when a phase is complete; coordinates pods | Not assumed to be a frontend expert — the roadmap and architecture document carry the context |
-| **GLM** — online engineering model | Clones/inspects the repo; implements phases when explicitly instructed; runs repo commands; reviews implementation against this roadmap; works from `fix/frontend-pre-week7-integration` unless a task says otherwise | Never silently changes an architecture decision — when an agreed decision fails in practice, stops at that boundary, explains, and requests a decision update |
+| **GLM** — online engineering model | Clones/inspects the repo; implements phases when explicitly instructed; runs repo commands; reviews implementation against this roadmap; works from `feature/frontend-refactor` unless a task says otherwise | Never silently changes an architecture decision — when an agreed decision fails in practice, stops at that boundary, explains, and requests a decision update |
 | **BigPickle** — local investigation agent | Deep repo inspection; tracing dependencies; finding affected files; validating assumptions; investigation reports | Reports are evidence, not decisions; never override accepted decisions |
 | **ChatGPT** — planning assistant | Planning; decisions → task lists; preparing implementation prompts; reviewing progress; helping update this roadmap; helping Seyam understand decisions | Does not replace Seyam's decision authority; does not implement code |
 
@@ -58,7 +70,7 @@ Architecture Decisions (accepted)
 - **PR discipline:** one concern per PR; target under ~400 changed lines; infrastructure files merge before their consumers; PR body lists behavior deltas and ticks the protected-functionality checklist.
 - **Protected functionality (per-PR checklist):** Keycloak login/register/logout + token refresh; the bearer API contract with FastAPI (paths, payloads, upsert semantics); course create/read/update behavior; profile create-or-update behavior; validation rules and messages; redirect destinations (changed once, deliberately, in Phase 3); dark-mode behavior on already-correct pages; CI green state. A PR that breaks one of these is a regression, not modernization.
 - **Decision boundaries:** any model that finds an accepted decision does not work in practice stops and requests a decision update instead of improvising.
-- **Branch discipline:** all work starts from `fix/frontend-pre-week7-integration`; per-task branches fine; no unreviewed merges.
+- **Branch discipline:** all work starts from `feature/frontend-refactor` (the current execution baseline); per-task branches fine; no unreviewed merges. Older branch names in history or docs are historical context — do not treat them as migration errors.
 - **No scope creep:** optional work stays Recommended or moves to the Deferred Backlog.
 
 ---
@@ -67,7 +79,7 @@ Architecture Decisions (accepted)
 
 | Rank | Source | Authoritative for |
 |---|---|---|
-| 1 | Current repository implementation (`fix/frontend-pre-week7-integration`) | What exists right now — file paths, current behavior, current defects |
+| 1 | Current repository implementation (`feature/frontend-refactor`) | What exists right now — file paths, current behavior, current defects |
 | 2 | Accepted architecture decisions (decision document, Section 8 baseline) | What the codebase is supposed to become — the target state |
 | 3 | This roadmap | The order, gating, and status of the transition |
 | 4 | Investigation reports (BigPickle and similar) | Evidence and context — never overrides ranks 1–3 |
@@ -83,7 +95,7 @@ Architecture Decisions (accepted)
 
 | Phase | Name | Status | Main goal | Est. |
 |---|---|---|---|---|
-| 0 | Preparation & Baseline | **IN PROGRESS** | Accept decisions, name owners, baseline the roadmap | days |
+| 0 | Preparation & Baseline | **DONE** (2026-09-29) | Accept decisions, name owners, baseline the roadmap | days |
 | 1 | Configuration, Hygiene & Staging Auth Fix | NOT STARTED | Staging auth works from any browser; config central + validated | ~1 sprint |
 | 2 | Data Foundation (First Implementation Slice) | NOT STARTED | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
 | 3 | Application Shell & Route Patterns | NOT STARTED | One guarded (app) group; shared state components; route fallbacks | ~1 sprint |
@@ -93,7 +105,7 @@ Architecture Decisions (accepted)
 
 Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos — **not deadlines**. Total ≈ 6–9 sprints; foundations (Phases 0–2) ≈ three weeks.
 
-**Start order:** Phase 0 gates everything. After acceptance, Phase 1 and the first PR of Phase 2 (Slice 1) **run in parallel** — they share no files, and Slice 1 is designed self-contained so conventions work is not blocked behind Pod D coordination. Phases 3–6 are strictly sequential.
+**Start order:** Phase 0 gated everything and is now closed (2026-09-29 — every gate in §5 is ticked; CI green is deliberately not a gate, see the known follow-up in §5). Phase 1 and the first PR of Phase 2 (Slice 1) **run in parallel** — they share no files, and Slice 1 is designed self-contained so conventions work is not blocked behind Pod D coordination. Phases 3–6 are strictly sequential. Neither Phase 1 nor Phase 2 has started.
 
 **Pilot feature — courses, and why:** the courses list is read-only (lowest risk) yet exercises the three most load-bearing decisions (D3 API boundary, D4 schemas-as-types, D5 query conventions) and covers query + mutation + invalidation. The approved slice becomes the reference implementation every later migration copies.
 
@@ -106,48 +118,53 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 | Styling | two dialects (tokens vs raw slate/indigo); profile page has zero dark-mode variants | token-only dialect with logical utilities; dark mode correct everywhere | Phase 3 (rails), Phase 4 (pages) |
 | Configuration & deployment | env vars read ad hoc; Keycloak vars never baked at build; realm redirects localhost-only | validated `lib/config.ts`; all five vars baked; per-env realm redirects; staging login works | Phase 1 |
 
+*The styling row describes the styling/token foundation (architectural consistency), not the final visual design — the intentional visual redesign happens later on top of it (D9 clarification, §1).*
+
 ---
 
 ## 5. Phase 0 — Preparation & Baseline
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| **IN PROGRESS** | days | All — acceptance of the D1–D19 baseline | Nothing |
+| **DONE** (2026-09-29) | days | All — D1–D19 ACCEPTED (2026-09-29) with clarifications to D9/D10/D13 | Nothing |
 
 **Goal.** Convert the completed architecture study into an accepted, owned, baselined working agreement before any implementation starts, and resolve the two assignment questions the deployment fix depends on.
 
-**Why.** The architecture document proposes a baseline but does not accept it; implementing without acceptance would re-open every decision implicitly — exactly the failure mode the architecture phase was run to avoid. Two assignment questions block Phase 1: the Pod D coordination owner and the staging URL scheme.
+**Why.** Implementing without an accepted baseline would re-open every decision implicitly — exactly the failure mode the architecture phase was run to avoid. The baseline acceptance is closed: D1–D19 are accepted with explicit clarifications to D9, D10, and D13 (see the architecture-baseline subsection in §1). As of 2026-09-29 the remaining Phase 0 items are closed as well: the Pod D coordination owner is named (Seyam), the staging URL scheme is decided (staging frontend + backend URLs recorded in §6), and the roadmap is baselined as v1.1. CI on the execution branch is currently red from a known frontend lint failure in `app/page.tsx`; by explicit decision CI green is not a Phase 0 blocker — the failure is recorded as a known follow-up carried into the modernization work (see the phase gate below).
 
 **Prerequisites.** Architecture document produced (done). Repository cloned and verified (done).
 
 **Work — required:**
 
-- [x] Clone the repository; checkout `fix/frontend-pre-week7-integration`; verify branch and clean tree (verified 2026-09-28 at `95bba7a`)
+- [x] Clone the repository; checkout the execution branch; verify branch and clean tree (2026-09-28: `fix/frontend-pre-week7-integration` @ `95bba7a`; re-baselined 2026-09-29 on `feature/frontend-refactor` @ `c7266103`, full SHA `c72661035d13e5907507de3a04206bea578416f4`)
 - [x] Produce the architecture decision document — 17 sections, D1–D19 (OpenLearn-AI_Frontend_Architecture_Modernization.docx)
-- [x] Re-verify findings at the new branch head: `95bba7a` adds only `scripts/LOCAL_SETUP.md` + `scripts/setup-dev.sh`; no frontend source changes; no decision impact; staging-auth finding re-confirmed
+- [x] Re-verify findings at the new branch head: `95bba7a` adds only `scripts/LOCAL_SETUP.md` + `scripts/setup-dev.sh`; no frontend source changes; no decision impact; staging-auth finding re-confirmed (re-confirmed again at `c7266103`, 2026-09-29)
 - [x] Produce this execution roadmap (v1.0)
-- [ ] Pod session: Seyam reviews and accepts (or amends) the architecture document's Section 8 baseline — any amendment triggers a re-read of the affected decisions (Section 6)
-- [ ] Name the Pod D coordination owner for the Phase 1 pipeline/realm fix
-- [ ] Decide the staging URL scheme (basis for the realm redirect URIs)
-- [ ] Commit this roadmap where the team works (repo `docs/` or the engineering wiki) and mark it v1.0
+- [x] Pod session: Seyam reviews and accepts (or amends) the architecture document's Section 8 baseline — closed 2026-09-29: **D1–D19 ACCEPTED with amendments** (explicit clarifications to D9, D10, D13 — see the architecture-baseline subsection in §1); no decision rejected; the affected-decision re-reads are reflected in the phase notes (Phases 3, 4, 5, 6)
+- [x] Name the Pod D coordination owner for the Phase 1 pipeline/realm fix — closed 2026-09-29: **Seyam**
+- [x] Decide the staging URL scheme (basis for the realm redirect URIs) — closed 2026-09-29: staging frontend `https://openlearn-web-staging.duckdns.org`; staging backend API `https://openlearn-api-staging.duckdns.org` (supporting references: API docs `https://openlearn-api-staging.duckdns.org/docs`; health endpoint `https://openlearn-api-staging.duckdns.org/health`)
+- [x] Commit this roadmap where the team works (repo `docs/` or the engineering wiki) and mark it the baselined version — closed 2026-09-29: baselined as **v1.1** (no baselining commit SHA is claimed in this document; the SHA in the header is the verified execution-baseline HEAD, not a baselining commit)
 
 **Work — recommended:**
 
-- [ ] Record a screen capture of the ten manual critical-flow checks as the pre-modernization behavior baseline
+- [ ] Record a screen capture of the ten manual critical-flow checks as the pre-modernization behavior baseline (recommended-only; not a Phase 0 gate — may be completed during the modernization work)
 
 **Affected areas.** None — no code changes.
 
-**Verification.** Branch/commit recorded here match the remote; baseline acceptance recorded; both assignments named in writing; roadmap committed and labeled v1.0.
+**Verification.** Branch/execution baseline recorded; architecture baseline accepted; Pod D coordination owner named; staging frontend/backend URLs recorded; roadmap v1.1 baselined; Phase 0 ownership and preparation gates closed. CI remains red due to a known frontend lint failure in `app/page.tsx`, intentionally carried forward as a modernization follow-up rather than a Phase 0 blocker.
 
 ### Phase gate — before Phase 1 and the Phase 2 slice start
 
-- [ ] Section 8 baseline accepted (or amended with a re-read of the affected decisions)
-- [ ] Pod D coordination owner named
-- [ ] Staging URL scheme decided
-- [ ] Roadmap baselined as the working document
-- [ ] CI green on `fix/frontend-pre-week7-integration`
+- [x] Section 8 architecture baseline accepted — D1–D19 accepted with D9/D10/D13 clarifications (closed 2026-09-29, §1)
+- [x] Pod D coordination owner named — Seyam
+- [x] Staging URL scheme decided — staging frontend/backend URLs recorded (§6)
+- [x] Roadmap baselined — v1.1
+- [x] Phase 0 closure decision — complete (2026-09-29)
+- [KNOWN FOLLOW-UP] CI currently fails at frontend lint because of `frontend/app/page.tsx`: warning — `user` is assigned a value but never used; error — `@typescript-eslint/no-explicit-any` (`Unexpected any`); `npm run lint` exits with code 1. This is a lint-quality issue, not an architecture decision change. It is intentionally carried into the modernization work and is not a Phase 0 blocker; CI green is not a Phase 0 gate.
 
-**Owner / execution model.** Seyam owns this phase end to end (baseline decision + two assignments). ChatGPT can prepare the pod-session summary and first implementation prompts. No GLM/BigPickle implementation work — their contribution is recorded above.
+**Phase 0 is complete.** Closed 2026-09-29: every gate above is ticked and the ownership and preparation decisions are recorded. Phase 1 and the Phase 2 first slice are cleared to start in parallel on Seyam's instruction — neither has started. The CI lint failure is carried forward as a known follow-up (see the gate above); fixing it is part of the modernization work, not a condition for having closed Phase 0.
+
+**Owner / execution model.** Seyam owns this phase end to end (baseline decision + both assignments, closed 2026-09-29) and is the named Pod D coordination owner for the deployment-related work. ChatGPT can prepare the first implementation prompts for Phase 1 / Phase 2 Slice 1. No GLM/BigPickle implementation work in this phase — their contribution is recorded above.
 
 ---
 
@@ -155,15 +172,21 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| NOT STARTED | ~1 sprint | D15 (primary), D18 items 1–2, D6 (configuration half) | Phase 0 gate |
+| NOT STARTED | ~1 sprint | D15 (primary), D18 items 1–2, D6 (configuration half) | Phase 0 gate (closed 2026-09-29) |
 
 **Parallel note.** May run alongside Phase 2's first slice — the two tracks share no files.
 
 **Goal.** Make configuration correct, central, and loud; fix the deployment blocker that confines authentication to developer machines; remove the inventoried dead code.
 
-**Why.** Verified on the branch: the staging image bakes only `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SENTRY_DSN` at build time, so a staging browser falls back to the `.env.example` Keycloak defaults (localhost:8080); independently, the realm client `openlearn-frontend` registers only `http://localhost:3000/*` redirects. Either alone makes staging auth broken by construction — together they guarantee it. This is the architecture document's highest-priority problem, on its own track because it needs a Pod D partner and a staging URL decision.
+**Why.** Verified on the branch: the staging image bakes only `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SENTRY_DSN` at build time, so a staging browser falls back to the `.env.example` Keycloak defaults (localhost:8080); independently, the realm client `openlearn-frontend` registers only `http://localhost:3000/*` redirects. Either alone makes staging auth broken by construction — together they guarantee it. This is the architecture document's highest-priority problem, on its own track under Pod D coordination (owner: Seyam). The staging URL decision is made (2026-09-29); the configuration work against it is Phase 1's job and has not started.
 
-**Prerequisites.** Phase 0 gate (Pod D owner named; staging URL scheme decided).
+**Staging targets — three states, kept distinct (targets decided 2026-09-29):**
+
+- **CURRENT PROBLEM:** staging auth/configuration is not yet correctly wired — the staging image bakes only the two currently documented public variables, and the realm client registers only localhost redirects.
+- **KNOWN TARGET:** staging frontend `https://openlearn-web-staging.duckdns.org`; staging backend API `https://openlearn-api-staging.duckdns.org`. Supporting references only: API docs `https://openlearn-api-staging.duckdns.org/docs`; health endpoint `https://openlearn-api-staging.duckdns.org/health`.
+- **PHASE 1:** implements the configuration and Keycloak redirect-URI fix against these targets. Nothing is claimed done in advance: staging authentication is not fixed, Keycloak redirect URIs are not updated, and the staging frontend/API configuration is not correct until this phase lands and verifies.
+
+**Prerequisites.** Phase 0 gate — closed (2026-09-29): Pod D coordination owner named (Seyam); staging URL scheme decided (targets above).
 
 **Work — required:**
 
@@ -171,7 +194,7 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 - [ ] Point `lib/keycloak.ts` at `lib/config.ts` — protocol, client, and PKCE flow untouched (protected functionality)
 - [ ] `frontend/Dockerfile` — add ARG/ENV for the three `NEXT_PUBLIC_KEYCLOAK_*` variables
 - [ ] `.github/workflows/deploy-staging.yml` — pass the Keycloak variables into the image build (vars/secrets)
-- [ ] `infra/realm-export.json` — per-environment redirect URIs and web origins for `openlearn-frontend`, with Pod D; shipped as an isolated, separately revertible commit
+- [ ] `infra/realm-export.json` — per-environment redirect URIs and web origins for `openlearn-frontend` (staging frontend: `https://openlearn-web-staging.duckdns.org`), with Pod D (coordination owner: Seyam); shipped as an isolated, separately revertible commit
 - [ ] `.env.example` — document all five variables (plus both Sentry DSNs where applicable)
 - [ ] Delete dead code: `features/auth/api/useRegister.ts` (empty), unused `loginSchema`/`registerSchema`, `components/courses/CourseTable.tsx` (unused), one of the two ThemeToggles (keep the `components/ui` one), the home page's dead comment block and its `as any` cast
 - [ ] Verify `bash scripts/setup-dev.sh` (from commit `95bba7a`) still completes green after the config changes
@@ -187,9 +210,9 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 **Verification.**
 
-- CI green (lint + strict typecheck + build)
+- CI green (lint + strict typecheck + build) — includes resolving the known `app/page.tsx` lint failure carried from Phase 0 (known follow-up, §5)
 - Local dev unchanged — manual login round trip works on localhost
-- On the staging host: a browser login round trip succeeds from a non-localhost machine
+- On the staging frontend (`https://openlearn-web-staging.duckdns.org`): a browser login round trip succeeds from a non-localhost machine, against the staging backend (`https://openlearn-api-staging.duckdns.org`)
 - grep confirms no dead file from the deletion list remains
 - One-variable-at-a-time for the realm/pipeline chain — each step separately revertible
 
@@ -217,7 +240,7 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| NOT STARTED | ~1 sprint | D3, D4, D5, D8 (error half) | Phase 0 gate only — deliberately **not** gated on Phase 1 |
+| NOT STARTED | ~1 sprint | D3, D4, D5, D8 (error half) | Phase 0 gate only (closed 2026-09-29) — deliberately **not** gated on Phase 1 |
 
 **Parallel note.** Shares no files with Phase 1's deployment track; both may run after Phase 0. If Phase 1 already landed `lib/config.ts`, reuse it; if not, Slice 1 carries the module itself, exactly as architecture document Section 12 defines.
 
@@ -293,6 +316,8 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 **Why.** Today the Navbar renders from the root layout — including on the login and register pages; exactly one page (courses) guards itself with a `useEffect`; no route anywhere has `loading.tsx`/`error.tsx`/`not-found.tsx`, so an unauthenticated deep link to `/profile` lands wherever it lands and an invalid course ID renders a raw error string. D1/D7/D11 fix this once at layout level; the D10 rails (dir, Arabic-capable fonts) go in while they are a line each rather than a retrofit.
 
+**D10 boundary (clarification, not a new decision).** LTR/English remains the product baseline: `dir` ships defaulting to `ltr`, English copy and routes are untouched, and nothing here removes or deprioritizes English. The rails exist so Arabic + RTL becomes a first-class supported direction without a later refactor — appropriate `dir` usage, an Arabic-capable font in the token stack, and layouts verified in both LTR and RTL. No i18n framework, no message catalogs, and no Arabic translation of the product in this phase.
+
 **Prerequisites.** Phase 2 gate (ErrorState renders ApiError; the conventions exist).
 
 **Work — required:**
@@ -355,6 +380,8 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 **Why.** With the foundation and shell in place, every remaining route is a copy-adapt exercise against the courses reference. This phase carries the user-visible wins staged deliberately late: a profile page that works in dark mode, a dashboard that stops inventing statistics, the course delete flow (the backend DELETE endpoint exists with no frontend caller — a contract gap, not a feature), and phone-usable navigation. Largest phase — contained by strict one-route-per-PR sequencing.
 
+**D9 boundary (clarification, not a new decision).** The token migration exists for architectural consistency — one styling dialect, dark-mode correctness, and a stable styling/token foundation. It does not declare today's colors, typography, spacing, or component appearance the final visual identity: a later part of the modernization intentionally redesigns the UI/UX, visual identity, colors, typography, spacing, and component appearance on top of this foundation.
+
 **Prerequisites.** Phase 2 gate (the data pattern is the reference). Phase 3 gate (shell, guard, state components exist).
 
 **Work — required:**
@@ -371,7 +398,7 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 **Work — recommended:**
 
-- [ ] Storybook stories for `CourseCard` and `ProfileForm` so Chromatic guards the token migration visually
+- [ ] Storybook stories for `CourseCard` and `ProfileForm` so Chromatic guards the token migration visually (verification infrastructure only — Storybook does not freeze the visual design; see the D13 note in Phase 6)
 - [ ] Dark-mode + mobile-viewport pass per route as it migrates, not as a cleanup at the end
 
 **Deferred from this phase.** Profile subscription-and-plan card → Deferred Backlog (needs a real product feature behind it).
@@ -417,7 +444,7 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 
 **Goal.** Make the RTL rails real: logical utilities everywhere, Storybook verification under RTL and dark, an axe-clean primitive set, keyboard-checked critical flows.
 
-**Why.** The product is Arabic-first, and the rails went in during Phase 3. This phase verifies them across the final component set while the codebase is still small enough that the audit is a sprint, not a quarter. The boundary is explicit: rails only — no translation work, no message catalogs, no i18n framework; that decision stays deferred with its trigger.
+**Why.** The product's stated identity is Arabic-first, while its delivered baseline remains English + LTR (D10 clarification, §1). The rails went in during Phase 3. This phase verifies them across the final component set while the codebase is still small enough that the audit is a sprint, not a quarter. The boundary is explicit: rails only — no translation work, no message catalogs, no i18n framework; that decision stays deferred with its trigger. LTR/English is not replaced: this phase makes RTL a first-class verified direction — nothing more.
 
 **Prerequisites.** Phase 4 gate (components final — auditing them twice would be waste).
 
@@ -473,6 +500,8 @@ Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos
 **Goal.** Turn the installed-but-unwired tooling into the standing quality bar: a test script in CI, the three E2E smoke flows, Sentry wired end to end, and a README that onboards a new member in one sitting.
 
 **Why.** The tooling is present but inert: vitest is configured with no test script (CI silently skips it), Playwright is installed with no specs, and Sentry's DSN is baked while source maps and environment labels are unwired. This phase makes every earlier phase-gate verification automatic, and writes the README that turns the modernization's exit test — a new contributor onboards by imitation — into a repeatable check.
+
+**D13 boundary (clarification, not a new decision).** Storybook's role is development and verification infrastructure: shared UI/component development; component, state, dark-mode, RTL, and accessibility verification; visual-regression verification where applicable; documenting reusable component behavior. Stories and Chromatic runs verify components — they do not establish or freeze the final visual design; the later visual redesign (D9 clarification, §1) proceeds on top of this infrastructure.
 
 **Prerequisites.** Phase 4 gate minimum (the flows the E2E suite exercises are stable). Phase 5 preferred (the axe flip already in CI).
 
@@ -572,6 +601,8 @@ This roadmap modernizes the existing frontend's architecture. It does not grow t
 - Speculative scalability or performance work — no measured problem exists
 - Replacing working technologies because newer ones exist — the dependency list is current and coherent; churn is pure cost
 - Unrelated UI polish — visual changes exist only where a decision requires them
+
+**Visual redesign is planned later work, not a freeze.** The current look is not the final design (D9 clarification, §1): a later part of the modernization intentionally redesigns UI/UX, visual identity, colors, typography, spacing, and component appearance on top of the stable token foundation, as its own planned workstream. Until Seyam charters that workstream, visual changes in Phases 0–6 stay limited to what the accepted decisions require — a boundary that prevents scope creep without freezing today's visuals as final.
 
 **Explicitly rejected (full reasoning in architecture document Section 16):**
 

@@ -1,5 +1,7 @@
 import type Keycloak from "keycloak-js";
 
+import { config } from "@/lib/config";
+
 let keycloak: Keycloak | null = null;
 let initPromise: Promise<Keycloak> | null = null;
 
@@ -18,15 +20,9 @@ export async function getKeycloak(): Promise<Keycloak | null> {
 
         if (!keycloak) {
             keycloak = new KeycloakConstructor({
-                url:
-                    process.env.NEXT_PUBLIC_KEYCLOAK_URL ??
-                    "http://localhost:8080",
-                realm:
-                    process.env.NEXT_PUBLIC_KEYCLOAK_REALM ??
-                    "openlearn",
-                clientId:
-                    process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ??
-                    "openlearn-frontend",
+                url: config.keycloak.url,
+                realm: config.keycloak.realm,
+                clientId: config.keycloak.clientId,
             });
         }
 
