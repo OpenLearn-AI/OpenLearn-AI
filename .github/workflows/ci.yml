@@ -149,6 +149,21 @@ jobs:
 
       - name: Build
         working-directory: frontend
+        # NEXT_PUBLIC_* values are required at build time — lib/config.ts
+        # does Zod validation at module load and throws if they're missing.
+        # CI reads from GitHub repository Variables (non-secret config).
+        # The `||` fallbacks use the .env.example defaults so CI still
+        # passes on a fresh fork that hasn't configured repo Variables yet.
+        # Real deployment values come from the same repo Variables in
+        # deploy-staging.yml (build-args) — this keeps CI and deploy
+        # consistent without duplicating config in the workflow file.
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
+          NEXT_PUBLIC_KEYCLOAK_URL: ${{ vars.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080' }}
+          NEXT_PUBLIC_KEYCLOAK_REALM: ${{ vars.NEXT_PUBLIC_KEYCLOAK_REALM || 'openlearn' }}
+          NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'openlearn-frontend' }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${{ vars.NEXT_PUBLIC_SENTRY_ENVIRONMENT || 'development' }}
         run: npm run build
 
   eval:
