@@ -1347,6 +1347,31 @@ Phase 5 cannot be marked COMPLETE until:
 2. The user visually verifies RTL + dark-mode in Storybook.
 3. The user completes the keyboard-only CRUD smoke procedure above.
 
+### Phase 5 Dark-mode sync fix + app-wide audit (2026-09-30)
+
+**Purpose.** Fix Storybook dark-mode sync (`.dark` class not toggled when backgrounds toolbar changes) and audit/fix all migrated components for hardcoded physical light-mode colors that bypass the token system.
+
+**Implementation:**
+
+Modified files:
+- `frontend/.storybook/preview.tsx` — added `import '../app/globals.css'` so CSS tokens load in the Storybook preview iframe; added `backgrounds` parameter with Light/Dark options; updated `WithDirection` decorator to also accept `isDark` and toggle the `.dark` class on `document.documentElement`; decorator reads `context.globals.backgrounds.value` to detect dark mode.
+- `frontend/components/ui/theme-toggle.tsx` — migrated from raw `slate-` classes to token classes (`border-border`, `bg-background`, `text-foreground`, `hover:bg-muted`).
+- `frontend/components/auth/LogoutButton.tsx` — migrated from raw `red-` classes to token classes (`border-destructive/30`, `bg-destructive/10`, `text-destructive`, `hover:bg-destructive`, `hover:text-destructive-foreground`).
+- `frontend/app/layout.tsx` — body class migrated from `bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100` to `bg-background text-foreground`.
+- `frontend/app/(auth)/layout.tsx` — main class migrated from `bg-slate-900 text-slate-100` to `bg-background text-foreground`.
+- `frontend/app/(auth)/login/page.tsx` — card container migrated from `bg-white text-slate-800 border-slate-200` to `bg-card text-card-foreground border-border`; brand header from `text-white` to `text-foreground`; heading from `text-slate-900` to `text-card-foreground`.
+- `frontend/app/(auth)/register/page.tsx` — same token migration as login page; button migrated from `bg-indigo-600` to default `Button` variant.
+
+**Legacy color audit result:** Zero raw `slate-`/`indigo-`/`red-`/`white`/`black` classes remain in migrated surfaces (`components/`, `app/(app)/`, `app/(auth)/`, `app/layout.tsx`).
+
+**Verification:**
+- `npx tsc --noEmit` PASS (EXIT 0)
+- `npm run lint` PASS (EXIT 0, zero errors, zero warnings)
+- `npm run test` PASS (22/22 unit tests)
+- `npm run build` PASS (EXIT 0, all 10 routes compiled)
+- Legacy color audit: zero matches
+- `npm run test:storybook`: NOT RUN in GLM environment (no browser runtime) — user must verify locally
+
 ---
 
 ## 11. Phase 6 — Testing & Observability Hardening
