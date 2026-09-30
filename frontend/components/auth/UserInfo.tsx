@@ -32,7 +32,7 @@ export function UserInfo() {
             ) : (
                 <div className="text-sm">
                     <span className="font-medium">Roles:</span>
-                    <ul className="ml-4 list-disc">
+                    <ul className="ms-4 list-disc">
                         {data.roles.map((role) => (
                             <li key={role}>{role}</li>
                         ))}

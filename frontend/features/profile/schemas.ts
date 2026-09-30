@@ -1,5 +1,37 @@
 import { z } from "zod";
 
+/**
+ * Profile domain schemas (D4 — Zod as the single source of truth).
+ *
+ * Two schemas live here:
+ *   - `profileResponseSchema` describes the API response from
+ *     `GET /v1/users/me` and `PUT /v1/users/me` (upsert). `Profile`
+ *     is `z.infer<typeof profileResponseSchema>`.
+ *   - `profileSchema` validates the form payload used by `PUT /v1/users/me`.
+ *     `ProfileFormValues` is `z.infer<typeof profileSchema>` and is the
+ *     request body type.
+ *
+ * Cross-checked against `backend/app/schemas/profile.py`:
+ * `ProfileResponse` (id, user_id, education_level, major,
+ * preferred_language, university, learning_style_vark,
+ * daily_available_minutes).
+ */
+
+const uuidString = z.string().uuid();
+
+export const profileResponseSchema = z.object({
+    id: uuidString,
+    user_id: uuidString,
+    education_level: z.string(),
+    major: z.string(),
+    preferred_language: z.string(),
+    university: z.string().nullable(),
+    learning_style_vark: z.string().nullable(),
+    daily_available_minutes: z.number().int(),
+});
+
+export type Profile = z.infer<typeof profileResponseSchema>;
+
 export const profileSchema = z.object({
     education_level: z
         .string()

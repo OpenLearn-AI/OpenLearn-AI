@@ -1,21 +1,25 @@
 import { z } from "zod";
 
-export const loginSchema = z.object({
-    email: z.string().email("Please enter a valid email address."),
-    password: z.string().min(1, "Password is required."),
+/**
+ * Auth domain schemas (D4 — Zod as the single source of truth).
+ *
+ * `meResponseSchema` describes the response from `GET /auth/me`.
+ * `Me` is `z.infer<typeof meResponseSchema>` and is the single source
+ * for the current-user type across the app. The legacy hand-written
+ * `features/auth/types.ts` is deleted.
+ */
+
+const uuidString = z.string().uuid();
+
+export const meResponseSchema = z.object({
+    id: uuidString,
+    email: z.string().email(),
+    settings: z.record(z.string(), z.unknown()),
+    roles: z.array(z.string()),
+    keycloak: z.object({
+        issuer: z.string(),
+        subject: z.string(),
+    }),
 });
 
-export const registerSchema = z
-    .object({
-        email: z.string().email("Please enter a valid email address."),
-        password: z
-            .string()
-            .min(8, "Password must be at least 8 characters.")
-            .regex(/[A-Z]/, "Password must contain at least one uppercase letter.")
-            .regex(/\d/, "Password must contain at least one digit."),
-        confirmPassword: z.string(),
-    })
-    .refine((data) => data.password === data.confirmPassword, {
-        message: "Passwords do not match.",
-        path: ["confirmPassword"],
-    });
+export type Me = z.infer<typeof meResponseSchema>;

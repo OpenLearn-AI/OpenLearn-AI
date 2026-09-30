@@ -10,10 +10,28 @@ import { playwright } from '@vitest/browser-playwright';
 const dirname =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
-// More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
+// Two test projects:
+//   - `unit`: plain node, for lib/ and feature unit tests (apiFetch,
+//     key factory, etc.). No browser, no DOM — fast and CI-friendly.
+//   - `storybook`: Storybook component tests (browser-driven, from the
+//     existing addon-vitest setup).
 export default defineConfig({
   test: {
     projects: [
+      {
+        // Plain node unit tests. Resolves the `@/*` path alias the same
+        // way the app does (tsconfig `paths`).
+        resolve: {
+          alias: {
+            '@': path.resolve(dirname),
+          },
+        },
+        test: {
+          name: 'unit',
+          include: ['lib/**/*.test.ts', 'features/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
       {
         extends: true,
         plugins: [

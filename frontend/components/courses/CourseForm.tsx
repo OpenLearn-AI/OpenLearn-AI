@@ -2,18 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+
 import {
     courseSchema,
     type CourseFormValues,
 } from "@/features/courses/schemas";
 import {
-    CourseApiError,
     useCreateCourse,
     useUpdateCourse,
 } from "@/features/courses/api/useCourseMutations";
+import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
 
 interface CourseFormProps {
     mode: "create" | "edit";
@@ -61,7 +63,7 @@ export function CourseForm({
             } = {};
 
             for (const issue of result.error.issues) {
-                const field = issue.path[0];
+                const field = issue.path[0] as "title" | "description";
 
                 if (field === "title" || field === "description") {
                     fieldErrors[field] = issue.message;
@@ -105,51 +107,43 @@ export function CourseForm({
         createCourse.error ?? updateCourse.error;
 
     const mutationErrorMessage =
-        mutationError instanceof CourseApiError
+        mutationError instanceof ApiError
             ? mutationError.status === 401
                 ? "Your session has expired. Please log in again."
                 : mutationError.status === 403
                   ? "You do not have permission to perform this action."
                   : mutationError.status === 404
                     ? "The course was not found."
-                    : mutationError.message
+                    : mutationError.status === 422
+                      ? "The submitted values are invalid."
+                      : mutationError.message
             : mutationError instanceof Error
-              ? mutationError.message
-              : null;
+                ? mutationError.message
+                : null;
 
     return (
-        <form
-            onSubmit={handleSubmit}
-            className="space-y-6"
-            noValidate
-        >
-            <div className="space-y-2">
-                <Label htmlFor="course-title">Title</Label>
-
+        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+            <Field
+                label="Title"
+                htmlFor="course-title"
+                error={errors.title}
+            >
                 <Input
                     id="course-title"
                     value={title}
-                    onChange={(event) =>
-                        setTitle(event.target.value)
-                    }
+                    onChange={(event) => setTitle(event.target.value)}
                     placeholder="Course title"
                     disabled={isSubmitting}
                     aria-invalid={Boolean(errors.title)}
                 />
+            </Field>
 
-                {errors.title && (
-                    <p className="text-sm text-destructive">
-                        {errors.title}
-                    </p>
-                )}
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="course-description">
-                    Description
-                </Label>
-
-                <textarea
+            <Field
+                label="Description"
+                htmlFor="course-description"
+                error={errors.description}
+            >
+                <Textarea
                     id="course-description"
                     value={description}
                     onChange={(event) =>
@@ -158,29 +152,16 @@ export function CourseForm({
                     placeholder="Course description"
                     disabled={isSubmitting}
                     aria-invalid={Boolean(errors.description)}
-                    className="min-h-32 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 />
-
-                {errors.description && (
-                    <p className="text-sm text-destructive">
-                        {errors.description}
-                    </p>
-                )}
-            </div>
+            </Field>
 
             {mutationErrorMessage && (
-                <p
-                    role="alert"
-                    className="text-sm text-destructive"
-                >
+                <p role="alert" className="text-sm text-destructive">
                     {mutationErrorMessage}
                 </p>
             )}
 
-            <Button
-                type="submit"
-                disabled={isSubmitting}
-            >
+            <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting
                     ? "Saving..."
                     : mode === "create"
