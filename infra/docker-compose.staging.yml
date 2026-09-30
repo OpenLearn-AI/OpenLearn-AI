@@ -261,6 +261,10 @@ services:
     environment:
       - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN_USER}
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - KC_HOSTNAME=https://keycloak-staging.duckdns.org
+      - KC_HOSTNAME_STRICT=true
+      - KC_PROXY_HEADERS=xforwarded
+      - KC_HTTP_ENABLED=true
     command: start-dev --import-realm
     volumes:
       - ./realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
