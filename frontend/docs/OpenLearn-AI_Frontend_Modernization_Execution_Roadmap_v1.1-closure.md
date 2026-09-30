@@ -96,16 +96,16 @@ Architecture Decisions (accepted)
 | Phase | Name | Status | Main goal | Est. |
 |---|---|---|---|---|
 | 0 | Preparation & Baseline | **DONE** (2026-09-29) | Accept decisions, name owners, baseline the roadmap | days |
-| 1 | Configuration, Hygiene & Staging Auth Fix | **REPOSITORY COMPLETE + LOCALLY VERIFIED** (2026-09-29 — Slice 1 committed at `773186e`; Slice 2 committed at `c6e7b3f`; final closure patch in this revision; staging browser login remains an external operational dependency — see §6 final closure record) | Staging auth works from any browser; config central + validated | ~1 sprint |
-| 2 | Data Foundation (First Implementation Slice) | **REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN** (2026-09-29 — Slice 1 committed at `af43728`; continuation `queryOptions` patch in this revision; manual CRUD round-trip pending user verification — see §7 continuation record) | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
+| 1 | Configuration, Hygiene & Staging Auth Fix | **REPOSITORY COMPLETE + LOCALLY VERIFIED** (2026-09-29 — Slice 1 committed at `773186e`; Slice 2 committed at `c6e7b3f`; final closure at `d9d1c53`; staging browser login remains an external operational dependency — see §6 final closure record) | Staging auth works from any browser; config central + validated | ~1 sprint |
+| 2 | Data Foundation (First Implementation Slice) | **REPOSITORY COMPLETE + AUTOMATED VERIFICATION GREEN** (2026-09-29 — Slice 1 committed at `af43728`; `queryOptions` continuation committed at `55d6649` — see §7 continuation record) | apiFetch + schemas + query conventions proven on courses | ~1 sprint |
 | 3 | Application Shell & Route Patterns | **REPOSITORY COMPLETE** (2026-09-29 — committed at `8635a48`; Step A route-group move + Step B AuthGuard/redirects/shared states/RTL rails) | One guarded (app) group; shared state components; route fallbacks | ~1 sprint |
-| 4 | Feature & Page Migration | **IN PROGRESS** (2026-09-29 — Patch 1: profile + auth feature migration in this revision; see §9 Patch 1 record) | All routes on the foundation; fake data gone; delete works; mobile menu | 2–3 sprints |
-| 5 | Arabic/RTL Readiness & Accessibility Baseline | NOT STARTED | RTL rails verified; axe-clean primitives; keyboard checks | ~1 sprint |
-| 6 | Testing & Observability Hardening | NOT STARTED | CI quality bar, three E2E flows, Sentry wired, README | ~1 sprint |
+| 4 | Feature & Page Migration | **COMPLETE** (2026-09-29 — Patches 1/3/4/Batch 2/Patch 9–10 committed: `4a52fca` → `ba148c1` → `9fd3335` → `3bfe85a` → `a973738`; all 9 required work items implemented and verified — see §9 closure record) | All routes on the foundation; fake data gone; delete works; mobile menu | 2–3 sprints |
+| 5 | Arabic/RTL Readiness & Accessibility Baseline | **COMPLETE** (2026-09-30 — Batch 1 committed at `0fcd3af`; Batch 2 + dark-mode sync committed at `f3a5fb4`; 42/42 Storybook tests with axe enforcement at `test: 'error'` — see §10 closure record) | RTL rails verified; axe-clean primitives; keyboard checks | ~1 sprint |
+| 6 | Testing & Observability Hardening | **REPOSITORY COMPLETE — RUNTIME VERIFICATION PENDING** (2026-09-30 — Batch 1 `5d0b7ac`; Batch 2 `fc99071`; Batch 3 `cee2a81`; Batch 4 `4af2920`; Batch 5 `193bba6`; all repository-verifiable items PASS; E2E runtime, Sentry runtime, and manual critical-flow gate remain pending external infrastructure — see §11 Batch 5 closure record) | CI quality bar, three E2E flows, Sentry wired, README | ~1 sprint |
 
 Estimates are sizing for a two-engineer pod with weekly sprints and Friday demos — **not deadlines**. Total ≈ 6–9 sprints; foundations (Phases 0–2) ≈ three weeks.
 
-**Start order:** Phase 0 gated everything and is now closed (2026-09-29 — every gate in §5 is ticked; CI green is deliberately not a gate, see the known follow-up in §5). Phase 1 and the first PR of Phase 2 (Slice 1) **run in parallel** — they share no files, and Slice 1 is designed self-contained so conventions work is not blocked behind Pod D coordination. Phases 3–6 are strictly sequential. Neither Phase 1 nor Phase 2 has started.
+**Start order:** Phase 0 gated everything and is now closed (2026-09-29 — every gate in §5 is ticked; CI green is deliberately not a gate, see the known follow-up in §5). Phase 1 and the first PR of Phase 2 (Slice 1) **ran in parallel** — they share no files, and Slice 1 is designed self-contained so conventions work was not blocked behind Pod D coordination. Phases 3–6 are strictly sequential. All phases 0–6 are now complete at the repository level (see closure records in §5–§11).
 
 **Pilot feature — courses, and why:** the courses list is read-only (lowest risk) yet exercises the three most load-bearing decisions (D3 API boundary, D4 schemas-as-types, D5 query conventions) and covers query + mutation + invalidation. The approved slice becomes the reference implementation every later migration copies.
 
@@ -1145,8 +1145,8 @@ Modified files:
 **Phase 4 status: COMPLETE (repository-side).** All 9 required Phase 4 work items are implemented and verified. The Phase 4 phase gate's automated items are all closed. The only remaining items are manual browser/backend verification, which the user must perform locally.
 
 **Remaining work after Phase 4:**
-- Phase 5 — Arabic/RTL Readiness & Accessibility Baseline (NOT STARTED)
-- Phase 6 — Testing & Observability Hardening (NOT STARTED)
+- Phase 5 — Arabic/RTL Readiness & Accessibility Baseline (COMPLETE — see §10)
+- Phase 6 — Testing & Observability Hardening (REPOSITORY COMPLETE — RUNTIME VERIFICATION PENDING — see §11)
 
 ---
 
