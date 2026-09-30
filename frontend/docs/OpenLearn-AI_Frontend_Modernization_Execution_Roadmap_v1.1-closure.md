@@ -1,7 +1,7 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
 > **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 COMPLETE — closure recorded 2026-09-29 (§9 Patch 9–10 records)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified (committed at `7ea76e7`); Phase 5 COMPLETE (committed at `f3a5fb4`) — 42/42 Storybook tests with axe enforcement at `test: 'error'`. Phase 6 IN PROGRESS — Batch 1 (Test + CI Foundation) REPOSITORY COMPLETE; verification patch staged against `f3a5fb4`. Batches 2–5 pending review.
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified (committed at `7ea76e7`); Phase 5 COMPLETE (committed at `f3a5fb4`) — 42/42 Storybook tests with axe enforcement at `test: 'error'`; Phase 6 Batch 1 COMPLETE (committed at `5d0b7ac`) — unit + Storybook tests wired into CI; Phase 6 Batch 2 REPOSITORY COMPLETE — Playwright E2E runner installed, three smoke flows authored, `e2e.yml` on `workflow_dispatch`; verification patch staged against `5d0b7ac`. Batches 3–5 pending review.
 > **Branch:** `feature/frontend-refactor` @ `3bfe85a` (HEAD after Phase 4 Batch 2; Phase 4 final batch applied on top, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
@@ -1378,7 +1378,7 @@ Modified files:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS — Batch 1 (Test + CI Foundation) COMPLETE | ~1 sprint | D12, D13 (full), D14 | Phases 0–5 complete |
+| IN PROGRESS — Batches 1–2 COMPLETE | ~1 sprint | D12, D13 (full), D14 | Phases 0–5 complete |
 
 **Goal.** Turn the installed-but-unwired tooling into the standing quality bar: a test script in CI, the three E2E smoke flows, Sentry wired end to end, and a README that onboards a new member in one sitting.
 
@@ -1392,8 +1392,8 @@ Modified files:
 
 - [x] `package.json` — add the test script wiring the existing vitest + Storybook test setup ✅ Phase 6 Batch 1 (the `test` and `test:storybook` scripts already exist from Phase 2/5; Batch 1 additionally adds a `typecheck` script for discoverability — CI used to call `npx tsc --noEmit` inline)
 - [x] `.github/workflows/ci.yml` — run unit tests and story tests on every PR ✅ Phase 6 Batch 1 (removed the obsolete conditional "Check for a test script" gate from before Phase 2; CI now runs `npm run test` and `npm run test:storybook` unconditionally, installs the Playwright chromium browser binary that `@vitest/browser-playwright` requires, and uses `npm run typecheck` for discoverability; axe enforcement at `test: 'error'` from Phase 5 is preserved)
-- [ ] `e2e/` — the three Playwright smoke specs: (1) login lands on dashboard; (2) create → read → update → delete a course; (3) profile create-then-update round trip — Batch 2
-- [ ] Wire E2E as workflow-dispatch first; promote to required CI check after three consecutive green runs (flake discipline) — Batch 2
+- [x] `e2e/` — the three Playwright smoke specs: (1) login lands on dashboard; (2) create → read → update → delete a course; (3) profile create-then-update round trip ✅ Phase 6 Batch 2 (`@playwright/test` installed; `frontend/playwright.config.ts` configured; `frontend/e2e/login.spec.ts`, `frontend/e2e/courses-crud.spec.ts`, `frontend/e2e/profile-roundtrip.spec.ts` authored — selectors are role/text/label-based, no `data-testid` injected into the app)
+- [x] Wire E2E as workflow-dispatch first; promote to required CI check after three consecutive green runs (flake discipline) ✅ Phase 6 Batch 2 (`.github/workflows/e2e.yml` created with `workflow_dispatch:` only — NO `pull_request:`/`push:` triggers; promotion explicitly deferred pending three green runs; see Batch 2 closure record below)
 - [ ] `next.config.ts` — `withSentryConfig`; sentry configs get environment-aware sampling; source-map upload configured (needs the Sentry auth token — Pod D item) — Batch 3
 - [ ] `frontend/README.md` — setup referencing `scripts/setup-dev.sh` and `scripts/LOCAL_SETUP.md` (from commit `95bba7a`) instead of duplicating them; the five environment variables; the conventions; the component-boundary rules from D2 — Batch 4
 
@@ -1461,6 +1461,115 @@ This satisfies the Global Definition of Done item: "Storybook story tests pass, 
 - Three consecutive green CI runs on a real PR (needed before E2E promotion; tracked separately in Batch 5)
 
 **Patch baseline:** `f3a5fb4` (Phase 5 complete commit). Patch file: `phase6_batch1.patch`.
+
+---
+
+### Phase 6 Batch 2 — Playwright E2E (REPOSITORY COMPLETE)
+
+**Scope.** Stand up the Playwright E2E runner (`@playwright/test`), author the three required smoke flows, and wire a workflow-dispatch E2E job that does NOT yet block PRs. Per the roadmap §11 required work and the Phase 6 instruction §7 E2E promotion discipline: E2E runs on `workflow_dispatch` first, then is promoted to a required PR check only after three consecutive green runs. Batch 2 does NOT promote — it only authors the suite and workflow.
+
+**Files changed (7):**
+
+- `frontend/package.json` — added `"test:e2e": "playwright test"` script and `@playwright/test` (`^1.63.0`) to `devDependencies`. The existing `playwright` (browser automation library used by `@vitest/browser-playwright` for the Storybook project) is preserved — `@playwright/test` is the test runner and is a separate package.
+- `frontend/package-lock.json` — regenerated to record the new `@playwright/test` dependency tree.
+- `frontend/playwright.config.ts` — new file. Configuration:
+  - `testDir: "./e2e"`, `fullyParallel: false`, `workers: 1` — the three specs share a Keycloak session and mutate the same user's courses/profile; parallelism would race.
+  - `forbidOnly: isCI` — `test.only` is a review-time footgun on CI.
+  - `retries: 2` on CI (transient flake absorption), `0` locally so a developer sees the real failure on the first run.
+  - `reporter: ["html", "list"]` on CI, `"list"` locally.
+  - `baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000"` — configurable so the same suite runs against a local `next dev`, a local container, or staging.
+  - `trace: "retain-on-failure"`, `screenshot: "only-on-failure"`, `video: "retain-on-failure"` — failure artifacts without the storage cost of always-on traces.
+  - Single `chromium` project — cross-browser coverage is the Storybook browser-test project's concern, not the smoke flows'.
+  - No `webServer` block — the existing local-run path already documents `scripts/setup-dev.sh` + `npm run dev`. Auto-starting a server here would mask the "backend/Keycloak must be running" prerequisite.
+- `frontend/e2e/login.spec.ts` — new file. Flow #1: login → dashboard.
+  - Visits `/login` on our origin.
+  - Clicks the `Sign in with OpenLearn AI` button (`components/auth/LoginForm.tsx`) — this triggers the real OIDC redirect to Keycloak's hosted login page.
+  - Fills `#username`, `#password`, clicks `#kc-login` on the Keycloak-hosted form (Keycloak standard theme selectors, stable across Keycloak versions).
+  - Waits for redirect back to `/dashboard`.
+  - Asserts the dashboard hero heading `Welcome Back!` is visible (proves the route loaded).
+  - Asserts the `Email:` text is visible (proves `/auth/me` resolved with the authenticated user's session — not merely that the route loaded).
+  - `test.skip()` if `E2E_USERNAME`/`E2E_PASSWORD` are unset, so `npx playwright test --list` doesn't lie about a missing runtime.
+- `frontend/e2e/courses-crud.spec.ts` — new file. Flow #2: create → read → update → delete.
+  - `beforeAll` performs the real Keycloak login once and caches the page across the single test block.
+  - Step 1: navigate to `/courses`, click `+ Create New Course`, fill `Title` + `Description` (Field-label selectors), click `Create Course`. CourseForm redirects to `/courses` on success.
+  - Step 2: assert the new course appears in the list (CourseCard `<h2>`), open detail via `Open Hub →` link, assert the detail page `<h1>` + Description section.
+  - Step 3: click `Edit Course`, re-fill both fields with updated values, click `Save Changes`. Redirects to `/courses`.
+  - Step 4: assert the updated title appears in the list; open detail to confirm persistence.
+  - Step 5: click `Delete Course`, the `DeleteCourseButton` swaps to a `role="alertdialog"` with `aria-label="Delete course: {title}"`; click `Yes, delete it`. Redirects to `/courses`.
+  - Step 6: assert the deleted course title no longer appears in the list (`toHaveCount(0)`).
+  - Unique title per run (timestamp) so leftover data from a failed previous run never collides.
+  - Failure cleanup is intentionally minimal — no elaborate fixture framework; left-behind courses are low-rate leaks cleanable via the regular UI.
+- `frontend/e2e/profile-roundtrip.spec.ts` — new file. Flow #3: profile create → update round trip.
+  - Robust to either initial state: if the test user has no profile, the section heading reads `Create Your Profile` and the button reads `Create Profile`; if a profile exists, the heading reads `Personal Information` and the button reads `Save Changes`. Either path is accepted.
+  - Step 1: navigate to `/profile`, fill all six fields (Education Level, Major, Preferred Language select, University, Learning Style (VARK), Daily Available Minutes), click the submit button (either label).
+  - Step 2: assert the success message (`role="status"`) appears — proves the `PUT /v1/users/me` mutation succeeded.
+  - Step 3: reload the page, verify the saved values are pre-populated in the form (`toHaveValue`).
+  - Step 4: re-fill with updated values, click `Save Changes`.
+  - Step 5: reload, verify the updated values persisted.
+- `.github/workflows/e2e.yml` — new file. Workflow:
+  - Trigger: `workflow_dispatch:` only — NO `pull_request:` / `push:` triggers. Per the roadmap, E2E is NOT a required PR check until three consecutive green runs.
+  - `concurrency: { group: e2e-playwright, cancel-in-progress: false }` — prevents two simultaneous runs from racing on the same test user's data.
+  - Verifies required configuration is present at dispatch time — fails loudly with `::error::` annotations if any of `PLAYWRIGHT_BASE_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_KEYCLOAK_URL`, `NEXT_PUBLIC_KEYCLOAK_REALM`, `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID`, `E2E_USERNAME`, `E2E_PASSWORD` is missing. This is the anti-silent-skip discipline applied to E2E.
+  - Installs Chromium via `npx playwright install --with-deps chromium`.
+  - Runs `npm run test:e2e`.
+  - Uploads `playwright-report/` artifact (14-day retention); uploads `test-results/` traces on failure.
+
+**E2E environment requirements (documented for dispatch):**
+
+Repository variables (non-secret):
+  - `PLAYWRIGHT_BASE_URL` — frontend deployment URL (e.g. `https://openlearn-web-staging.duckdns.org`)
+  - `NEXT_PUBLIC_API_URL` — backend API URL (e.g. `https://openlearn-api-staging.duckdns.org`)
+  - `NEXT_PUBLIC_KEYCLOAK_URL` — Keycloak server URL
+  - `NEXT_PUBLIC_KEYCLOAK_REALM` — Keycloak realm name
+  - `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID` — Keycloak client ID
+
+Repository secrets:
+  - `E2E_USERNAME` — Keycloak test user username
+  - `E2E_PASSWORD` — Keycloak test user password
+
+No credentials are committed. No production secrets are touched.
+
+**Verification (local, run by GLM before patch generation):**
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | PASS (clean exit) |
+| Lint | `npm run lint` | PASS (clean exit) |
+| Unit tests | `npm run test` | PASS — 22/22 in 3 files |
+| Storybook tests | `npm run test:storybook` | PASS — 42/42 in 12 story files (axe at `test: 'error'`) |
+| Build | `npm run build` | PASS — 10 routes |
+| Playwright test discovery | `npx playwright test --list` | PASS — 3 tests in 3 files discovered (`courses-crud.spec.ts`, `login.spec.ts`, `profile-roundtrip.spec.ts`) |
+| E2E runtime execution | (no Keycloak/backend/test-credentials available in GLM env) | NOT RUN |
+| Workflow validation | (would require GitHub Actions dispatch) | NOT RUN |
+
+**E2E promotion status (per roadmap §11 — three consecutive green runs required):**
+
+```text
+Run 1/3: pending
+Run 2/3: pending
+Run 3/3: pending
+Required CI: NO
+```
+
+These are runtime validation records, not implementation claims. The workflow file's existence does not satisfy the promotion gate — only actual green runs do. Promotion to required CI is deferred until three consecutive green `workflow_dispatch` runs are observed by Seyam.
+
+**Architecture preservation:**
+
+- No provider order changes (ThemeProvider → AppQueryProvider → AuthProvider → AuthGuard → Navbar → children).
+- No API/config boundary changes: `grep fetch(` in `frontend/e2e/` returned zero matches — the specs exercise the UI, never call the API directly. `grep NEXT_PUBLIC_` in `frontend/e2e/` returned only docstring mentions, no actual reads. The only `process.env` reads in spec code are `E2E_USERNAME` and `E2E_PASSWORD`, which are E2E-only test credentials — separate from the app config boundary.
+- No `as any` / `as unknown` in `frontend/e2e/` or `frontend/playwright.config.ts`.
+- No UI changes ("freeze behavior, not appearance" — no styling/layout/component-visual changes; no new `data-testid` attributes injected into app code; selectors use existing roles, labels, headings, and visible text).
+- No new dependencies beyond `@playwright/test` — the existing `playwright` package is preserved (still needed by `@vitest/browser-playwright` for the Storybook project). Inspected dependency usage before deciding not to remove anything.
+- No Redux/Zustand/Jotai, no custom data-fetching layer, no DI/container, no mega-components, no fixture framework.
+- Phase 5 axe enforcement at `test: 'error'` unchanged.
+
+**Manual / runtime verification NOT RUN in this batch:**
+
+- The three E2E smoke flows have not been executed — the GLM environment has no Keycloak server, no backend, and no test credentials. `npm run test:e2e` was not run.
+- The `e2e.yml` workflow has not been dispatched on GitHub Actions.
+- Seyam must run the suite against a real staging environment (with the documented repository variables and secrets) and record the three green runs before any promotion to required CI.
+
+**Patch baseline:** `5d0b7ac` (Phase 6 Batch 1 complete commit). Patch file: `phase6_batch2.patch`.
 
 ---
 
