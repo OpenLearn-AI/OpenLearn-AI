@@ -1,7 +1,7 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
 > **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 COMPLETE — closure recorded 2026-09-29 (§9 Patch 9–10 records)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified. Patch 9 (Navbar + UserName) + Patch 10 (final gate) land in this final batch. Manual browser/backend verification pending user. Phases 5–6 NOT STARTED.
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified (committed at `7ea76e7`); Phase 5 COMPLETE (committed at `f3a5fb4`) — 42/42 Storybook tests with axe enforcement at `test: 'error'`. Phase 6 IN PROGRESS — Batch 1 (Test + CI Foundation) REPOSITORY COMPLETE; verification patch staged against `f3a5fb4`. Batches 2–5 pending review.
 > **Branch:** `feature/frontend-refactor` @ `3bfe85a` (HEAD after Phase 4 Batch 2; Phase 4 final batch applied on top, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
@@ -1378,7 +1378,7 @@ Modified files:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| NOT STARTED | ~1 sprint | D12, D13 (full), D14 | Phases 0–4 complete; Phase 5 preferred |
+| IN PROGRESS — Batch 1 (Test + CI Foundation) COMPLETE | ~1 sprint | D12, D13 (full), D14 | Phases 0–5 complete |
 
 **Goal.** Turn the installed-but-unwired tooling into the standing quality bar: a test script in CI, the three E2E smoke flows, Sentry wired end to end, and a README that onboards a new member in one sitting.
 
@@ -1390,12 +1390,12 @@ Modified files:
 
 **Work — required:**
 
-- [ ] `package.json` — add the test script wiring the existing vitest + Storybook test setup
-- [ ] `.github/workflows/ci.yml` — run unit tests and story tests on every PR
-- [ ] `e2e/` — the three Playwright smoke specs: (1) login lands on dashboard; (2) create → read → update → delete a course; (3) profile create-then-update round trip
-- [ ] Wire E2E as workflow-dispatch first; promote to required CI check after three consecutive green runs (flake discipline)
-- [ ] `next.config.ts` — `withSentryConfig`; sentry configs get environment-aware sampling; source-map upload configured (needs the Sentry auth token — Pod D item)
-- [ ] `frontend/README.md` — setup referencing `scripts/setup-dev.sh` and `scripts/LOCAL_SETUP.md` (from commit `95bba7a`) instead of duplicating them; the five environment variables; the conventions; the component-boundary rules from D2
+- [x] `package.json` — add the test script wiring the existing vitest + Storybook test setup ✅ Phase 6 Batch 1 (the `test` and `test:storybook` scripts already exist from Phase 2/5; Batch 1 additionally adds a `typecheck` script for discoverability — CI used to call `npx tsc --noEmit` inline)
+- [x] `.github/workflows/ci.yml` — run unit tests and story tests on every PR ✅ Phase 6 Batch 1 (removed the obsolete conditional "Check for a test script" gate from before Phase 2; CI now runs `npm run test` and `npm run test:storybook` unconditionally, installs the Playwright chromium browser binary that `@vitest/browser-playwright` requires, and uses `npm run typecheck` for discoverability; axe enforcement at `test: 'error'` from Phase 5 is preserved)
+- [ ] `e2e/` — the three Playwright smoke specs: (1) login lands on dashboard; (2) create → read → update → delete a course; (3) profile create-then-update round trip — Batch 2
+- [ ] Wire E2E as workflow-dispatch first; promote to required CI check after three consecutive green runs (flake discipline) — Batch 2
+- [ ] `next.config.ts` — `withSentryConfig`; sentry configs get environment-aware sampling; source-map upload configured (needs the Sentry auth token — Pod D item) — Batch 3
+- [ ] `frontend/README.md` — setup referencing `scripts/setup-dev.sh` and `scripts/LOCAL_SETUP.md` (from commit `95bba7a`) instead of duplicating them; the five environment variables; the conventions; the component-boundary rules from D2 — Batch 4
 
 **Work — recommended:**
 
@@ -1412,6 +1412,57 @@ Modified files:
 - The three flows green across three consecutive runs
 - A forced frontend error arrives in Sentry readable: correct environment label, source-mapped stack
 - A teammate outside the frontend pod runs the app in one sitting using only the README + setup script
+
+### Phase 6 Batch 1 — Test + CI Foundation (REPOSITORY COMPLETE)
+
+**Scope.** Wire the existing test scripts into the CI quality gate so that every PR runs unit tests and Storybook tests, not just lint/typecheck/build. Phase 2 added the `test` and `test:storybook` scripts but the CI job still used a Phase 0-era conditional that silently skipped tests if a `test` script was absent — exactly the silent-skip defect Phase 6 exists to remove.
+
+**Files changed (2):**
+
+- `frontend/package.json` — added `"typecheck": "tsc --noEmit"` script for discoverability (CI now calls this instead of `npx tsc --noEmit` inline). The existing `test` and `test:storybook` scripts from Phase 2/5 are unchanged.
+- `.github/workflows/ci.yml` — the `frontend` job:
+  - Job name: `Frontend (lint + typecheck + build)` → `Frontend (lint + typecheck + unit tests + Storybook tests + build)`
+  - Removed the obsolete `Check for a test script` step (Phase 0-era conditional that silently skipped tests when no `test` script existed — Phase 2 added the script, so the gate is now permanently satisfied and the conditional is dead code masking the silent-skip defect Phase 6 removes).
+  - Removed the `Skip test notice` step (paired with the conditional above).
+  - Typecheck step now runs `npm run typecheck` (the new discoverability script) instead of `npx tsc --noEmit`.
+  - Added a `Install Playwright browser for Storybook tests` step that runs `npx playwright install --with-deps chromium` — required because Storybook component tests run in a real browser via `@vitest/browser-playwright` (chromium). Without this step the Storybook test job would fail with `Error: browserType.launch: Executable doesn't exist`.
+  - Replaced the conditional `Run Vitest` step (`if: has_test == 'true'`, `npm run test -- --run`) with an unconditional `Run unit tests` step (`npm run test`). The `-- --run` suffix was redundant — the `test` script is already `vitest run --project unit`.
+  - Added `Run Storybook tests` step (`npm run test:storybook`). The Phase 5 axe addon is configured at `test: 'error'`, so any axe violation fails the story test, which fails this step, which fails the PR. This is the CI enforcement of Phase 5's accessibility baseline.
+  - Order: lint → typecheck → install Playwright browser → unit tests → Storybook tests → build. Fast-failing checks (lint/typecheck) run before the slower Storybook browser install.
+
+**Verification (local, run by GLM before patch generation):**
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | PASS (clean exit) |
+| Lint | `npm run lint` | PASS (clean exit) |
+| Unit tests | `npm run test` | PASS — 22/22 tests in 3 files (`lib/api.test.ts` 12, `features/courses/keys.test.ts` 5, `features/courses/api/course-query-options.test.ts` 5) |
+| Storybook tests | `npm run test:storybook` | PASS — 42/42 tests in 12 story files, including axe a11y enforcement at `test: 'error'` |
+| Build | `npm run build` | PASS — 10 routes built (5 static, 2 dynamic, 3 app-shell) |
+
+**Architecture preservation:**
+
+- No provider order changes (ThemeProvider → AppQueryProvider → AuthProvider → AuthGuard → Navbar → children).
+- No API/config boundary changes (no new direct `fetch` or `NEXT_PUBLIC_` reads introduced).
+- No UI changes ("freeze behavior, not appearance" — no styling/layout/component-visual changes in this batch).
+- No new dependencies added to `package.json` `dependencies` or `devDependencies` — the existing `playwright` (browser automation library used by `@vitest/browser-playwright`) is what makes `npx playwright install chromium` work; no `@playwright/test` runner is added yet (Batch 2 will install it for the E2E suite).
+- Phase 5 axe enforcement at `test: 'error'` is preserved — Batch 1 does not weaken it.
+
+**Storybook CI wiring — explicit record (D13 boundary).** The Phase 6 work item "run unit tests and story tests on every PR" is now satisfied for both projects in `vitest.config.ts`:
+
+- `--project unit` runs in CI via `npm run test`.
+- `--project storybook` runs in CI via `npm run test:storybook`, with `npx playwright install --with-deps chromium` preparing the browser binary first.
+
+This satisfies the Global Definition of Done item: "Storybook story tests pass, including axe for `ui/` stories (from Phase 5 onward)."
+
+**Manual / runtime verification (NOT RUN in this batch — awaiting Seyam's CI execution):**
+
+- A deliberately broken PR fails CI, then passes after revert (recommended work; not run by GLM)
+- Three consecutive green CI runs on a real PR (needed before E2E promotion; tracked separately in Batch 5)
+
+**Patch baseline:** `f3a5fb4` (Phase 5 complete commit). Patch file: `phase6_batch1.patch`.
+
+---
 
 ### Phase gate — modernization complete
 

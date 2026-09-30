@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
     "test:storybook": "vitest run --project storybook",
     "storybook": "storybook dev -p 6006",
