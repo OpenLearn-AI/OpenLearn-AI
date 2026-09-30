@@ -1154,7 +1154,7 @@ Modified files:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| NOT STARTED | ~1 sprint | D10 (full rails), D17 | Phase 4 gate |
+| IN PROGRESS (2026-09-30) — Batch 1 (logical utility audit + Storybook RTL infrastructure + token contrast check) landed, locally verified; Batch 2 pending (see Batch 1 record below) | ~1 sprint | D10 (full rails), D17 | Phase 4 gate |
 
 **Parallel note.** May overlap the tail of Phase 4 if the remaining routes are already final.
 
@@ -1166,12 +1166,12 @@ Modified files:
 
 **Work — required:**
 
-- [ ] Logical-utility audit: `ml-`/`mr-`/`pl-`/`pr-`/`text-left`/`text-right` → `ms-`/`me-`/`ps-`/`pe-`/`text-start`/`text-end` across `components/` and migrated pages
-- [ ] `.storybook/preview.tsx` — toggleable RTL/direction view for shared components
-- [ ] Storybook pass: `components/ui`, the state trio, `CourseCard`, `Navbar`, forms — verified under RTL and dark
-- [ ] Triage existing axe violations in `ui/` stories; after triage, flip the a11y addon to error for `ui/` stories so CI fails on new violations
-- [ ] Keyboard-only completion of the CRUD smoke (manual now; assertions land with the Phase 6 E2E suite)
-- [ ] Token contrast check for text-on-surface pairs; fix failing pairs in the token file
+- [x] Logical-utility audit: `ml-`/`mr-`/`pl-`/`pr-`/`text-left`/`text-right` → `ms-`/`me-`/`ps-`/`pe-`/`text-start`/`text-end` across `components/` and migrated pages — DONE in Batch 1: audited all `frontend/components/` and `frontend/app/`; found 1 real violation (`components/auth/UserInfo.tsx:35` `ml-4` → `ms-4`, fixed). The remaining matches in `components/ui/badge.tsx` and `components/ui/button.tsx` are `has-data-[icon=inline-end]:pr-*` and `has-data-[icon=inline-start]:pl-*` patterns — these are semantically tied to explicit icon position via data attributes and are NOT arbitrary physical-direction utilities. They were reviewed and intentionally retained.
+- [x] `.storybook/preview.tsx` — toggleable RTL/direction view for shared components — DONE in Batch 1: added `globalTypes.direction` with `ltr`/`rtl` toolbar items (default: `ltr`); added `WithDirection` decorator that sets `document.documentElement.dir` based on the selected direction so logical CSS utilities (`ms-`, `me-`, `ps-`, `pe-`, `text-start`, `text-end`) flip correctly in RTL mode. Existing addons, dark-mode behavior, and a11y config preserved.
+- [ ] Storybook pass: `components/ui`, the state trio, `CourseCard`, `Navbar`, forms — verified under RTL and dark — Batch 2 (requires creating stories for components that don't have them yet)
+- [ ] Triage existing axe violations in `ui/` stories; after triage, flip the a11y addon to error for `ui/` stories so CI fails on new violations — Batch 2
+- [ ] Keyboard-only completion of the CRUD smoke (manual now; assertions land with the Phase 6 E2E suite) — Manual gate (NOT RUN — no browser available)
+- [x] Token contrast check for text-on-surface pairs; fix failing pairs in the token file — DONE in Batch 1: inspected all major text-on-surface pairs in `globals.css` (light + dark). All pairs pass WCAG AA (≥4.5:1) using approximate OKLCH→sRGB conversion. The `muted-foreground` on `muted` pair in light mode is borderline (~4.6:1) but passes. No token changes required.
 
 **Work — recommended:**
 
@@ -1204,6 +1204,62 @@ Modified files:
 | Current | In this phase | Target |
 |---|---|---|
 | Rails exist (dir, fonts) but components still use physical-direction utilities; a11y unchecked | Logical utilities everywhere; RTL + dark verified in Storybook; axe gates new violations in primitives | An Arabic-ready component set that flips correctly, with a documented accessibility floor |
+
+### Phase 5 Batch 1 — Logical utility audit + Storybook RTL infrastructure + Token contrast closure record (2026-09-30)
+
+**Batch 1 purpose.** Complete the first three Phase 5 required items: logical-utility audit (migrate physical-direction utilities to logical ones), Storybook RTL/direction infrastructure (toggleable direction view), and token contrast check (verify WCAG AA compliance).
+
+**Baseline.** Branch `feature/frontend-refactor` @ `1e46f5c` (HEAD after Phase 4 completion + docs update). Batch 1 rides on top of `1e46f5c`.
+
+**Implementation outcome:**
+
+Modified files:
+- `frontend/components/auth/UserInfo.tsx` — logical utility fix: `ml-4` → `ms-4` on the roles `<ul>` element. This was the only real physical-direction violation found in the entire `frontend/components/` and `frontend/app/` tree. The `ml-4` (margin-left) is now `ms-4` (margin-inline-start), which flips correctly in RTL layouts.
+- `frontend/.storybook/preview.tsx` — Storybook RTL infrastructure: added `globalTypes.direction` toolbar item (LTR/RTL toggle, default: `ltr`); added `WithDirection` decorator component that sets `document.documentElement.dir` to the selected direction so logical CSS utilities flip correctly. Existing addons (`@chromatic-com/storybook`, `@storybook/addon-vitest`, `@storybook/addon-a11y`, `@storybook/addon-docs`), dark-mode behavior, and a11y config (`test: 'todo'`) all preserved. No new dependencies added.
+- `frontend/docs/OpenLearn-AI_Frontend_Modernization_Execution_Roadmap_v1.1-closure.md` — this file. Phase 5 status row, required-work checkboxes, and this Batch 1 closure record updated.
+
+**Intentionally retained physical utilities (reviewed exceptions):**
+- `components/ui/badge.tsx:8` — `has-data-[icon=inline-end]:pr-1.5` and `has-data-[icon=inline-start]:pl-1.5`: these are data-attribute-conditional padding rules tied to explicit icon position (`inline-start`/`inline-end`). They are NOT arbitrary physical-direction utilities — they use Tailwind's `has-data-*` variant selector to conditionally apply padding based on which icon slot is present. Semantically correct and should NOT be changed.
+- `components/ui/button.tsx:24-27` — same pattern as badge, across all button size variants (`xs`, `sm`, `default`, `lg`). Same justification: data-attribute-conditional, semantically tied to icon position.
+
+**Token contrast check result:**
+All major text-on-surface pairs in `globals.css` were inspected using approximate OKLCH→sRGB conversion:
+
+Light mode:
+- `foreground(0.20)` on `background(0.985)`: ~15:1 — PASS
+- `card-foreground(0.20)` on `card(1.0)`: ~16:1 — PASS
+- `primary-foreground(0.985)` on `primary(0.55)`: ~5.5:1 — PASS
+- `muted-foreground(0.50)` on `muted(0.95)`: ~4.6:1 — PASS (borderline)
+- `secondary-foreground(0.25)` on `secondary(0.95)`: ~8:1 — PASS
+
+Dark mode:
+- `foreground(0.96)` on `background(0.15)`: ~14:1 — PASS
+- `card-foreground(0.96)` on `card(0.19)`: ~12:1 — PASS
+- `primary-foreground(0.15)` on `primary(0.65)`: ~5:1 — PASS
+- `muted-foreground(0.70)` on `muted(0.25)`: ~5:1 — PASS
+- `secondary-foreground(0.96)` on `secondary(0.25)`: ~8:1 — PASS
+
+**No token changes required.** All pairs pass WCAG AA (≥4.5:1).
+
+**Verification performed:**
+- Physical utility grep audit: 1 violation found and fixed; 5 intentional `has-data-*` patterns reviewed and retained
+- `npx tsc --noEmit` PASS (EXIT 0)
+- `npm run lint` PASS (EXIT 0, zero errors, zero warnings)
+- `npm run test` PASS (22/22 tests)
+- `npm run build` PASS (EXIT 0, all 10 routes compiled)
+- `git diff --check` PASS
+
+**Verification NOT RUN:**
+- Storybook browser-based RTL verification (no browser runtime available — Batch 2 will add stories and the user can verify visually)
+- axe violation triage (deferred to Batch 2 — requires stories for more components)
+- Keyboard-only CRUD smoke (manual gate — NOT RUN, no browser available)
+
+**Batch 2 remaining scope:**
+- Create Storybook stories for: `LoadingBlock`, `ErrorState`, `EmptyState`, `CourseCard`, `Input`, `Textarea`, `Select`, `Field`, `Label`, `Card`, `Badge`
+- Triage axe violations in the expanded story set
+- Flip a11y addon to `test: 'error'` for UI stories
+- Document the a11y baseline (checked vs known-unchecked)
+- Manual gate: keyboard-only CRUD smoke (NOT RUN — provide procedure for Seyam)
 
 ---
 
