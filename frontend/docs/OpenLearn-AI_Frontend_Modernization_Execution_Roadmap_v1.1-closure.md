@@ -1,7 +1,7 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
 > **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 COMPLETE — closure recorded 2026-09-29 (§9 Patch 9–10 records)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified (committed at `7ea76e7`); Phase 5 COMPLETE (committed at `f3a5fb4`) — 42/42 Storybook tests with axe enforcement at `test: 'error'`; Phase 6 Batch 1 COMPLETE (committed at `5d0b7ac`) — unit + Storybook tests wired into CI; Phase 6 Batch 2 COMPLETE (committed at `fc99071`) — Playwright E2E runner installed, three smoke flows authored, `e2e.yml` on `workflow_dispatch`; Phase 6 Batch 3 REPOSITORY COMPLETE — `withSentryConfig` wired, environment-aware sampling, source-map upload configured (auth token is a Pod D external dependency); verification patch staged against `fc99071`. Batches 4–5 pending review.
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified (committed at `7ea76e7`); Phase 5 COMPLETE (committed at `f3a5fb4`) — 42/42 Storybook tests with axe enforcement at `test: 'error'`; Phase 6 Batch 1 COMPLETE (committed at `5d0b7ac`) — unit + Storybook tests wired into CI; Phase 6 Batch 2 COMPLETE (committed at `fc99071`) — Playwright E2E runner installed, three smoke flows authored, `e2e.yml` on `workflow_dispatch`; Phase 6 Batch 3 COMPLETE (committed at `cee2a81`) — `withSentryConfig` wired, environment-aware sampling, source-map upload configured (auth token is a Pod D external dependency); Phase 6 Batch 4 REPOSITORY COMPLETE — README rewritten as onboarding guide, 5 dead scaffold SVGs deleted, roadmap updated; verification patch staged against `cee2a81`. Batch 5 / final phase closure pending.
 > **Branch:** `feature/frontend-refactor` @ `3bfe85a` (HEAD after Phase 4 Batch 2; Phase 4 final batch applied on top, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
@@ -1378,7 +1378,7 @@ Modified files:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS — Batches 1–3 COMPLETE | ~1 sprint | D12, D13 (full), D14 | Phases 0–5 complete |
+| IN PROGRESS — Batches 1–4 COMPLETE | ~1 sprint | D12, D13 (full), D14 | Phases 0–5 complete |
 
 **Goal.** Turn the installed-but-unwired tooling into the standing quality bar: a test script in CI, the three E2E smoke flows, Sentry wired end to end, and a README that onboards a new member in one sitting.
 
@@ -1395,7 +1395,7 @@ Modified files:
 - [x] `e2e/` — the three Playwright smoke specs: (1) login lands on dashboard; (2) create → read → update → delete a course; (3) profile create-then-update round trip ✅ Phase 6 Batch 2 (`@playwright/test` installed; `frontend/playwright.config.ts` configured; `frontend/e2e/login.spec.ts`, `frontend/e2e/courses-crud.spec.ts`, `frontend/e2e/profile-roundtrip.spec.ts` authored — selectors are role/text/label-based, no `data-testid` injected into the app)
 - [x] Wire E2E as workflow-dispatch first; promote to required CI check after three consecutive green runs (flake discipline) ✅ Phase 6 Batch 2 (`.github/workflows/e2e.yml` created with `workflow_dispatch:` only — NO `pull_request:`/`push:` triggers; promotion explicitly deferred pending three green runs; see Batch 2 closure record below)
 - [x] `next.config.ts` — `withSentryConfig`; sentry configs get environment-aware sampling; source-map upload configured (needs the Sentry auth token — Pod D item) ✅ Phase 6 Batch 3 (`withSentryConfig` imported from the non-deprecated `@sentry/nextjs/config` subpath; preserves `output: "standalone"`; source-map upload delegated to the SDK which reads `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` from the environment at build time — no hardcoded secrets; `deleteSourcemapsAfterUpload: true`; local dev gracefully skips upload when the token is absent; new `NEXT_PUBLIC_SENTRY_ENVIRONMENT` + `SENTRY_ENVIRONMENT` variables replace the broken `NODE_ENV || "staging"` heuristic; sampling is environment-aware: development 1.0 / staging 0.5 / production 0.1 — see Batch 3 closure record below)
-- [ ] `frontend/README.md` — setup referencing `scripts/setup-dev.sh` and `scripts/LOCAL_SETUP.md` (from commit `95bba7a`) instead of duplicating them; the five environment variables; the conventions; the component-boundary rules from D2 — Batch 4
+- [x] `frontend/README.md` — setup referencing `scripts/setup-dev.sh` and `scripts/LOCAL_SETUP.md` (from commit `95bba7a`) instead of duplicating them; the five environment variables; the conventions; the component-boundary rules from D2 ✅ Phase 6 Batch 4 (create-next-app boilerplate README replaced with a concise onboarding guide that points at `scripts/LOCAL_SETUP.md` for the canonical setup path, documents all six `NEXT_PUBLIC_*` variables + the server-side `SENTRY_DSN`/`SENTRY_ENVIRONMENT` + the build-time `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` (Pod D external dependency), documents every `package.json` script with what each verifies, documents the directory layout, API/config boundaries, feature-domain structure, provider order, query/validation conventions, RTL rule, Storybook D13 boundary, accessibility baseline, E2E workflow-dispatch status with the three-green-run promotion policy, Sentry configuration-vs-runtime-verification status, and a common-workflow section that shows how to add a new feature domain by imitation — the understandability exit test target)
 
 **Work — recommended:**
 
@@ -1679,6 +1679,109 @@ Seyam must perform the runtime verification in the staging/production environmen
 - Production build with real `SENTRY_AUTH_TOKEN` performing actual upload — NOT RUN (no token available).
 
 **Patch baseline:** `fc99071` (Phase 6 Batch 2 complete commit). Patch file: `phase6_batch3.patch`.
+
+**Batch 3 status (updated after Seyam's commit):** COMPLETE — committed at `cee2a81` (`chore(frontend): phase 6 batch 3 — wire sentry observability`). Local verification PASS (typecheck, lint, unit 22/22, storybook 42/42, build with `withSentryConfig` active). Runtime Sentry event verification + source-map readability verification remain NOT RUN — they require the Pod D `SENTRY_AUTH_TOKEN` secret and a real Sentry project / deployed environment.
+
+---
+
+### Phase 6 Batch 4 — README + Frontend Dead-File Cleanup (REPOSITORY COMPLETE)
+
+**Scope.** Replace the create-next-app boilerplate `frontend/README.md` with a concise contributor onboarding guide (Phase 6 required work item, D2 component-boundary rules), and perform a careful, evidence-based cleanup of genuinely dead files inside `frontend/`. This is the final Phase 6 implementation batch before the Batch 5 / final phase closure gate.
+
+**Part A — README rewrite (1 file changed):**
+
+- `frontend/README.md` — the create-next-app boilerplate (Vercel deploy instructions, `next/font` Geist mention, generic Next.js links) is replaced with a 355-line onboarding guide. The new README covers:
+  - **What the frontend is** — Next.js App Router application for OpenLearn AI, Arabic-first content model with English LTR baseline, OIDC against Keycloak, FastAPI backend.
+  - **Prerequisites** — Node >= 20 (CI target), npm, Docker (only for the local backend + Keycloak stack). Points at `scripts/LOCAL_SETUP.md` as the canonical, always-up-to-date list.
+  - **Local setup** — the one-command path `bash scripts/setup-dev.sh` from the repo root, with a brief summary of what the script does (idempotent, branch-independent, never mutates git state). Does NOT duplicate the full setup instructions — explicitly points at `scripts/LOCAL_SETUP.md` for troubleshooting, port conflicts, and OS-specific notes.
+  - **Environment variables** — three tables: (1) required-for-local-dev (4 Keycloak + API vars), (2) optional / observability (`NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT`), (3) server-side only (`SENTRY_DSN`, `SENTRY_ENVIRONMENT`), (4) build-time only / not committed (`SENTRY_AUTH_TOKEN` (Pod D external dependency), `SENTRY_ORG`, `SENTRY_PROJECT`). Documents staging/production URLs and the build-time inlining behavior. No credentials committed.
+  - **Commands** — every `package.json` script (`dev`, `build`, `start`, `lint`, `typecheck`, `test`, `test:storybook`, `test:e2e`, `storybook`, `build-storybook`) with a one-line description of what each verifies.
+  - **Architecture & conventions** — the directory layout (annotated tree), the API boundary (`lib/api.ts` is the ONLY place `fetch()` is called — documented grep check), the configuration boundary (`lib/config.ts` is the ONLY place `process.env.NEXT_PUBLIC_*` is read — documented grep check), the feature-boundary structure (schemas → keys → api hooks; visual components live in `components/<domain>/`, NOT in `features/`), the authentication ownership (`lib/keycloak` + `lib/auth-context` + `components/AuthGuard`), the provider order (ThemeProvider → AppQueryProvider → AuthProvider → AuthGuard → Navbar → children — preservation rule, not an invitation to redesign), the query/data-fetching conventions (TanStack Query + `queryOptions` + key-factory; defaults staleTime 30s / retry 1 / refetchOnWindowFocus false), the validation conventions (Zod + `Field` wrapper; no React Hook Form), the RTL rule (logical CSS utilities only; no full i18n framework).
+  - **Storybook (D13 boundary)** — explicitly documents that Storybook is development and verification infrastructure, NOT a frozen visual design. Lists what it covers (shared UI development, state verification, dark-mode, RTL, accessibility at `test: 'error'`, visual-regression where applicable). Explicitly states the later UI/UX redesign proceeds on top of this infrastructure.
+  - **Testing & quality gate** — the CI `frontend` job's 6 steps (lint → typecheck → install Playwright browser → unit tests → Storybook tests → build). Documents the Phase 5 accessibility baseline (axe at `test: 'error'`, semantic labels via `Field`, `role="alert"`/`role="status"` for state, RTL direction toolbar). Documents the three E2E smoke flows + the workflow-dispatch-only status + the three-green-run promotion policy + the current pending status (Run 1/2/3: pending, Required CI: NO).
+  - **Sentry status** — `withSentryConfig` from `@sentry/nextjs/config`, environment-aware sampling (dev 1.0 / staging 0.5 / prod 0.1), `deleteSourcemapsAfterUpload: true`, no hardcoded secrets. Explicitly distinguishes configured-vs-runtime-verified: repository config PASS, source-map upload configured but NOT runtime-verified (requires Pod D `SENTRY_AUTH_TOKEN`), runtime Sentry event verification NOT RUN.
+  - **Common workflow** — a step-by-step example of adding a new feature domain (`materials/`) by copying the `features/courses/` shape. This is the **understandability exit test** target: a new contributor should be able to add a feature domain by imitation, without reading framework code.
+  - **Further reading** — links to `scripts/LOCAL_SETUP.md`, the roadmap, and the architecture decision study.
+
+**Part B — Frontend dead-file cleanup (5 files deleted, 0 kept-as-uncertain):**
+
+A complete frontend file inventory was performed (99 files inspected, excluding `node_modules`/`.next`/`.git`). For every file, imports / dynamic imports / route references / Storybook references / test references / config references / script references / documentation references were searched.
+
+**Files deleted (5 — all proven dead with zero references anywhere):**
+
+| File | Why it's dead |
+|---|---|
+| `frontend/public/vercel.svg` | create-next-app default scaffold asset; zero references in any `.ts`/`.tsx`/`.json`/`.md`/`.html` file. The project's only image in use is `public/logo.png` (referenced by `app/layout.tsx:33` and `components/Navbar.tsx:38`). |
+| `frontend/public/next.svg` | create-next-app default scaffold asset; zero references anywhere. |
+| `frontend/public/file.svg` | create-next-app default scaffold asset; zero references anywhere. |
+| `frontend/public/globe.svg` | create-next-app default scaffold asset; zero references anywhere. |
+| `frontend/public/window.svg` | create-next-app default scaffold asset; zero references anywhere. |
+
+After deletion, `frontend/public/` contains only `logo.png` — the only image actually served by the application.
+
+**Notable candidates intentionally retained:**
+
+- `frontend/components/ui/badge.tsx` — has zero application consumers today (its only importer is `frontend/stories/Badge.stories.tsx`). Retained because Phase 5's axe enforcement at `test: 'error'` means deleting `badge.tsx` would break `npm run test:storybook` (the story imports it). Deleting it would require also removing `Badge.stories.tsx` — not recommended unless the design-system policy explicitly retires Badge. Reported here for transparency.
+- `frontend/README.md` — the create-next-app boilerplate was flagged as stale/obsolete, but the right action was a rewrite (Part A above), not deletion. A frontend project without a README would fail the understandability exit test.
+- All Next.js convention files (`layout.tsx`, `page.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`, `globals.css`, `instrumentation.ts`, `next-env.d.ts`), all config files (`next.config.ts`, `tsconfig.json`, `vitest.config.ts`, `playwright.config.ts`, `postcss.config.mjs`, `eslint.config.mjs`, `components.json`, `Dockerfile`, `.env.example`, `.gitignore`, `.dockerignore`), all Storybook infrastructure (`.storybook/main.ts`, `.storybook/preview.tsx`), all test infrastructure (3 unit test files + 3 E2E specs), and all Sentry config files (`sentry.client.config.ts`, `sentry.server.config.ts`) were inspected and retained with documented reasons.
+
+**Architecture-document dead-file inventory check:**
+
+The roadmap's Global Definition of Done requires "No dead file from the architecture document's inventory remains." Cross-checked the architecture decision study (`docs/OpenLearn-AI_Frontend_Architecture_Modernization.docx`) and the roadmap closure records (§5 line 199/216/323, §8 Patch 1 line 676/745) against the current `frontend/` tree. Every file the architecture document flagged as dead has already been deleted in committed slices (Phase 1 Slice 2 + Phase 4 Patch 1):
+
+- `frontend/components/courses/CourseTable.tsx` — DELETED ✓ (Phase 1)
+- `frontend/components/theme-toggle.tsx` (duplicate) — DELETED ✓ (Phase 1; only `components/ui/theme-toggle.tsx` survives)
+- `frontend/features/auth/api/useRegister.ts` (empty file) — DELETED ✓ (Phase 1)
+- `frontend/features/auth/types.ts` (hand-written `MeResponse`) — DELETED ✓ (Phase 4 Patch 1)
+- `frontend/features/auth/schemas.ts` — was DELETED in Phase 1, then re-created in Phase 4 Patch 1 with different content (`meResponseSchema` + `Me` type). Verified live: imported by `features/auth/api/useMe.ts:4`. Not dead.
+- `CourseApiError` (private class in `useCourseMutations.ts`) — DELETED ✓ (Phase 2; replaced by shared `ApiError` in `lib/api.ts`)
+- `ProfileApiError` (private class in `useProfileMutation.ts`) — DELETED ✓ (Phase 4 Patch 1)
+- `app/page.tsx` dead comment block + `as any` cast — DELETED ✓ (Phase 1; verified the file is now clean)
+
+No regressions found. The architecture-document dead-file inventory remains genuinely empty after Batch 4.
+
+**No application logic was changed during cleanup.** The 5 deleted files are static scaffold assets with zero code references; their deletion cannot affect runtime behavior, type safety, or test results.
+
+**Verification (local, run by GLM before patch generation):**
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | PASS (clean exit) |
+| Lint | `npm run lint` | PASS (clean exit) |
+| Unit tests | `npm run test` | PASS — 22/22 in 3 files |
+| Storybook tests | `npm run test:storybook` | PASS — 42/42 in 12 story files (axe at `test: 'error'`) |
+| Build | `npm run build` | PASS — 10 routes built, `withSentryConfig` active |
+| E2E discovery | `npx playwright test --list` | PASS — 3 tests in 3 files discovered |
+| `git diff --check` | whitespace audit | PASS — no whitespace errors |
+| Direct `fetch(` outside `lib/api.ts` | `grep -rn "fetch(" frontend/app frontend/components frontend/features` | PASS — zero matches (excluding `refetch` callbacks) |
+| `NEXT_PUBLIC_*` outside `lib/config.ts` | `grep -rn "NEXT_PUBLIC_" frontend/app frontend/components frontend/features frontend/lib` | PASS — zero matches outside `lib/config.ts` |
+| `as any` in `frontend/app/` | `grep -rn "as any" frontend/app` | PASS — zero matches |
+
+**Manual / runtime verification NOT RUN in this batch:**
+
+- E2E runtime execution — NOT RUN (no Keycloak/backend/test-credentials available in GLM env). Discovery confirms 3 tests in 3 files are discoverable and compile-clean.
+- Runtime Sentry event verification — still NOT RUN (carried over from Batch 3; requires Pod D `SENTRY_AUTH_TOKEN` + real Sentry project).
+
+**Architecture preservation:**
+
+- [x] Provider order unchanged (ThemeProvider → AppQueryProvider → AuthProvider → AuthGuard → Navbar → children).
+- [x] No API boundary changes (no new `fetch` calls; the deleted SVGs had zero code references).
+- [x] No Keycloak/auth changes.
+- [x] No route changes.
+- [x] No UI changes ("freeze behavior, not appearance" — no styling/layout/component-visual changes; the 5 deleted SVGs were unreferenced scaffold assets, not in-use UI).
+- [x] No Playwright changes (Batch 2 E2E files untouched).
+- [x] No Storybook changes (`.storybook/` untouched; all 12 stories retained).
+- [x] No new state-management library.
+- [x] No custom telemetry abstraction.
+- [x] No custom logging framework.
+- [x] No unrelated dependency upgrades.
+- [x] No hardcoded Sentry secrets.
+- [x] Existing standalone build behavior preserved (`output: "standalone"` unchanged).
+- [x] Phase 5 axe enforcement at `test: 'error'` unchanged.
+
+**Files changed (6):** 1 rewritten (`frontend/README.md`), 5 deleted (`frontend/public/{vercel,next,file,globe,window}.svg`).
+
+**Patch baseline:** `cee2a81` (Phase 6 Batch 3 complete commit). Patch file: `phase6_batch4.patch`.
 
 ---
 
