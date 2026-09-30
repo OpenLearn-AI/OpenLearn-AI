@@ -1,0 +1,130 @@
+name: E2E (Playwright)
+
+# Phase 6 Batch 2 — workflow_dispatch only.
+#
+# Per the roadmap §11 Phase 6 required work: E2E runs as workflow-dispatch
+# first, and is promoted to a required PR check only after three
+# consecutive green runs (flake discipline). Until that promotion
+# happens, this workflow does NOT run on PRs and does NOT block merges.
+#
+# Promotion status (updated when actual runs occur):
+#   Run 1/3: pending
+#   Run 2/3: pending
+#   Run 3/3: pending
+#   Required CI: NO
+#
+# Prerequisites for a successful run (all of these must be true at the
+# moment of dispatch — the workflow will fail loudly if any are missing):
+#   - A reachable frontend deployment (staging or local-tunnel) whose
+#     PLAYWRIGHT_BASE_URL is configured as a repository variable.
+#   - A reachable backend at NEXT_PUBLIC_API_URL that the frontend talks to.
+#   - A reachable Keycloak server at NEXT_PUBLIC_KEYCLOAK_URL with the
+#     configured realm + client.
+#   - Test credentials stored as repository secrets:
+#       E2E_USERNAME  — Keycloak test user
+#       E2E_PASSWORD  — Keycloak test user password
+#   - Repository variables (non-secret):
+#       PLAYWRIGHT_BASE_URL       — e.g. https://openlearn-web-staging.duckdns.org
+#       NEXT_PUBLIC_API_URL       — e.g. https://openlearn-api-staging.duckdns.org
+#       NEXT_PUBLIC_KEYCLOAK_URL  — e.g. https://keycloak-staging.duckdns.org
+#       NEXT_PUBLIC_KEYCLOAK_REALM     — e.g. openlearn
+#       NEXT_PUBLIC_KEYCLOAK_CLIENT_ID — e.g. openlearn-frontend
+#     (NEXT_PUBLIC_SENTRY_DSN is optional for E2E.)
+#
+# When any of these are unavailable, do NOT dispatch the workflow. The
+# suite does not silently skip tests when the env is missing — the login
+# spec uses test.skip() with a clear message, but the CRUD/profile specs
+# would still fail at runtime. This is intentional.
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Optional run note (e.g. 'Run 1/3 for promotion gate')"
+        required: false
+        default: ""
+
+# Prevent two simultaneous E2E runs from racing on the same test user's
+# courses/profile data (the specs share state by design).
+concurrency:
+  group: e2e-playwright
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Playwright E2E smoke flows
+    runs-on: ubuntu-latest
+
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL }}
+      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_KEYCLOAK_URL: ${{ vars.NEXT_PUBLIC_KEYCLOAK_URL }}
+      NEXT_PUBLIC_KEYCLOAK_REALM: ${{ vars.NEXT_PUBLIC_KEYCLOAK_REALM }}
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID }}
+      E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      CI: "true"
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        # Installs the Chromium binary that @playwright/test drives.
+        # `--with-deps` installs required OS libraries on the runner.
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify required configuration is present
+        # Fail loudly with a clear message if any required var is missing.
+        # Do NOT silently skip — silent skipping is the exact defect Phase
+        # 6 was created to eliminate.
+        run: |
+          missing=()
+          [ -z "$PLAYWRIGHT_BASE_URL" ] && missing+=("PLAYWRIGHT_BASE_URL (repo variable)")
+          [ -z "$NEXT_PUBLIC_API_URL" ] && missing+=("NEXT_PUBLIC_API_URL (repo variable)")
+          [ -z "$NEXT_PUBLIC_KEYCLOAK_URL" ] && missing+=("NEXT_PUBLIC_KEYCLOAK_URL (repo variable)")
+          [ -z "$NEXT_PUBLIC_KEYCLOAK_REALM" ] && missing+=("NEXT_PUBLIC_KEYCLOAK_REALM (repo variable)")
+          [ -z "$NEXT_PUBLIC_KEYCLOAK_CLIENT_ID" ] && missing+=("NEXT_PUBLIC_KEYCLOAK_CLIENT_ID (repo variable)")
+          [ -z "$E2E_USERNAME" ] && missing+=("E2E_USERNAME (repo secret)")
+          [ -z "$E2E_PASSWORD" ] && missing+=("E2E_PASSWORD (repo secret)")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required E2E configuration:"
+            for m in "${missing[@]}"; do echo "::error::  - $m"; done
+            echo "::error::Configure these as repository variables / secrets, then re-dispatch."
+            exit 1
+          fi
+          echo "E2E configuration present. Base URL: $PLAYWRIGHT_BASE_URL"
+
+      - name: Run Playwright E2E suite
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 14
+
+      - name: Upload Playwright traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: |
+            frontend/test-results
+            frontend/playwright/.cache
+          retention-days: 14
+          if-no-files-found: ignore

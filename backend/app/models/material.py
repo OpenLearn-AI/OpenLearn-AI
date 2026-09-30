@@ -8,16 +8,19 @@ scanning and processing are explicitly a future phase, not implemented here.
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
 # Materials are registered as ``pending`` until a future scan/processing phase
-# transitions them. There is deliberately no status CHECK constraint yet: the
-# set of supported statuses is owned by that future phase.
+# The supported status vocabulary is defined here; transitions are enforced
+# by the material service.
 PENDING_STATUS = "pending"
+PROCESSING_STATUS = "processing"
+READY_STATUS = "ready"
+FAILED_STATUS = "failed"
 
 
 class Material(Base):
@@ -72,4 +75,8 @@ class Material(Base):
 
     __table_args__ = (
         UniqueConstraint("s3_key", name="uq_materials_s3_key"),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'ready', 'failed')",
+            name="ck_materials_status_supported",
+        ),
     )

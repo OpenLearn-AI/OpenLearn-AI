@@ -4,8 +4,8 @@ Mirrors the authenticated-endpoint test setup in test_oidc.py (fake JWKS +
 dependency-overridden database session).
 """
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 
 import jwt
 import pytest
@@ -20,45 +20,11 @@ from app.db.session import get_db
 from app.main import app
 from app.models.profile import Profile
 from app.models.user import User
-from app.services.auth import oidc as oidc_module
 from app.services.profile_service import get_profile_by_user_id
+from conftest import _create_user
 
 ISSUER = settings.keycloak_issuer
 AUDIENCE = settings.keycloak_audience
-
-
-@pytest.fixture
-def rsa_keypair():
-    private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-    )
-
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("utf-8")
-
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
-
-    return private_pem, public_pem
-
-
-@pytest.fixture
-def fake_jwks(rsa_keypair, monkeypatch):
-    _, public_pem = rsa_keypair
-
-    class FakeJwksClient:
-        def get_signing_key_from_jwt(self, token):
-            return SimpleNamespace(key=public_pem)
-
-    monkeypatch.setattr(oidc_module, "_JWK_CLIENT", FakeJwksClient())
-
-    return FakeJwksClient
 
 
 def _build_token(
@@ -106,29 +72,25 @@ def _profile_payload(**overrides) -> dict:
     return payload
 
 
-async def _create_user(db, subject: str, email: str) -> User:
-    await _delete_user_by_subject(db, subject)
+@asynccontextmanager
+async def _api(db_session, token: str | None = None):
+    async def override_get_db():
+        yield db_session
 
-    user = User(
-        keycloak_issuer=ISSUER,
-        keycloak_subject=subject,
-        email=email,
-    )
+    app.dependency_overrides[get_db] = override_get_db
 
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
 
-    return user
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            yield client, headers
+    finally:
+        app.dependency_overrides.clear()
 
-
-async def _delete_user_by_subject(db, subject: str) -> None:
-    result = await db.execute(
-        select(User).where(User.keycloak_subject == subject)
-    )
-    for user in result.scalars():
-        await db.delete(user)
-    await db.commit()
 
 
 async def _count_profiles_for(db, user_id: uuid.UUID) -> int:
@@ -142,47 +104,21 @@ async def _count_profiles_for(db, user_id: uuid.UUID) -> int:
 
 @pytest.mark.asyncio
 async def test_get_me_requires_authentication(db_session):
-    async def override_get_db():
-        yield db_session
+    async with _api(db_session) as (client, headers):
+        response = await client.get("/v1/users/me")
 
-    app.dependency_overrides[get_db] = override_get_db
-
-    try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            response = await client.get("/v1/users/me")
-
-        assert response.status_code == 401
-    finally:
-        app.dependency_overrides.clear()
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_put_me_requires_authentication(db_session):
-    async def override_get_db():
-        yield db_session
+    async with _api(db_session) as (client, headers):
+        response = await client.put(
+            "/v1/users/me",
+            json=_profile_payload(),
+        )
 
-    app.dependency_overrides[get_db] = override_get_db
-
-    try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            response = await client.put(
-                "/v1/users/me",
-                json=_profile_payload(),
-            )
-
-        assert response.status_code == 401
-    finally:
-        app.dependency_overrides.clear()
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -199,26 +135,13 @@ async def test_get_me_rejects_invalid_token(db_session, rsa_keypair, fake_jwks):
 
     token = _build_token(other_private_key)
 
-    async def override_get_db():
-        yield db_session
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(
+            "/v1/users/me",
+            headers=headers,
+        )
 
-    app.dependency_overrides[get_db] = override_get_db
-
-    try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            response = await client.get(
-                "/v1/users/me",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-
-        assert response.status_code == 401
-    finally:
-        app.dependency_overrides.clear()
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -232,32 +155,19 @@ async def test_get_me_returns_404_without_local_user(
 
     token = _build_token(private_key, sub=subject)
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            response = await client.get(
-                "/v1/users/me",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-
-        assert response.status_code == 404
-
-        # No local user may be created as a side effect.
-        result = await db_session.execute(
-            select(User).where(User.keycloak_subject == subject)
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(
+            "/v1/users/me",
+            headers=headers,
         )
-        assert result.scalar_one_or_none() is None
-    finally:
-        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+    # No local user may be created as a side effect.
+    result = await db_session.execute(
+        select(User).where(User.keycloak_subject == subject)
+    )
+    assert result.scalar_one_or_none() is None
 
 
 @pytest.mark.asyncio
@@ -271,32 +181,19 @@ async def test_put_me_returns_404_without_local_user(
 
     token = _build_token(private_key, sub=subject)
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            response = await client.put(
-                "/v1/users/me",
-                json=_profile_payload(),
-                headers={"Authorization": f"Bearer {token}"},
-            )
-
-        assert response.status_code == 404
-
-        result = await db_session.execute(
-            select(User).where(User.keycloak_subject == subject)
+    async with _api(db_session, token) as (client, headers):
+        response = await client.put(
+            "/v1/users/me",
+            json=_profile_payload(),
+            headers=headers,
         )
-        assert result.scalar_one_or_none() is None
-    finally:
-        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+    result = await db_session.execute(
+        select(User).where(User.keycloak_subject == subject)
+    )
+    assert result.scalar_one_or_none() is None
 
 
 @pytest.mark.asyncio
@@ -330,28 +227,16 @@ async def test_identity_resolved_by_keycloak_identity_not_email(
         email="someone-else@example.com",
     )
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.get(
                 "/v1/users/me",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 200
         assert response.json()["user_id"] == str(user.id)
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -379,21 +264,11 @@ async def test_get_me_returns_existing_profile(db_session, rsa_keypair, fake_jwk
 
     token = _build_token(private_key, sub=user.keycloak_subject)
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.get(
                 "/v1/users/me",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 200
@@ -409,8 +284,6 @@ async def test_get_me_returns_existing_profile(db_session, rsa_keypair, fake_jwk
         assert body["learning_style_vark"] == "visual"
         assert body["daily_available_minutes"] == 45
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -431,27 +304,15 @@ async def test_get_me_returns_404_when_profile_missing(
 
     token = _build_token(private_key, sub=user.keycloak_subject)
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.get(
                 "/v1/users/me",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 404
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -474,22 +335,12 @@ async def test_put_me_creates_profile(db_session, rsa_keypair, fake_jwks):
         daily_available_minutes=120,
     )
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 200
@@ -511,8 +362,6 @@ async def test_put_me_creates_profile(db_session, rsa_keypair, fake_jwks):
         assert stored.major == "AI"
         assert stored.daily_available_minutes == 120
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -535,22 +384,12 @@ async def test_put_me_rejects_client_user_id(db_session, rsa_keypair, fake_jwks)
     token = _build_token(private_key, sub=user.keycloak_subject)
     payload = _profile_payload(user_id=str(other_user.id))
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         # Identity comes exclusively from the token; a client-supplied
@@ -560,8 +399,6 @@ async def test_put_me_rejects_client_user_id(db_session, rsa_keypair, fake_jwks)
         assert await _count_profiles_for(db_session, user.id) == 0
         assert await _count_profiles_for(db_session, other_user.id) == 0
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.delete(other_user)
         await db_session.commit()
@@ -602,22 +439,12 @@ async def test_put_me_replaces_profile_completely(
         daily_available_minutes=60,
     )
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 200
@@ -640,8 +467,6 @@ async def test_put_me_replaces_profile_completely(
         assert stored.learning_style_vark is None
         assert stored.major == "Data Science"
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -674,29 +499,17 @@ async def test_put_me_rejects_missing_required_fields(
     payload = _profile_payload()
     del payload[missing_field]
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 422
         assert await _count_profiles_for(db_session, user.id) == 0
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -720,29 +533,17 @@ async def test_put_me_rejects_unsupported_language(
     token = _build_token(private_key, sub=user.keycloak_subject)
     payload = _profile_payload(preferred_language=language)
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 422
         assert await _count_profiles_for(db_session, user.id) == 0
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -766,29 +567,17 @@ async def test_put_me_rejects_out_of_range_daily_minutes(
     token = _build_token(private_key, sub=user.keycloak_subject)
     payload = _profile_payload(daily_available_minutes=minutes)
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 422
         assert await _count_profiles_for(db_session, user.id) == 0
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -819,29 +608,17 @@ async def test_put_me_rejects_wrong_types(
     token = _build_token(private_key, sub=user.keycloak_subject)
     payload = _profile_payload(**{field: value})
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 422
         assert await _count_profiles_for(db_session, user.id) == 0
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -864,29 +641,17 @@ async def test_put_me_rejects_boolean_daily_minutes(
     token = _build_token(private_key, sub=user.keycloak_subject)
     payload = _profile_payload(daily_available_minutes=True)
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 422
         assert await _count_profiles_for(db_session, user.id) == 0
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -908,29 +673,17 @@ async def test_put_me_rejects_unknown_extra_field(
     token = _build_token(private_key, sub=user.keycloak_subject)
     payload = _profile_payload(unexpected_field="not part of the contract")
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 422
         assert await _count_profiles_for(db_session, user.id) == 0
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -954,29 +707,17 @@ async def test_put_me_accepts_boundary_daily_minutes(
     token = _build_token(private_key, sub=user.keycloak_subject)
     payload = _profile_payload(daily_available_minutes=minutes)
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             response = await client.put(
                 "/v1/users/me",
                 json=payload,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
         assert response.status_code == 200
         assert response.json()["daily_available_minutes"] == minutes
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()
 
@@ -1026,22 +767,12 @@ async def test_profile_endpoints_do_not_require_any_role(
         missing_claims=["realm_access"],
     )
 
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
     try:
-        transport = ASGITransport(app=app)
-
-        async with AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
+        async with _api(db_session, token) as (client, headers):
             put_response = await client.put(
                 "/v1/users/me",
                 json=_profile_payload(),
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
             assert put_response.status_code == 200
@@ -1049,13 +780,11 @@ async def test_profile_endpoints_do_not_require_any_role(
 
             get_response = await client.get(
                 "/v1/users/me",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             )
 
             assert get_response.status_code == 200
             assert get_response.json()["user_id"] == str(user.id)
     finally:
-        app.dependency_overrides.clear()
-
         await db_session.delete(user)
         await db_session.commit()

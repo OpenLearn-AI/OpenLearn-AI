@@ -1,32 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
-import { getKeycloak } from "@/lib/keycloak";
-import type { MeResponse } from "../types";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 
-async function fetchMe(): Promise<MeResponse> {
-    const keycloak = await getKeycloak();
+import { apiFetch } from "@/lib/api";
+import { meResponseSchema, type Me } from "@/features/auth/schemas";
+import { authKeys } from "@/features/auth/keys";
 
-    if (!keycloak || !keycloak.token) {
-        throw new Error("Not authenticated");
-    }
-
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-    const response = await fetch(`${baseUrl}/auth/me`, {
-        headers: {
-            Authorization: `Bearer ${keycloak.token}`,
-        },
-    });
-
-    if (!response.ok) {
-        throw new Error(`Failed to fetch /auth/me: ${response.status}`);
-    }
-
-    return response.json();
-}
+/**
+ * Query options for the current-user query (D5 — `queryOptions`
+ * objects next to the hooks). Exported so `prefetchQuery` /
+ * `fetchQuery` can reuse the same definition.
+ */
+export const meOptions = queryOptions({
+    queryKey: authKeys.me(),
+    queryFn: () => apiFetch<Me>("/auth/me", { schema: meResponseSchema }),
+});
 
 export function useMe() {
-    return useQuery({
-        queryKey: ["auth", "me"],
-        queryFn: fetchMe,
-    });
+    return useQuery(meOptions);
 }

@@ -1,4 +1,4 @@
-"""Request/response schemas for the Week 6 Course API (/v1/courses)."""
+"""Request/response schemas for the Course API (/v1/courses)."""
 
 import uuid
 from datetime import datetime
@@ -20,17 +20,11 @@ class CourseCreate(BaseModel):
     description: str | None = Field(default=None, min_length=1)
 
 
-class CourseUpdate(BaseModel):
-    """Full-replacement payload for PUT /v1/courses/{course_id}.
-
-    Same contract as CourseCreate: PUT replaces title/description entirely,
-    and ``owner_id`` cannot be changed by the client.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    title: str = Field(min_length=1, max_length=255)
-    description: str | None = Field(default=None, min_length=1)
+# PUT /v1/courses/{course_id} takes the same contract as creation: it replaces
+# title/description entirely and can never change ``owner_id``, so both
+# operations share one request schema. Aliased rather than subclassed so the
+# PUT body stays identical to the POST body, field for field.
+CourseUpdate = CourseCreate
 
 
 class CourseResponse(BaseModel):

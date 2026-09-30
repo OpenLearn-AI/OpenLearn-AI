@@ -23,7 +23,7 @@ export function LogoutButton() {
     return (
         <button
             onClick={handleLogout}
-            className="group inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-all duration-200 hover:scale-[1.02] hover:border-red-300 hover:bg-red-600 hover:text-white hover:shadow-md active:scale-[0.98]"
+            className="group inline-flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition-all duration-200 hover:bg-destructive hover:text-destructive-foreground active:scale-[0.98]"
         >
             <svg
                 xmlns="http://www.w3.org/2000/svg"

@@ -1,9 +1,11 @@
 import type Keycloak from "keycloak-js";
 
+import { config } from "@/lib/config";
+
 let keycloak: Keycloak | null = null;
 let initPromise: Promise<Keycloak> | null = null;
 
-export async function getKeycloak() {
+export async function getKeycloak(): Promise<Keycloak | null> {
     if (typeof window === "undefined") {
         return null;
     }
@@ -18,19 +20,45 @@ export async function getKeycloak() {
 
         if (!keycloak) {
             keycloak = new KeycloakConstructor({
-                url: "http://localhost:8080",
-                realm: "openlearn",
-                clientId: "openlearn-frontend",
+                url: config.keycloak.url,
+                realm: config.keycloak.realm,
+                clientId: config.keycloak.clientId,
             });
         }
 
-        await keycloak.init({
-            onLoad: "check-sso",
-            pkceMethod: "S256",
-        });
+        if (!keycloak.authenticated) {
+            await keycloak.init({
+                onLoad: "check-sso",
+                pkceMethod: "S256",
+                checkLoginIframe: false,
+            });
+        }
 
         return keycloak;
     })();
 
-    return initPromise;
+    try {
+        return await initPromise;
+    } catch (error) {
+        initPromise = null;
+        console.error("Failed to initialize Keycloak:", error);
+        return null;
+    }
+}
+
+export async function getAccessToken(): Promise<string | null> {
+    const instance = await getKeycloak();
+
+    if (!instance || !instance.authenticated) {
+        return null;
+    }
+
+    try {
+        await instance.updateToken(30);
+    } catch (error) {
+        console.error("Failed to refresh Keycloak token:", error);
+        return null;
+    }
+
+    return instance.token ?? null;
 }

@@ -9,10 +9,22 @@ import os
 import re
 import uuid
 
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.material import Material, PENDING_STATUS
+from app.models.material import (
+    FAILED_STATUS,
+    PENDING_STATUS,
+    PROCESSING_STATUS,
+    READY_STATUS,
+    Material,
+)
+
+_ALLOWED_TRANSITIONS = {
+    PENDING_STATUS: {PROCESSING_STATUS},
+    PROCESSING_STATUS: {READY_STATUS, FAILED_STATUS},
+}
 
 _KEY_PREFIX_TEMPLATE = "courses/{course_id}/materials/"
 _SAFE_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
@@ -66,4 +78,74 @@ async def create_material(
         await db.rollback()
         raise
     await db.refresh(material)
+    return material
+
+
+async def get_material_by_id(
+    db: AsyncSession,
+    material_id: uuid.UUID,
+) -> Material | None:
+    result = await db.execute(
+        select(Material).where(Material.id == material_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def claim_pending_material(
+    db: AsyncSession,
+    material_id: uuid.UUID,
+) -> Material | None:
+    """Atomically claim a pending material for processing (W8).
+
+    The claim is a single conditional UPDATE that makes the ``pending`` ->
+    ``processing`` transition and only matches rows still ``pending`` at
+    execution time, so concurrent workers can never claim the same material
+    twice. The claim is committed before returning; the returned material is
+    already persisted as ``processing``. Returns ``None`` when there is no
+    pending material to claim (including when another worker already claimed
+    it).
+    """
+    result = await db.execute(
+        update(Material)
+        .where(Material.id == material_id, Material.status == PENDING_STATUS)
+        .values(status=PROCESSING_STATUS)
+        .returning(Material.id)
+        .execution_options(synchronize_session=False)
+    )
+    if result.scalar_one_or_none() is None:
+        return None
+    await db.commit()
+    material = await get_material_by_id(db, material_id)
+    await db.refresh(material)
+    return material
+
+
+async def list_materials_by_course(
+    db: AsyncSession,
+    course_id: uuid.UUID,
+) -> list[Material]:
+    """Return all materials for a course, newest first (id as tiebreak)."""
+    result = await db.execute(
+        select(Material)
+        .where(Material.course_id == course_id)
+        .order_by(Material.created_at.desc(), Material.id)
+    )
+    return list(result.scalars().all())
+
+
+async def transition_material_status(
+    db: AsyncSession,
+    material: Material,
+    new_status: str,
+) -> Material:
+    allowed_statuses = _ALLOWED_TRANSITIONS.get(material.status, set())
+
+    if new_status not in allowed_statuses:
+        raise ValueError(
+            f"Invalid material status transition: "
+            f"{material.status!r} -> {new_status!r}"
+        )
+
+    material.status = new_status
+    await db.flush()
     return material

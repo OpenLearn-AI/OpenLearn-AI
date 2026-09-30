@@ -21,7 +21,6 @@ class Settings(BaseSettings):
         "http://localhost:8080/realms/openlearn/protocol/openid-connect/certs"
     )
     keycloak_audience: str = "openlearn-api"
-    keycloak_client_id: str = "openlearn-frontend"
 
     # PAL / AI Settings
     ai_ocr_provider: str = "mock"
@@ -39,7 +38,7 @@ class Settings(BaseSettings):
     ai_reasoning_fallbacks: str = ""
     ai_vector_db_provider: str = "mock"
 
-    # Chunking (Week 6 P8)
+    # Chunking
     chunk_size: int = 1200
     chunk_overlap: int = 150
 

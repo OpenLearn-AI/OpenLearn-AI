@@ -25,7 +25,7 @@ _PROFILE_ERROR_RESPONSES = {
 async def read_my_profile(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> ProfileResponse:
+):
     profile = await get_profile_by_user_id(db, user.id)
 
     if profile is None:
@@ -34,7 +34,7 @@ async def read_my_profile(
             detail="Profile not found",
         )
 
-    return ProfileResponse.model_validate(profile)
+    return profile
 
 
 @router.put(
@@ -46,9 +46,9 @@ async def replace_my_profile(
     payload: ProfileUpdate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> ProfileResponse:
+):
     # The profile owner always comes from the authenticated identity; the
     # request body cannot influence it.
     profile = await replace_profile(db, user.id, payload)
 
-    return ProfileResponse.model_validate(profile)
+    return profile

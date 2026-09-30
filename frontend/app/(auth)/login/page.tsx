@@ -1,14 +1,32 @@
+import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/LoginForm";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export default function LoginPage() {
     return (
-        <main className="relative flex min-h-screen items-center justify-center bg-background px-4 py-8">
-            <div className="absolute right-4 top-4">
+        <>
+            <div className="absolute end-6 top-6">
                 <ThemeToggle />
             </div>
 
-            <LoginForm />
-        </main>
+            {/* Brand Header */}
+            <div className="text-center mb-8">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-wider text-foreground">OPENLEARN</h1>
+            </div>
+
+            <div className="w-full max-w-md bg-card text-card-foreground p-8 rounded-2xl shadow-xl border border-border">
+                <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-card-foreground">Sign in to your account</h2>
+                </div>
+                {/*
+                  Suspense boundary required by Next.js because LoginForm
+                  uses useSearchParams() to read the `redirectedFrom`
+                  query param carried over by AuthGuard.
+                */}
+                <Suspense fallback={null}>
+                    <LoginForm />
+                </Suspense>
+            </div>
+        </>
     );
 }

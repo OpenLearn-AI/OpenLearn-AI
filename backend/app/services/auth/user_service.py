@@ -6,6 +6,28 @@ from sqlalchemy.exc import IntegrityError
 from app.models.user import User
 
 
+class KeycloakIdentityError(ValueError):
+    """A token could not be resolved to an OpenLearn user.
+
+    These are defensive failures for identities that are already
+    signature/issuer/audience validated, so they are caller-caused and must
+    surface as 4xx rather than 500. They subclass ``ValueError`` so the
+    service contract (and its existing callers) is unchanged.
+    """
+
+
+class MissingIdentityError(KeycloakIdentityError):
+    """The token carries no issuer or subject to resolve a user by."""
+
+
+class MissingEmailError(KeycloakIdentityError):
+    """The token carries no email, so no user row can be created."""
+
+
+class DuplicateEmailError(KeycloakIdentityError):
+    """Another OpenLearn user already owns the email in the token."""
+
+
 async def get_user_by_keycloak_identity(
     db: AsyncSession,
     claims: dict[str, Any],
@@ -14,10 +36,10 @@ async def get_user_by_keycloak_identity(
     subject = claims.get("sub")
 
     if not issuer:
-        raise ValueError("Keycloak issuer is missing.")
+        raise MissingIdentityError("Keycloak issuer is missing.")
 
     if not subject:
-        raise ValueError("Keycloak subject is missing.")
+        raise MissingIdentityError("Keycloak subject is missing.")
 
     result = await db.execute(
         select(User).where(
@@ -38,13 +60,13 @@ async def get_or_create_user_from_keycloak(
     email = claims.get("email")
 
     if not issuer:
-        raise ValueError("Keycloak issuer is missing.")
+        raise MissingIdentityError("Keycloak issuer is missing.")
 
     if not subject:
-        raise ValueError("Keycloak subject is missing.")
+        raise MissingIdentityError("Keycloak subject is missing.")
 
     if not email:
-        raise ValueError("Keycloak email is missing.")
+        raise MissingEmailError("Keycloak email is missing.")
 
     user = await get_user_by_keycloak_identity(
         db,
@@ -67,7 +89,7 @@ async def get_or_create_user_from_keycloak(
     existing_email_user = existing_email_result.scalar_one_or_none()
 
     if existing_email_user is not None:
-        raise ValueError(
+        raise DuplicateEmailError(
             "A different OpenLearn user already uses this email address."
         )
 

@@ -210,6 +210,9 @@ services:
     command: celery -A app.workers.celery_app worker --loglevel=info -E
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DATABASE_URL: ${DATABASE_URL}
+      SENTRY_DSN: ${SENTRY_DSN}
+      ENVIRONMENT: staging
       S3_ENDPOINT_URL: http://minio:9000
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
@@ -227,6 +230,7 @@ services:
     command: celery -A app.workers.celery_app beat --loglevel=info
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       redis:
         condition: service_healthy

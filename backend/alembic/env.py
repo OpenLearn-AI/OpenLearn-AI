@@ -7,13 +7,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import settings
 from app.db.base import Base
-from app.models import (  # noqa: F401
-    Course,
-    Enrollment,
-    Material,
-    Profile,
-    User,
-)
+
+# Importing the models package registers every ORM model on ``Base.metadata``,
+# which is what ``target_metadata`` below needs for autogenerate. The package
+# imports each model module itself, so importing the package is enough.
+import app.models  # noqa: F401
 
 
 config = context.config

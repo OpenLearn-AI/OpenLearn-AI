@@ -1,0 +1,173 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+import {
+    courseSchema,
+    type CourseFormValues,
+} from "@/features/courses/schemas";
+import {
+    useCreateCourse,
+    useUpdateCourse,
+} from "@/features/courses/api/useCourseMutations";
+import { ApiError } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Field } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
+
+interface CourseFormProps {
+    mode: "create" | "edit";
+    courseId?: string;
+    initialValues?: CourseFormValues;
+}
+
+export function CourseForm({
+    mode,
+    courseId,
+    initialValues,
+}: CourseFormProps) {
+    const router = useRouter();
+
+    const createCourse = useCreateCourse();
+    const updateCourse = useUpdateCourse();
+
+    const [title, setTitle] = useState(initialValues?.title ?? "");
+    const [description, setDescription] = useState(
+        initialValues?.description ?? "",
+    );
+
+    const [errors, setErrors] = useState<{
+        title?: string;
+        description?: string;
+    }>({});
+
+    const isSubmitting =
+        createCourse.isPending || updateCourse.isPending;
+
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
+        const values: CourseFormValues = {
+            title,
+            description: description || null,
+        };
+
+        const result = courseSchema.safeParse(values);
+
+        if (!result.success) {
+            const fieldErrors: {
+                title?: string;
+                description?: string;
+            } = {};
+
+            for (const issue of result.error.issues) {
+                const field = issue.path[0] as "title" | "description";
+
+                if (field === "title" || field === "description") {
+                    fieldErrors[field] = issue.message;
+                }
+            }
+
+            setErrors(fieldErrors);
+            return;
+        }
+
+        setErrors({});
+
+        if (mode === "create") {
+            createCourse.mutate(result.data, {
+                onSuccess: () => {
+                    router.push("/courses");
+                },
+            });
+
+            return;
+        }
+
+        if (!courseId) {
+            return;
+        }
+
+        updateCourse.mutate(
+            {
+                courseId,
+                payload: result.data,
+            },
+            {
+                onSuccess: () => {
+                    router.push("/courses");
+                },
+            },
+        );
+    };
+
+    const mutationError =
+        createCourse.error ?? updateCourse.error;
+
+    const mutationErrorMessage =
+        mutationError instanceof ApiError
+            ? mutationError.status === 401
+                ? "Your session has expired. Please log in again."
+                : mutationError.status === 403
+                  ? "You do not have permission to perform this action."
+                  : mutationError.status === 404
+                    ? "The course was not found."
+                    : mutationError.status === 422
+                      ? "The submitted values are invalid."
+                      : mutationError.message
+            : mutationError instanceof Error
+                ? mutationError.message
+                : null;
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+            <Field
+                label="Title"
+                htmlFor="course-title"
+                error={errors.title}
+            >
+                <Input
+                    id="course-title"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Course title"
+                    disabled={isSubmitting}
+                    aria-invalid={Boolean(errors.title)}
+                />
+            </Field>
+
+            <Field
+                label="Description"
+                htmlFor="course-description"
+                error={errors.description}
+            >
+                <Textarea
+                    id="course-description"
+                    value={description}
+                    onChange={(event) =>
+                        setDescription(event.target.value)
+                    }
+                    placeholder="Course description"
+                    disabled={isSubmitting}
+                    aria-invalid={Boolean(errors.description)}
+                />
+            </Field>
+
+            {mutationErrorMessage && (
+                <p role="alert" className="text-sm text-destructive">
+                    {mutationErrorMessage}
+                </p>
+            )}
+
+            <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting
+                    ? "Saving..."
+                    : mode === "create"
+                      ? "Create Course"
+                      : "Save Changes"}
+            </Button>
+        </form>
+    );
+}

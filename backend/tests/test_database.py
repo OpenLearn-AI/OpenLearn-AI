@@ -10,35 +10,7 @@ from app.models.profile import Profile
 from app.models.course import Course
 from app.models.enrollment import Enrollment
 from app.models.material import Material
-
-
-ISSUER = "http://localhost:8080/realms/openlearn"
-
-
-async def _delete_user_by_subject(db, subject: str) -> None:
-    """Defensively remove a user by Keycloak subject to keep tests repeatable."""
-    result = await db.execute(
-        select(User).where(User.keycloak_subject == subject)
-    )
-    for user in result.scalars():
-        await db.delete(user)
-    await db.commit()
-
-
-async def _create_user(db, subject: str, email: str) -> User:
-    await _delete_user_by_subject(db, subject)
-
-    user = User(
-        keycloak_issuer=ISSUER,
-        keycloak_subject=subject,
-        email=email,
-    )
-
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    return user
+from conftest import _create_material, _create_user
 
 
 @pytest.mark.asyncio
@@ -752,19 +724,6 @@ async def test_deleting_user_cascades_to_enrollments(db_session):
 
     await db_session.delete(owner)
     await db_session.commit()
-
-
-async def _create_material(db, course: Course, uploaded_by: User) -> Material:
-    material = Material(
-        course_id=course.id,
-        title="Lecture Slides",
-        s3_key=f"courses/{course.id}/materials/{uuid.uuid4()}-slides.pdf",
-        uploaded_by=uploaded_by.id,
-    )
-    db.add(material)
-    await db.commit()
-    await db.refresh(material)
-    return material
 
 
 def test_materials_table_contract():

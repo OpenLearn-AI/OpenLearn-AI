@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
@@ -5,9 +6,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.models.course import Course
 from app.models.user import User
 from app.services.auth.oidc import decode_access_token, extract_roles
 from app.services.auth.user_service import get_user_by_keycloak_identity
+from app.services.course_service import get_course_by_id
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -48,6 +51,35 @@ async def get_current_user(
         )
 
     return user
+
+
+async def require_owned_course(
+    db: AsyncSession,
+    course_id: uuid.UUID,
+    user: User,
+) -> Course:
+    """Load a course and enforce owner-only access to it.
+
+    A missing course is a 404 checked before the ownership check; a course
+    owned by someone else is a 403. Returns the loaded course so callers can
+    keep working with it. Owner-only mutation and the course-scoped material
+    routes share this one check; no role is implied by it.
+    """
+    course = await get_course_by_id(db, course_id)
+
+    if course is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found",
+        )
+
+    if course.owner_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+
+    return course
 
 
 def require_role(required_role: str):

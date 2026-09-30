@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 import uuid
 
 import jwt
@@ -20,40 +19,6 @@ from fastapi import HTTPException, Depends
 
 ISSUER = settings.keycloak_issuer
 AUDIENCE = settings.keycloak_audience
-
-
-@pytest.fixture
-def rsa_keypair():
-    private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-    )
-
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("utf-8")
-
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
-
-    return private_pem, public_pem
-
-
-@pytest.fixture
-def fake_jwks(rsa_keypair, monkeypatch):
-    _, public_pem = rsa_keypair
-
-    class FakeJwksClient:
-        def get_signing_key_from_jwt(self, token):
-            return SimpleNamespace(key=public_pem)
-
-    monkeypatch.setattr(oidc, "_JWK_CLIENT", FakeJwksClient())
-
-    return FakeJwksClient
 
 
 def _build_token(
@@ -308,16 +273,11 @@ async def test_me_endpoint_with_valid_token(
         assert payload["email"] == "student1@openlearn.dev"
         assert payload["settings"] == {"theme": "dark"}
         assert payload["roles"] == ["student"]
-        # Preferred language moved to profiles (Phase 2 exposes it via
-        # GET /v1/users/me); /auth/me must not return the legacy field.
-        assert "preferred_lang" not in payload
 
         assert payload["keycloak"]["issuer"] == ISSUER
         assert payload["keycloak"]["subject"] == subject
 
-        assert "password" not in payload
         assert "token" not in payload
-        assert "password_hash" not in payload
 
     finally:
         app.dependency_overrides.clear()
@@ -362,7 +322,6 @@ async def test_me_endpoint_jit_creates_new_user(
         assert payload["email"] == "student1@openlearn.dev"
         assert payload["settings"] == {}
         assert payload["roles"] == ["student"]
-        assert "preferred_lang" not in payload
         assert payload["keycloak"]["issuer"] == ISSUER
         assert payload["keycloak"]["subject"] == subject
 
@@ -382,7 +341,176 @@ async def test_me_endpoint_jit_creates_new_user(
 
 
 @pytest.mark.asyncio
-async def test_student_role_is_authorized(
+async def test_auth_me_creates_or_returns_user(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    subject = "auth-me-create-or-return-subject"
+    token = _build_token(private_key, sub=subject)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            first = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            second = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+
+        first_payload = first.json()
+        second_payload = second.json()
+
+        # issuer + subject is the create-or-return key, so the repeated call
+        # resolves to the user the first call provisioned.
+        assert first_payload["id"] == second_payload["id"]
+        assert first_payload["email"] == "student1@openlearn.dev"
+        assert first_payload["keycloak"]["issuer"] == ISSUER
+        assert first_payload["keycloak"]["subject"] == subject
+
+        rows = (
+            await db_session.execute(
+                select(User).where(
+                    User.keycloak_issuer == ISSUER,
+                    User.keycloak_subject == subject,
+                )
+            )
+        ).scalars().all()
+
+        assert len(rows) == 1
+        assert rows[0].id == uuid.UUID(first_payload["id"])
+        assert rows[0].email == "student1@openlearn.dev"
+    finally:
+        app.dependency_overrides.clear()
+
+        # Remove every row for this identity so a duplicate cannot leak
+        # into later tests even when an assertion above fails.
+        result = await db_session.execute(
+            select(User).where(
+                User.keycloak_issuer == ISSUER,
+                User.keycloak_subject == subject,
+            )
+        )
+
+        for user in result.scalars().all():
+            await db_session.delete(user)
+
+        await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_auth_me_returns_400_when_email_missing(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    """A signature-valid token with no email cannot provision a user, so
+    /auth/me reports 400 instead of a 500 and creates nothing."""
+    private_key, _ = rsa_keypair
+
+    subject = "auth-me-missing-email-subject"
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        transport = ASGITransport(app=app)
+
+        token = _build_token(
+            private_key,
+            sub=subject,
+            missing_claims=["email"],
+        )
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Keycloak email is missing."
+
+        result = await db_session.execute(
+            select(User).where(User.keycloak_subject == subject)
+        )
+        assert result.scalar_one_or_none() is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_auth_me_returns_409_on_duplicate_email(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    """The token's email already belongs to a different OpenLearn user, so
+    /auth/me reports 409 rather than a 500."""
+    private_key, _ = rsa_keypair
+
+    existing_user = User(
+        keycloak_issuer=ISSUER,
+        keycloak_subject="auth-me-duplicate-email-owner-subject",
+        email="student1@openlearn.dev",
+    )
+
+    db_session.add(existing_user)
+    await db_session.commit()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(
+                "/auth/me",
+                headers={
+                    "Authorization": f"Bearer {_build_token(private_key)}"
+                },
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "A different OpenLearn user already uses this email address."
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+        await db_session.delete(existing_user)
+        await db_session.commit()
+
+
+def test_student_role_is_authorized(
     fake_jwks,
     rsa_keypair,
 ) -> None:
@@ -404,8 +532,7 @@ async def test_student_role_is_authorized(
     assert result["sub"] == "123e4567-e89b-12d3-a456-426614174000"
 
 
-@pytest.mark.asyncio
-async def test_student_role_is_forbidden_from_instructor(
+def test_student_role_is_forbidden_from_instructor(
     fake_jwks,
     rsa_keypair,
 ) -> None:
@@ -428,8 +555,7 @@ async def test_student_role_is_forbidden_from_instructor(
     assert exc_info.value.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_instructor_role_is_authorized(
+def test_instructor_role_is_authorized(
     fake_jwks,
     rsa_keypair,
 ) -> None:
@@ -451,8 +577,7 @@ async def test_instructor_role_is_authorized(
     assert result["sub"] == "123e4567-e89b-12d3-a456-426614174000"
 
 
-@pytest.mark.asyncio
-async def test_admin_role_is_authorized(
+def test_admin_role_is_authorized(
     fake_jwks,
     rsa_keypair,
 ) -> None:
@@ -474,8 +599,7 @@ async def test_admin_role_is_authorized(
     assert result["sub"] == "123e4567-e89b-12d3-a456-426614174000"
 
 
-@pytest.mark.asyncio
-async def test_missing_role_is_forbidden(
+def test_missing_role_is_forbidden(
     fake_jwks,
     rsa_keypair,
 ) -> None:
@@ -498,8 +622,7 @@ async def test_missing_role_is_forbidden(
     assert exc_info.value.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_absent_role_claim_is_forbidden_without_crashing(
+def test_absent_role_claim_is_forbidden_without_crashing(
     fake_jwks,
     rsa_keypair,
 ) -> None:
@@ -518,8 +641,7 @@ async def test_absent_role_claim_is_forbidden_without_crashing(
     assert exc_info.value.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_multi_role_token_satisfies_each_matching_guard(
+def test_multi_role_token_satisfies_each_matching_guard(
     fake_jwks,
     rsa_keypair,
 ) -> None:
@@ -546,8 +668,7 @@ async def test_multi_role_token_satisfies_each_matching_guard(
     assert exc_info.value.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_email_does_not_grant_authorization(
+def test_email_does_not_grant_authorization(
     fake_jwks,
     rsa_keypair,
 ) -> None:

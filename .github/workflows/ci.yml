@@ -107,21 +107,11 @@ jobs:
         run: python -m pytest tests/pal tests/documents
 
   frontend:
-    name: Frontend (lint + typecheck + build)
+    name: Frontend (lint + typecheck + unit tests + Storybook tests + build)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Check for a test script
-        id: check_test_script
-        working-directory: frontend
-        run: |
-          if node -e "const s=require('./package.json').scripts; process.exit(s && s.test ? 0 : 1)"; then
-            echo "has_test=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_test=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -138,20 +128,43 @@ jobs:
 
       - name: Typecheck
         working-directory: frontend
-        run: npx tsc --noEmit
+        run: npm run typecheck
+
+      - name: Install Playwright browser for Storybook tests
+        # Storybook component tests run in a real browser via
+        # @vitest/browser-playwright (chromium). The browser binary must
+        # be present before `npm run test:storybook` runs.
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run unit tests
+        working-directory: frontend
+        run: npm run test
+
+      - name: Run Storybook tests
+        # Includes axe a11y verification at `test: 'error'` (Phase 5 baseline).
+        # A violation fails the story test, which fails this step.
+        working-directory: frontend
+        run: npm run test:storybook
 
       - name: Build
         working-directory: frontend
+        # NEXT_PUBLIC_* values are required at build time — lib/config.ts
+        # does Zod validation at module load and throws if they're missing.
+        # CI reads from GitHub repository Variables (non-secret config).
+        # The `||` fallbacks use the .env.example defaults so CI still
+        # passes on a fresh fork that hasn't configured repo Variables yet.
+        # Real deployment values come from the same repo Variables in
+        # deploy-staging.yml (build-args) — this keeps CI and deploy
+        # consistent without duplicating config in the workflow file.
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
+          NEXT_PUBLIC_KEYCLOAK_URL: ${{ vars.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080' }}
+          NEXT_PUBLIC_KEYCLOAK_REALM: ${{ vars.NEXT_PUBLIC_KEYCLOAK_REALM || 'openlearn' }}
+          NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'openlearn-frontend' }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${{ vars.NEXT_PUBLIC_SENTRY_ENVIRONMENT || 'development' }}
         run: npm run build
-
-      - name: Run Vitest
-        if: steps.check_test_script.outputs.has_test == 'true'
-        working-directory: frontend
-        run: npm run test -- --run
-
-      - name: Skip test notice
-        if: steps.check_test_script.outputs.has_test == 'false'
-        run: echo "frontend/package.json has no 'test' script yet — skipping Vitest step (Pod C hasn't added tests)."
 
   eval:
     name: Run Eval Harness
