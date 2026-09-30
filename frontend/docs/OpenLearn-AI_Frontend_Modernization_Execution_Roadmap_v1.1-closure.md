@@ -1,7 +1,7 @@
 # OpenLearn-AI Frontend Architecture Modernization — Execution Roadmap
 
 > **Version:** v1.1 — 2026-09-29 (v1.0 — 2026-09-28); Phase 0 closure recorded 2026-09-29 within the v1.1 baseline (§5); Phase 1 closure recorded 2026-09-29 (§6); Phase 2 closure recorded 2026-09-29 (§7); Phase 3 closure recorded 2026-09-29 (§8); Phase 4 COMPLETE — closure recorded 2026-09-29 (§9 Patch 9–10 records)
-> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified (committed at `7ea76e7`); Phase 5 COMPLETE (committed at `f3a5fb4`) — 42/42 Storybook tests with axe enforcement at `test: 'error'`; Phase 6 Batch 1 COMPLETE (committed at `5d0b7ac`) — unit + Storybook tests wired into CI; Phase 6 Batch 2 REPOSITORY COMPLETE — Playwright E2E runner installed, three smoke flows authored, `e2e.yml` on `workflow_dispatch`; verification patch staged against `5d0b7ac`. Batches 3–5 pending review.
+> **Phase status:** Phase 0 DONE; Phase 1 REPOSITORY COMPLETE + LOCALLY VERIFIED (committed at `d9d1c53`); Phase 2 REPOSITORY COMPLETE (committed at `55d6649`); Phase 3 REPOSITORY COMPLETE (committed at `8635a48`); Phase 4 COMPLETE — all 9 required work items implemented and verified (committed at `7ea76e7`); Phase 5 COMPLETE (committed at `f3a5fb4`) — 42/42 Storybook tests with axe enforcement at `test: 'error'`; Phase 6 Batch 1 COMPLETE (committed at `5d0b7ac`) — unit + Storybook tests wired into CI; Phase 6 Batch 2 COMPLETE (committed at `fc99071`) — Playwright E2E runner installed, three smoke flows authored, `e2e.yml` on `workflow_dispatch`; Phase 6 Batch 3 REPOSITORY COMPLETE — `withSentryConfig` wired, environment-aware sampling, source-map upload configured (auth token is a Pod D external dependency); verification patch staged against `fc99071`. Batches 4–5 pending review.
 > **Branch:** `feature/frontend-refactor` @ `3bfe85a` (HEAD after Phase 4 Batch 2; Phase 4 final batch applied on top, not yet committed to the remote branch).
 > **Architecture baseline:** D1–D19 ACCEPTED with amendments — explicit clarifications to D9, D10, D13 (2026-09-29; see the architecture-baseline subsection in §1)
 > **Companion to:** `OpenLearn-AI_Frontend_Architecture_Modernization.docx` (architecture decision study)
@@ -1378,7 +1378,7 @@ Modified files:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS — Batches 1–2 COMPLETE | ~1 sprint | D12, D13 (full), D14 | Phases 0–5 complete |
+| IN PROGRESS — Batches 1–3 COMPLETE | ~1 sprint | D12, D13 (full), D14 | Phases 0–5 complete |
 
 **Goal.** Turn the installed-but-unwired tooling into the standing quality bar: a test script in CI, the three E2E smoke flows, Sentry wired end to end, and a README that onboards a new member in one sitting.
 
@@ -1394,7 +1394,7 @@ Modified files:
 - [x] `.github/workflows/ci.yml` — run unit tests and story tests on every PR ✅ Phase 6 Batch 1 (removed the obsolete conditional "Check for a test script" gate from before Phase 2; CI now runs `npm run test` and `npm run test:storybook` unconditionally, installs the Playwright chromium browser binary that `@vitest/browser-playwright` requires, and uses `npm run typecheck` for discoverability; axe enforcement at `test: 'error'` from Phase 5 is preserved)
 - [x] `e2e/` — the three Playwright smoke specs: (1) login lands on dashboard; (2) create → read → update → delete a course; (3) profile create-then-update round trip ✅ Phase 6 Batch 2 (`@playwright/test` installed; `frontend/playwright.config.ts` configured; `frontend/e2e/login.spec.ts`, `frontend/e2e/courses-crud.spec.ts`, `frontend/e2e/profile-roundtrip.spec.ts` authored — selectors are role/text/label-based, no `data-testid` injected into the app)
 - [x] Wire E2E as workflow-dispatch first; promote to required CI check after three consecutive green runs (flake discipline) ✅ Phase 6 Batch 2 (`.github/workflows/e2e.yml` created with `workflow_dispatch:` only — NO `pull_request:`/`push:` triggers; promotion explicitly deferred pending three green runs; see Batch 2 closure record below)
-- [ ] `next.config.ts` — `withSentryConfig`; sentry configs get environment-aware sampling; source-map upload configured (needs the Sentry auth token — Pod D item) — Batch 3
+- [x] `next.config.ts` — `withSentryConfig`; sentry configs get environment-aware sampling; source-map upload configured (needs the Sentry auth token — Pod D item) ✅ Phase 6 Batch 3 (`withSentryConfig` imported from the non-deprecated `@sentry/nextjs/config` subpath; preserves `output: "standalone"`; source-map upload delegated to the SDK which reads `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` from the environment at build time — no hardcoded secrets; `deleteSourcemapsAfterUpload: true`; local dev gracefully skips upload when the token is absent; new `NEXT_PUBLIC_SENTRY_ENVIRONMENT` + `SENTRY_ENVIRONMENT` variables replace the broken `NODE_ENV || "staging"` heuristic; sampling is environment-aware: development 1.0 / staging 0.5 / production 0.1 — see Batch 3 closure record below)
 - [ ] `frontend/README.md` — setup referencing `scripts/setup-dev.sh` and `scripts/LOCAL_SETUP.md` (from commit `95bba7a`) instead of duplicating them; the five environment variables; the conventions; the component-boundary rules from D2 — Batch 4
 
 **Work — recommended:**
@@ -1570,6 +1570,115 @@ These are runtime validation records, not implementation claims. The workflow fi
 - Seyam must run the suite against a real staging environment (with the documented repository variables and secrets) and record the three green runs before any promotion to required CI.
 
 **Patch baseline:** `5d0b7ac` (Phase 6 Batch 1 complete commit). Patch file: `phase6_batch2.patch`.
+
+---
+
+### Phase 6 Batch 3 — Sentry Observability (REPOSITORY COMPLETE)
+
+**Scope.** Wire the existing `@sentry/nextjs` v10.74.0 SDK end-to-end so frontend errors are associated with the correct deployment environment and production stack traces can be source-mapped. D14 implementation — no observability architecture redesign, no new telemetry, no custom error-reporting abstraction.
+
+**Files changed (6):**
+
+- `frontend/next.config.ts` — wrapped the existing `nextConfig` (`output: "standalone"` preserved) with `withSentryConfig` imported from the non-deprecated `@sentry/nextjs/config` subpath (the v10.74.0 SDK emits a deprecation warning when importing from `@sentry/nextjs` directly; the new subpath is the recommended path forward and will be the only path in v11). Source-map upload is delegated to the SDK, which reads `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` from the environment at build time — they are NEVER passed as config options, so they cannot leak into the build artifact. `deleteSourcemapsAfterUpload: true` keeps source maps out of the deployed bundle. `silent: true` suppresses noisy build logs. Local dev builds gracefully skip upload when `SENTRY_AUTH_TOKEN` is absent.
+- `frontend/sentry.client.config.ts` — replaced `process.env.NODE_ENV || "staging"` with `config.sentryEnvironment` (read from `NEXT_PUBLIC_SENTRY_ENVIRONMENT` via `lib/config.ts`). Added environment-aware sampling: development 1.0, staging 0.5, production 0.1. DSN behavior unchanged (empty DSN = no-op SDK).
+- `frontend/sentry.server.config.ts` — replaced `process.env.NODE_ENV || "staging"` with `process.env.SENTRY_ENVIRONMENT` (the server-side counterpart to the client's `NEXT_PUBLIC_SENTRY_ENVIRONMENT` — read at runtime, matching the existing `SENTRY_DSN` pattern used by `infra/docker-compose.staging.yml:214` and the backend `backend/app/observability.py:16`). Added a `resolveSentryEnvironment()` helper that validates the value against the allowed enum and falls back to `"development"` when unset or invalid (fail-safe toward the noisier environment). Sampling mirrors the client: development 1.0, staging 0.5, production 0.1.
+- `frontend/lib/config.ts` — added `NEXT_PUBLIC_SENTRY_ENVIRONMENT` to the Zod schema with an enum constraint (`development | staging | production`) defaulting to `"development"`. Added `sentryEnvironment` to the exported `config` object. The existing five variables are unchanged.
+- `frontend/lib/api.test.ts` — updated the `vi.mock("@/lib/config", ...)` factory to include the new `sentryEnvironment: "development"` field so the mock matches the real `config` shape. No test assertions changed.
+- `frontend/.env.example` — documented `NEXT_PUBLIC_SENTRY_ENVIRONMENT=development` with a comment explaining the allowed values, the default, and the requirement to match the server-side `SENTRY_ENVIRONMENT` in deployment.
+
+**Environment labeling strategy:**
+
+The previous code used `process.env.NODE_ENV || "staging"` in both Sentry configs. This was broken because the Dockerfile runner stage sets `ENV NODE_ENV=production` for BOTH staging and production deployments — so every deployed event was labeled `"production"`, and local dev (where `NODE_ENV` is unset) was labeled `"staging"`. The fix introduces an explicit deployment-environment variable:
+
+| Variable | Where read | When | Purpose |
+|---|---|---|---|
+| `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | `lib/config.ts` → `sentry.client.config.ts` | build time (inlined into client bundle) | Client-side Sentry event environment label |
+| `SENTRY_ENVIRONMENT` | `sentry.server.config.ts` directly | runtime (server process) | Server-side Sentry event environment label |
+
+Both must be set to the same value in deployment. The client var is build-time-inlined (matches the existing `NEXT_PUBLIC_*` convention centralized in `lib/config.ts`); the server var is runtime-read (matches the existing `SENTRY_DSN` pattern). This gives a single deterministic environment label per deployment, with no hostname guessing, no URL parsing, no browser heuristics.
+
+**Sampling strategy:**
+
+| Environment | `tracesSampleRate` | Rationale |
+|---|---|---|
+| development | 1.0 | Local dev noise is signal — capture everything. |
+| staging | 0.5 | Staging load is moderate — sample half. |
+| production | 0.1 | Production load is highest — sample 10% to control cost. |
+
+These are implementation defaults. The architecture decision (D14) intentionally leaves rates configurable — adjust at the deployment env level if a different tradeoff is needed. No dynamic sampling rules, no per-user sampling, no feature-specific sampling, no custom performance instrumentation.
+
+**Source-map upload strategy:**
+
+- Configured through `withSentryConfig` — the official mechanism supported by the installed `@sentry/nextjs` v10.74.0.
+- No custom upload script.
+- The SDK reads `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` from the environment at build time. These are NEVER hardcoded in `next.config.ts` — they are passed only as environment variables, so they cannot leak into the build artifact.
+- `deleteSourcemapsAfterUpload: true` (SDK default, set explicitly to document intent) — source maps are removed from the build output after upload, so they don't ship to end users.
+- No custom `assets`/`ignore` globs — the SDK's default detection (`.next/static/**`) matches the Next.js standalone build layout.
+- Release naming is left to the SDK's auto-detection (git HEAD SHA when available).
+
+**Sentry auth token — Pod D external dependency:**
+
+`SENTRY_AUTH_TOKEN` is NOT available in this repository. It is a Pod D external dependency — the same operational boundary documented in the roadmap §13 Deferred Backlog and the Phase 1 staging auth work. The implementation is complete on the frontend side; the actual authenticated source-map upload will occur in the environment where the Pod D secret exists (CI build with the secret configured, or a deploy-time build with the token in the environment).
+
+No token was fabricated. No token was committed. The build was verified to succeed WITHOUT a token — the SDK gracefully skips upload.
+
+**Verification (local, run by GLM before patch generation):**
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | PASS (clean exit) |
+| Lint | `npm run lint` | PASS (clean exit) |
+| Unit tests | `npm run test` | PASS — 22/22 in 3 files (api.test.ts mock updated to include `sentryEnvironment`) |
+| Storybook tests | `npm run test:storybook` | PASS — 42/42 in 12 story files (axe at `test: 'error'`) |
+| Build | `npm run build` | PASS — 10 routes built, `withSentryConfig` active, `runAfterProductionCompile` ran, source-map upload gracefully skipped (no `SENTRY_AUTH_TOKEN` in env) |
+| `git diff --check` | (whitespace audit) | PASS — no whitespace errors |
+| Secret boundary audit | `grep SENTRY_AUTH_TOKEN\|SENTRY_ORG\|SENTRY_PROJECT` in `frontend/` | PASS — only docstring/comment mentions; no actual code reads or commits a token |
+| `NEXT_PUBLIC_*` boundary | `grep "process.env.NEXT_PUBLIC" lib/keycloak.ts sentry.client.config.ts` | PASS — no matches (both still consume `config` from `@/lib/config`) |
+
+**Runtime Sentry event verification — NOT RUN:**
+
+The required runtime verification (force a frontend error in the real deployment, confirm the event arrives in Sentry with the correct environment label and a source-mapped stack) was NOT performed. The GLM environment has no real Sentry project, no `SENTRY_AUTH_TOKEN`, no staging/production deployment to test against.
+
+```text
+Repository verification: PASS
+Build-time source-map configuration: PASS (configured; upload skipped locally because no auth token — expected)
+Runtime Sentry event verification: NOT RUN
+Reason: no real Sentry project / auth token / deployed environment available in the GLM environment
+Source-map readability verification: NOT RUN
+Reason: depends on a real Sentry project receiving an uploaded source map, which requires the Pod D auth token
+```
+
+Seyam must perform the runtime verification in the staging/production environment once the Pod D `SENTRY_AUTH_TOKEN` secret is configured.
+
+**Architecture preservation (D14 boundary):**
+
+- [x] Provider order unchanged (ThemeProvider → AppQueryProvider → AuthProvider → AuthGuard → Navbar → children).
+- [x] No API boundary changes (no new `fetch` calls, no direct API access outside `lib/api.ts`).
+- [x] No Keycloak/auth changes.
+- [x] No route changes.
+- [x] No UI changes ("freeze behavior, not appearance" — no styling/layout/component-visual changes).
+- [x] No Playwright changes (Batch 2 E2E files untouched).
+- [x] No Storybook changes.
+- [x] No new state-management library.
+- [x] No custom telemetry abstraction.
+- [x] No custom logging framework.
+- [x] No unrelated dependency upgrades (`@sentry/nextjs` stays at `^10.74.0`).
+- [x] No hardcoded Sentry secrets.
+- [x] Existing standalone build behavior preserved (`output: "standalone"` unchanged).
+- [x] Existing Sentry DSN behavior preserved (empty DSN = no-op SDK).
+- [x] Client and server Sentry initialization remain intact.
+- [x] Environment labeling is explicit and deterministic (no hostname guessing, no `NODE_ENV` heuristic).
+- [x] Sampling is environment-aware (development/staging/production tiers).
+- [x] Source-map upload is configured through the installed Sentry SDK (`withSentryConfig`).
+- [x] Local development does not require production Sentry credentials (build succeeds without `SENTRY_AUTH_TOKEN`).
+
+**Manual / runtime verification NOT RUN in this batch:**
+
+- Forced frontend error → arrives in Sentry with correct environment label — NOT RUN (no real Sentry project).
+- Source-mapped stack trace readable in Sentry — NOT RUN (depends on uploaded source maps, which require the Pod D auth token).
+- Production build with real `SENTRY_AUTH_TOKEN` performing actual upload — NOT RUN (no token available).
+
+**Patch baseline:** `fc99071` (Phase 6 Batch 2 complete commit). Patch file: `phase6_batch3.patch`.
 
 ---
 

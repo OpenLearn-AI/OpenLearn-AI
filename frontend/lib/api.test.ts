@@ -11,6 +11,7 @@ vi.mock("@/lib/config", () => ({
             clientId: "openlearn-frontend",
         },
         sentryDsn: null,
+        sentryEnvironment: "development",
     },
 }));
 
