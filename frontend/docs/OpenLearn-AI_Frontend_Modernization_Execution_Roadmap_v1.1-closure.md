@@ -1154,7 +1154,7 @@ Modified files:
 
 | Status | Estimate | Decisions implemented | Depends on |
 |---|---|---|---|
-| IN PROGRESS (2026-09-30) — Batch 1 (logical utility audit + Storybook RTL infrastructure + token contrast check) landed, locally verified; Batch 2 pending (see Batch 1 record below) | ~1 sprint | D10 (full rails), D17 | Phase 4 gate |
+| IN PROGRESS (2026-09-30) — Batch 1 + Batch 2 landed, locally verified; manual gate (keyboard CRUD smoke) pending (see Batch 2 record below) | ~1 sprint | D10 (full rails), D17 | Phase 4 gate |
 
 **Parallel note.** May overlap the tail of Phase 4 if the remaining routes are already final.
 
@@ -1168,9 +1168,9 @@ Modified files:
 
 - [x] Logical-utility audit: `ml-`/`mr-`/`pl-`/`pr-`/`text-left`/`text-right` → `ms-`/`me-`/`ps-`/`pe-`/`text-start`/`text-end` across `components/` and migrated pages — DONE in Batch 1: audited all `frontend/components/` and `frontend/app/`; found 1 real violation (`components/auth/UserInfo.tsx:35` `ml-4` → `ms-4`, fixed). The remaining matches in `components/ui/badge.tsx` and `components/ui/button.tsx` are `has-data-[icon=inline-end]:pr-*` and `has-data-[icon=inline-start]:pl-*` patterns — these are semantically tied to explicit icon position via data attributes and are NOT arbitrary physical-direction utilities. They were reviewed and intentionally retained.
 - [x] `.storybook/preview.tsx` — toggleable RTL/direction view for shared components — DONE in Batch 1: added `globalTypes.direction` with `ltr`/`rtl` toolbar items (default: `ltr`); added `WithDirection` decorator that sets `document.documentElement.dir` based on the selected direction so logical CSS utilities (`ms-`, `me-`, `ps-`, `pe-`, `text-start`, `text-end`) flip correctly in RTL mode. Existing addons, dark-mode behavior, and a11y config preserved.
-- [ ] Storybook pass: `components/ui`, the state trio, `CourseCard`, `Navbar`, forms — verified under RTL and dark — Batch 2 (requires creating stories for components that don't have them yet)
-- [ ] Triage existing axe violations in `ui/` stories; after triage, flip the a11y addon to error for `ui/` stories so CI fails on new violations — Batch 2
-- [ ] Keyboard-only completion of the CRUD smoke (manual now; assertions land with the Phase 6 E2E suite) — Manual gate (NOT RUN — no browser available)
+- [~] Storybook pass: `components/ui`, the state trio, `CourseCard`, `Navbar`, forms — verified under RTL and dark — PARTIALLY DONE in Batch 2: stories created for `LoadingBlock`, `ErrorState`, `EmptyState`, `CourseCard`, `Input`, `Textarea`, `Select`, `Field`, `Label`, `Card`, `Badge` (11 new story files). RTL direction toolbar from Batch 1 is available. Visual RTL/dark verification NOT RUN (no browser runtime available — user must verify locally via `npm run storybook`).
+- [~] Triage existing axe violations in `ui/` stories; after triage, flip the a11y addon to error for `ui/` stories so CI fails on new violations — PARTIALLY DONE in Batch 2: a11y addon flipped from `test: 'todo'` to `test: 'error'` in `.storybook/preview.tsx`. Static accessibility review performed on all story components (label associations, role semantics, aria attributes). Runtime axe verification NOT RUN (no browser runtime available — user must run `npm run test:storybook` locally to confirm stories are actually axe-clean).
+- [ ] Keyboard-only completion of the CRUD smoke (manual now; assertions land with the Phase 6 E2E suite) — Manual gate (NOT RUN — no browser available; see procedure below)
 - [x] Token contrast check for text-on-surface pairs; fix failing pairs in the token file — DONE in Batch 1: inspected all major text-on-surface pairs in `globals.css` (light + dark). All pairs pass WCAG AA (≥4.5:1) using approximate OKLCH→sRGB conversion. The `muted-foreground` on `muted` pair in light mode is borderline (~4.6:1) but passes. No token changes required.
 
 **Work — recommended:**
@@ -1260,6 +1260,92 @@ Dark mode:
 - Flip a11y addon to `test: 'error'` for UI stories
 - Document the a11y baseline (checked vs known-unchecked)
 - Manual gate: keyboard-only CRUD smoke (NOT RUN — provide procedure for Seyam)
+
+### Phase 5 Batch 2 — Storybook stories + axe triage + a11y enforcement + accessibility baseline closure record (2026-09-30)
+
+**Batch 2 purpose.** Create Storybook stories for all shared components that lack them, configure the a11y addon to error mode, perform static accessibility review, and document the accessibility baseline. Runtime axe verification and keyboard CRUD smoke remain pending (no browser available in the GLM environment).
+
+**Baseline.** Branch `feature/frontend-refactor` @ `0fcd3af` (HEAD after Phase 5 Batch 1). Batch 2 rides on top of `0fcd3af`.
+
+**Implementation outcome:**
+
+New files (11 story files):
+- `frontend/stories/LoadingBlock.stories.tsx` — 2 stories: Default, CustomMessage
+- `frontend/stories/ErrorState.stories.tsx` — 3 stories: Default, WithRetry (with onRetry callback), CustomMessage
+- `frontend/stories/EmptyState.stories.tsx` — 3 stories: Default, WithAction (with actionHref + actionLabel), SearchEmpty
+- `frontend/stories/CourseCard.stories.tsx` — 3 stories: Default (with description), NoDescription (null description), LongTitle (tests truncation/layout)
+- `frontend/stories/Input.stories.tsx` — 5 stories: Default, WithValue, Disabled, Invalid (aria-invalid), WithType (number)
+- `frontend/stories/Textarea.stories.tsx` — 4 stories: Default, WithValue, Disabled, Invalid (aria-invalid)
+- `frontend/stories/Select.stories.tsx` — 3 stories: Default (with options), Disabled, Invalid (aria-invalid)
+- `frontend/stories/Field.stories.tsx` — 4 stories: WithInput, WithError (demonstrates error text + aria), WithHint (demonstrates hint text), WithSelect (demonstrates label→select association)
+- `frontend/stories/Label.stories.tsx` — 1 story: Default
+- `frontend/stories/Card.stories.tsx` — 3 stories: Default (Card + Header + Content), WithAction (CardAction + Footer), SmallSize (size="sm")
+- `frontend/stories/Badge.stories.tsx` — 4 stories: Default, Secondary, Destructive, Outline
+
+Modified files:
+- `frontend/.storybook/preview.tsx` — a11y addon config flipped from `test: 'todo'` to `test: 'error'` so CI fails on new axe violations. Comment documents that runtime verification is still pending.
+- `frontend/docs/OpenLearn-AI_Frontend_Modernization_Execution_Roadmap_v1.1-closure.md` — this file. Phase 5 status row, required-work checkboxes, and this Batch 2 closure record updated.
+
+**Static accessibility review performed:**
+- **Label associations:** `Field` component correctly associates `<Label htmlFor>` with the child control's `id`. Stories demonstrate this relationship (WithInput, WithError, WithHint, WithSelect).
+- **Error semantics:** `Field` uses `role="alert"` for error text and `aria-invalid` on the control. `ErrorState` uses `role="alert"`. Stories exercise these paths.
+- **Loading semantics:** `LoadingBlock` uses `role="status"` + `aria-live="polite"`. Story covers default state.
+- **Status semantics:** `EmptyState` is a presentational `<div>` — no interactive role needed. Story covers default and with-action states.
+- **Interactive controls:** `Button` stories already existed (7 stories). `Input`, `Textarea`, `Select` stories cover disabled and aria-invalid states.
+- **CourseCard:** uses `Button` with `render={<Link>}` for accessible navigation links. Story covers default, no-description, and long-title cases.
+
+**Accessibility baseline (checked vs known-unchecked):**
+
+Checked (static review):
+- Label→control associations in `Field` stories
+- `role="alert"` for error messages in `Field` and `ErrorState`
+- `role="status"` + `aria-live="polite"` for loading in `LoadingBlock`
+- `aria-invalid` on form controls in `Input`, `Textarea`, `Select` stories
+- Button variant semantics (destructive, outline, etc.) in existing Button stories
+- Badge variant semantics in new Badge stories
+- Card structure (header, content, footer, action) in new Card stories
+
+Known-unchecked / pending:
+- **Runtime axe verification:** NOT RUN — no browser runtime available in the GLM environment. The a11y addon is configured to `test: 'error'` but the user must run `npm run test:storybook` locally to confirm all stories are actually axe-clean.
+- **Visual RTL verification:** NOT RUN — the RTL direction toolbar is configured (from Batch 1) but the user must verify visually in Storybook that components flip correctly in RTL mode.
+- **Visual dark-mode verification:** NOT RUN — dark mode uses the existing token system; user must verify visually in Storybook.
+- **Keyboard-only CRUD smoke:** NOT RUN — manual gate; see procedure below.
+- **Deliberate violation enforcement demonstration:** NOT RUN — no browser runtime to create a temporary violating story and observe the failure. The `test: 'error'` config is set; the user can verify by temporarily adding an `aria-label` violation to a story and running `npm run test:storybook`.
+
+**Keyboard-only CRUD smoke procedure (for Seyam):**
+1. Navigate to `/courses` using keyboard only (Tab to focus the URL bar, type the URL, Enter).
+2. Tab to the "Create New Course" button and press Enter.
+3. On the create form: Tab through Title and Description fields, type values, Tab to "Create Course" button, press Enter.
+4. On the courses list: Tab to a course card, Tab to "Edit" button, press Enter.
+5. On the edit form: modify the title, Tab to "Save Changes" button, press Enter.
+6. On the course detail page: Tab to "Delete Course" button, press Enter.
+7. In the confirmation dialog: Tab to "Yes, delete it" button, press Enter.
+8. Verify focus returns to the courses list and the deleted course is gone.
+9. Throughout: verify visible focus indicators, no keyboard traps, meaningful accessible names on all controls.
+
+**Verification performed:**
+- `npx tsc --noEmit` PASS (EXIT 0)
+- `npm run lint` PASS (EXIT 0, zero errors, zero warnings)
+- `npm run test` PASS (22/22 unit tests)
+- `npm run build` PASS (EXIT 0, all 10 routes compiled)
+- `git diff --check` PASS
+
+**Verification NOT RUN:**
+- `npm run test:storybook` (Storybook browser-based axe tests — no browser runtime available)
+- Visual RTL/dark-mode verification in Storybook (no browser available)
+- Keyboard-only CRUD smoke (manual gate — no browser available)
+
+**Phase 5 gate status: IN PROGRESS — Batch 2 complete; manual gate pending.**
+
+Of the 6 required Phase 5 work items:
+- 3 are DONE (logical utility audit, Storybook RTL infrastructure, token contrast check — all from Batch 1)
+- 2 are PARTIALLY DONE (Storybook stories created + a11y enforcement configured, but runtime axe/RTL/dark verification pending — from Batch 2)
+- 1 is NOT RUN (keyboard-only CRUD smoke — manual gate)
+
+Phase 5 cannot be marked COMPLETE until:
+1. The user runs `npm run test:storybook` locally to verify all stories are axe-clean with `test: 'error'` enforcement.
+2. The user visually verifies RTL + dark-mode in Storybook.
+3. The user completes the keyboard-only CRUD smoke procedure above.
 
 ---
 

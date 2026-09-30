@@ -32,7 +32,11 @@ const preview: Preview = {
       // 'todo' - show a11y violations in the test UI only
       // 'error' - fail CI on a11y violations
       // 'off' - skip a11y checks entirely
-      test: 'todo'
+      // Phase 5: flipped to 'error' for UI stories so CI fails on
+      // new axe violations. Runtime verification still pending —
+      // the user must run `npm run test:storybook` locally to
+      // confirm the stories are actually axe-clean.
+      test: 'error'
     }
   },
 
