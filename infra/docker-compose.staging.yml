@@ -11,8 +11,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - LITELLM_API_BASE=http://litellm:4000
-      - KEYCLOAK_ISSUER=http://keycloak:8080/realms/openlearn
-      - KEYCLOAK_JWKS_URL=http://keycloak:8080/realms/openlearn/protocol/openid-connect/certs
+      - KEYCLOAK_ISSUER=https://keycloak-staging.duckdns.org/realms/openlearn
+      - KEYCLOAK_JWKS_URL=https://keycloak-staging.duckdns.org/realms/openlearn/protocol/openid-connect/certs
       - KEYCLOAK_AUDIENCE=openlearn-api
       - KEYCLOAK_CLIENT_ID=openlearn-frontend
       - S3_ENDPOINT_URL=https://openlearn-storage-staging.duckdns.org
