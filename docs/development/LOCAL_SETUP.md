@@ -307,7 +307,203 @@ containers (plus your own dev-server terminals).
 
 ---
 
-## 11. Troubleshooting
+## 11. Running Tests and Quality Checks
+
+The repository has a pytest suite in `backend/tests/` and two frontend test
+layers (Vitest and Playwright). Every command below was checked against the
+current repository configuration (`backend/pytest.ini`,
+`backend/requirements-dev.txt`, `frontend/package.json`,
+`frontend/vitest.config.ts`, `frontend/playwright.config.ts`, and the CI
+workflows in `.github/workflows/`). All commands assume the one-command
+setup (Section 4) has been run.
+
+Prerequisites at a glance:
+
+| What you run | Directory | Docker `db` needed | Migrations applied | Dev servers running |
+|--------------|-----------|--------------------|--------------------|---------------------|
+| Backend pytest | `backend/` | yes (PostgreSQL + pgvector) | yes | none |
+| Frontend unit tests (`npm run test`) | `frontend/` | no | no | none |
+| Frontend Storybook tests (`npm run test:storybook`) | `frontend/` | no | no | none (Chromium binary needed) |
+| Frontend E2E (`npm run test:e2e`) | `frontend/` | yes | yes | backend + frontend + Keycloak |
+
+Lint, type-check, and build commands are quality checks, not tests; they
+are listed with their suites and do not substitute for them.
+
+### Backend tests
+
+All backend commands run from `backend/`. The examples call the
+virtualenv's interpreter directly, so the same command line works in any
+shell; activating the venv first (as in Sections 6 and 9) also works. The
+interpreter path depends on the platform (created in Phase 5):
+
+| Environment | Interpreter |
+|-------------|-------------|
+| Linux / macOS / WSL2 | `.venv/bin/python` |
+| Windows Git Bash (Windows CPython venv) | `.venv/Scripts/python.exe` |
+| Windows PowerShell | `.venv\Scripts\python.exe` |
+
+Full suite — everything CI's two backend jobs run, in one command:
+
+```bash
+.venv/bin/python -m pytest tests
+```
+
+There are no pytest markers; test categories are directory-based. CI
+(`.github/workflows/ci.yml`) selects them exactly like this:
+
+```bash
+# "Backend" CI job — core API / service / database / worker tests:
+.venv/bin/python -m pytest tests --ignore=tests/pal --ignore=tests/documents
+
+# "AI tests" CI job — PAL provider/router tests and document pipeline tests:
+.venv/bin/python -m pytest tests/pal tests/documents
+```
+
+Targeted runs (pytest accepts forward slashes on Windows too):
+
+```bash
+.venv/bin/python -m pytest tests/test_main.py                     # one file
+.venv/bin/python -m pytest tests/test_main.py::test_health_check  # one test function
+.venv/bin/python -m pytest tests -k material                      # keyword filter
+```
+
+What the suite requires — verified from `tests/conftest.py` and the test
+modules themselves:
+
+- **PostgreSQL + pgvector, up and migrated.** The `db_session` fixture
+  connects to `settings.database_url` — the same `openlearn_dev` database
+  the backend uses (Section 5). There is no separate test database and no
+  automatic rollback: database-backed tests create their own rows (users,
+  courses, materials) and delete them again, so an interrupted run can
+  leave rows behind. To run against a scratch database instead, set
+  `DATABASE_URL` in the environment before pytest — environment variables
+  override `backend/.env` (this is exactly how CI injects its database
+  URL).
+- **No Keycloak, no Redis, no running backend, no AI API keys.** OIDC
+  tests mint RS256 tokens locally and fake the JWKS client; the
+  Celery-related test modules set `REDIS_PASSWORD` themselves and never
+  contact a broker; API tests use the in-process TestClient; all PAL
+  providers default to `mock` (Section 1).
+
+One group is opt-in: the real-PostgreSQL pgvector integration tests in
+`tests/pal/providers/vector_db/` are skipped unless `OPENLEARN_PG_TESTS=1`
+is set. They require the `vector_records` table (migrations applied),
+touch only rows whose ID starts with `p9b-test:`, and can target a
+different database through `OPENLEARN_TEST_DATABASE_URL`:
+
+```bash
+# Bash (Linux / macOS / WSL2 / Git Bash):
+OPENLEARN_PG_TESTS=1 .venv/bin/python -m pytest tests/pal/providers/vector_db
+```
+
+```powershell
+# Windows PowerShell:
+$env:OPENLEARN_PG_TESTS = "1"
+.venv\Scripts\python.exe -m pytest tests/pal/providers/vector_db
+```
+
+Backend quality checks (not tests), plus the eval-harness job CI runs:
+
+```bash
+.venv/bin/python -m ruff check .                                        # lint (CI runs this before tests)
+.venv/bin/python -m pytest tests --cov=app --cov-report=term            # optional coverage report
+.venv/bin/python -m app.eval run dummy --dataset tests/data/dummy.json  # eval harness (no infrastructure)
+```
+
+The coverage command relies on `pytest-cov`, which is pinned in
+`requirements-dev.txt`; CI does not enforce coverage.
+
+### Frontend tests
+
+All frontend commands run from `frontend/` with dependencies installed
+(`npm ci`, setup Phase 6). Only scripts actually defined in
+`frontend/package.json` are used here.
+
+**Unit tests.** The default `npm run test` script runs only the Vitest
+`unit` project — plain Node environment over `lib/**/*.test.ts` and
+`features/**/*.test.ts` (see `frontend/vitest.config.ts`). It does not run
+the Storybook or E2E suites and needs no browser, servers, or environment
+variables:
+
+```bash
+npm run test
+npm run test -- lib/api.test.ts     # one file
+npm run test -- -t "bearer token"   # filter by test name
+```
+
+**Storybook component tests.** The `storybook` Vitest project renders the
+stories in `frontend/stories/` in a headless Chromium via
+`@vitest/browser-playwright`, including axe accessibility checks that fail
+the run on violations:
+
+```bash
+npx playwright install chromium   # once — installs the browser binary
+npm run test:storybook
+```
+
+**E2E tests (Playwright).** Three smoke flows — `e2e/login.spec.ts`,
+`e2e/courses-crud.spec.ts`, `e2e/profile-roundtrip.spec.ts` — drive the
+real UI against the real stack. Start everything first: the `db` +
+`keycloak` containers (Section 5), the backend on `:8000` (Section 6), and
+the frontend on `:3000` (Section 7). Then set the credentials the specs
+read:
+
+```bash
+# Bash (Linux / macOS / WSL2 / Git Bash):
+export E2E_USERNAME=testuser
+export E2E_PASSWORD=<OPENLEARN_TEST_USER_PASSWORD value from ../.env.local>
+npm run test:e2e
+```
+
+```powershell
+# Windows PowerShell:
+$env:E2E_USERNAME = "testuser"
+$env:E2E_PASSWORD = "<OPENLEARN_TEST_USER_PASSWORD value from ..\.env.local>"
+npm run test:e2e
+```
+
+Behavior worth knowing (from `frontend/playwright.config.ts` and the
+specs):
+
+- The Playwright runner itself needs only `E2E_USERNAME` and
+  `E2E_PASSWORD`. The `NEXT_PUBLIC_*` variables are consumed by the
+  frontend app itself and come from `frontend/.env.local` when `npm run
+  dev` starts (Section 3).
+- The suite runs serially against Chromium only — the flows share
+  Keycloak sessions and course/profile data. Locally there are no retries
+  (CI retries twice); failures leave traces and screenshots under
+  `frontend/test-results/`.
+- All three specs skip with a message when the credentials are unset, so
+  a green result without them does not mean the flows ran — set both.
+- Targeted runs: `npm run test:e2e -- e2e/login.spec.ts` (one spec file)
+  or `npm run test:e2e -- -g "Course"` (title filter).
+- `PLAYWRIGHT_BASE_URL` overrides the target URL (default
+  `http://localhost:3000`), so the same suite can be pointed at another
+  deployment.
+
+Frontend quality checks (not tests):
+
+```bash
+npm run lint         # ESLint (flat config)
+npm run typecheck    # tsc --noEmit
+npm run build        # production build — needs NEXT_PUBLIC_* from frontend/.env.local
+```
+
+### If tests fail
+
+- Backend tests fail with connection errors or missing tables → the `db`
+  container is not running or migrations were not applied (Sections 5 and
+  9). Re-running the setup script is safe and fixes both.
+- Vitest Storybook tests or Playwright E2E cannot launch a browser → run
+  `npx playwright install chromium` (on Linux, `--with-deps` adds missing
+  OS libraries, which is what CI does).
+- E2E cannot reach Keycloak or the API → the corresponding container or
+  dev server is down, or `NEXT_PUBLIC_API_URL` in `frontend/.env.local`
+  does not match the backend port. See Troubleshooting (Section 12).
+
+---
+
+## 12. Troubleshooting
 
 All compose commands below assume the repository root and this prefix:
 
@@ -445,7 +641,7 @@ lockfile deliberately (`npm install`) rather than fighting `npm ci`.
 
 ---
 
-## 12. Final verification checklist
+## 13. Final verification checklist
 
 Run through this after setup (and any time something feels off):
 
