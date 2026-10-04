@@ -41,10 +41,10 @@ This file is the persistent execution ledger for every AI Week 7–8 batch on br
 
 | Item | Value |
 |---|---|
-| Current phase | **Phase 0 — Baseline and decisions** (B0 executed 2026-10-04; B1 not started) |
-| Next authorized batch | **B1 — Interface and technical decisions** (roadmap Section 8, B1) |
+| Current phase | **Phase 0 — Baseline and decisions** (B0 executed 2026-10-04; B1 executed 2026-10-05; Phase 0 complete pending G1 confirmation) |
+| Next authorized batch | **B2 — Pipeline stage 1: ingest + targeted-OCR enrichment** (roadmap Section 8, B2) |
 | Batch status | See Section 5 |
-| Awaiting | Seyam's explicit instruction to start B1 |
+| Awaiting | Seyam's explicit instruction to start B2 |
 
 ## 4. Status Categories (Keep These Distinct)
 
@@ -59,7 +59,7 @@ This file is the persistent execution ledger for every AI Week 7–8 batch on br
 | Batch | Title | Status | Notes |
 |---|---|---|---|
 | B0 | Baseline ramp-up (run AI suites locally) | **COMPLETE** (2026-10-04) | AI-relevant suite green locally; batch record below |
-| B1 | Interface and technical decisions | PENDING | Blocked by B0 |
+| B1 | Interface and technical decisions | **COMPLETE** (2026-10-05) | Decisions (a)–(d) recorded in `decisions.md`; batch record below |
 | B2 | Pipeline stage 1 — ingest + targeted-OCR enrichment | PENDING | Blocked by B1 |
 | B3 | Pipeline stage 2 — chunk → embed → persist | PENDING | Blocked by B1 (B2 first recommended) |
 | B4 | LiteLLM reasoning provider + config + tests | PENDING | Blocked by B1(b) |
@@ -94,11 +94,12 @@ Every batch B0–B11 (Section 5), in the order and with the gates defined in the
 
 ## 9. Known Risks and Unresolved Decisions
 
-* Q1 image-material OCR scope — decided in B1(c); default proposal: PDF-only resolver, images deferred with a recorded note.
-* Q2 reasoning adapter SDK — decided in B1(b); exactly one new dependency line.
+* Q1 image-material OCR scope — **decided by B1(c)** (2026-10-05): PDF-only targeted-OCR path; non-PDF skips OCR gracefully with a metadata note; images deferred. See `decisions.md` §4.
+* Q2 reasoning adapter SDK — **decided by B1(b)** (2026-10-05): `openai` SDK (OpenAI-compatible client) inside PAL against the LiteLLM gateway; one dependency line `openai==3.24.0` (pin re-verified at B4). See `decisions.md` §3.3.
 * Q3 staging embedding provider — repo-level evidence the gap is real (F16); DevOps must inject `ai_embedding_provider=bge_m3` (+ key env) before any staging run; verified in B7 from worker logs.
 * Q4 stale `ocr_tasks` route / missing `process_material` route-retry policy — DevOps finalizes with AI-supplied task name and transient-error list (H5).
-* Q5 storage fetch helper pattern — Backend agrees before B5 lands it (H2).
+* Q5 storage fetch helper pattern — **boundary decided by B1(d)** (2026-10-05): minimal worker-side fetch helper lands in Backend-owned `storage.py` at B5, after H2 approval; sync, `s3_key` → local `Path`, per-task temp dir with `finally` cleanup. Pattern approval itself remains Backend's (H2). See `decisions.md` §5.
+* New from B1 (non-blocking, awaiting Seyam's ratification): ADR-0009 §3.4's "OmniRoute adapter second" line resolved in favor of ADR-0005's gateway architecture — OmniRoute consumed as a gateway-layer credential source only; see `decisions.md` §3.7 and §8.
 * Risks R1–R5 (time limits vs pipeline latency, model cold-start scope, single-executor serialization, staging-env dependency, silent mock vectors) — roadmap Section 11.2.
 
 ## 10. Verification Evidence (This Documentation Task)
@@ -123,7 +124,7 @@ Not executed (and therefore not claimed anywhere):
 
 ## 12. The Exact Next Action
 
-Execute **B1 — Interface and technical decisions** (roadmap Section 8, B1): record decisions (a)–(d) in `docs/tasks/ai-week7-8/decisions.md`, restate the enqueue contract unchanged, generate the batch patch per the lifecycle rules, and stop. B1 must not begin until Seyam explicitly authorizes it.
+Execute **B2 — Pipeline stage 1: ingest + targeted-OCR enrichment** (roadmap Section 8, B2): create `backend/app/services/document_pipeline.py` with `ingest_and_enrich` exactly per `decisions.md` §2.1 and §4, plus its test file, generate the batch patch per the lifecycle rules, and stop. B2 must not begin until Seyam explicitly authorizes it.
 
 ---
 
@@ -180,3 +181,25 @@ Every future batch appends a section here using exactly this template, filled wi
 8. **Deviations from the roadmap:** none in scope or order — B0 executed exactly as specified (read + run + record; only `progress.md` modified). The two environment substitutions in item 7 are execution-environment facts, not scope deviations, and are recorded for transparency.
 9. **Blockers / regressions / unresolved questions:** none. No test failure, no missing dependency, no regression observed. B0's evidence gives B1 one new input to weigh: the legacy `omniroute_*` gateway config-key naming already present in `config.py` when B1(b) names the new gateway/reasoning keys.
 10. **Final state and next authorized batch:** HEAD unchanged at `a9680d4c7ec98d1cb709edd49d2253d7b21ee56a` (no commits made; the executor does not commit or push); working tree contains exactly one modification — `docs/tasks/ai-week7-8/progress.md`. Gate G1: B0 leg **passed** (AI-relevant suite green locally, summary recorded); B1 leg pending. Next authorized batch: **B1 — Interface and technical decisions**, awaiting Seyam's explicit instruction.
+
+---
+
+## Batch B1 — Interface and technical decisions — 2026-10-05
+
+1. **Batch identifier and objective:** B1 — fix, in writing, the pipeline contracts and scope decisions that all implementation batches depend on (roadmap Section 8, B1: (a) pipeline stage signatures and seam contract, (b) reasoning adapter SDK, (c) image-material/OCR scope, (d) `document_pipeline.py` module shape); decision batch, no production code.
+2. **Starting commit and initial Git state:** `9f7f55046444f0aa8ca95db02dc8a8a3a5894630` ("ai-week7-8-batch-B0.patch") on branch `ai-week7-8`, tracking `origin/ai-week7-8`, in sync (0/0 after `git fetch`), working tree clean (fresh isolated clone at `/home/z/my-project/work/OpenLearn-AI-b1`; no staged, unstaged, or untracked changes). This is the commit Seyam produced by applying the validated B0 patch on top of `a9680d4`; the B0 record above remains unchanged per the no-history-rewrite rule. Precondition checks: B0 marked COMPLETE (Section 5 + batch record); B1 the next pending batch; no pre-existing `decisions.md` on the branch (verified via `git ls-tree`); this batch's prompt explicitly authorizes B1 only.
+3. **Changes actually made:** evidence reading + decision writing only — no source, configuration, dependency, test, infra, CI, or ADR files touched. (i) Read in full: the three canonical task documents, ADR-0001/0002/0003/0004/0005/0009, the Technical Specification sections listed in `decisions.md` §1 (§6.1, §7.2–7.3, §8.1–8.4, §10.1/10.3, §11.1–11.7, §12.1–12.5, §23.1–23.3), 44-week plan Week 7/8 + cross-pod dependencies, and all in-scope implementation files (worker layer, services, chunking, storage, config, PAL factory/router/interfaces/types/providers, `vector_record` model, `infra/litellm-config.yaml`, staging compose blocks for `backend`/`litellm`/`celery_worker`, `requirements*.txt`, pinned task tests). (ii) Created `docs/tasks/ai-week7-8/decisions.md` recording decisions A–D with per-decision labeling (Established by repository authority / Chosen design / Future extension / Out of current scope): pipeline contract (`ingest_and_enrich`, `chunk_embed_and_persist` + `PersistResult`, sync/async boundary, shared-session atomic persist, `{material_id}:{chunk_id}` vector-record identity with the collision reasoning, provenance payload); LiteLLM architecture (gateway per ADR-0005; `openai` SDK client inside PAL, dependency line `openai==3.24.0` recorded for B4, error mapping mirroring the Gemini pattern; config-key plan `ai_reasoning_model`/`litellm_api_base`/`litellm_api_key`; OmniRoute = gateway-layer credential source with the ADR-0009 §3.4 tension recorded and flagged for ratification); PDF-only OCR scope with graceful non-PDF skip; storage fetch boundary (B5, Backend-owned module, H2 approval before landing, sync `s3_key` → local `Path`, per-task temp dir + `finally` cleanup); Celery contract restated verbatim; B2–B5 implementation consequences. (iii) Updated this ledger (Sections 3, 5, 9, 12 + this record).
+4. **Files created / modified / deleted:** created `docs/tasks/ai-week7-8/decisions.md`; modified `docs/tasks/ai-week7-8/progress.md` (Sections 3, 5, 9, 12 + this entry). No other file touched.
+5. **Tests and commands actually executed:** (decision batch — roadmap: "none beyond `python -m ruff check .`"; no code exists to test and none was written)
+   * `git clone … && git checkout ai-week7-8`, `git rev-parse HEAD`, `git log --oneline`, `git remote -v`, `git status --porcelain`, `git branch -vv`, `git fetch origin`, `git diff --stat a9680d4..9f7f550` (verify origin's new commit is exactly the B0 patch), `git diff 9f7f550 -- docs/tasks/ai-week7-8/progress.md` (local B0 leftover byte-identical to origin), `git ls-tree 9f7f550 -- docs/tasks/ai-week7-8/` (no pre-existing `decisions.md`).
+   * Repo-wide grep for OmniRoute consumers (`omniroute|OMNIROUTE|OmniRoute`) — hits only in `config.py` (unused fields), historical Week-6 plan, ADR-0009, LOCAL_SETUP notes, and this ledger; **no code consumer**.
+   * PyPI JSON query for `openai` (latest published version, 3.24.0, and its dependency surface) to record an exact, real dependency line for B4.
+   * `python -m ruff check .` (ruff 0.7.4 from the B0 venv, run against `backend/` at the B1 working tree) — **All checks passed, exit 0**.
+   * `git diff --check` on the batch's changes — clean (no whitespace errors).
+6. **Passes / failures / checks not run:**
+   * All executed checks passed (see item 5); no test suites were required or run because B1 produces no code — this is the roadmap-specified validation mode for B1, not a skipped obligation.
+   * Not run / not claimed: any pytest suite (no code changed; B0's green baseline remains the reference), any staging/runtime verification, any live LiteLLM gateway call (B6 owns runtime gateway evidence), no dependency was installed or added.
+7. **Relevant output / verification evidence:** `ruff`: "All checks passed!" / exit 0. `git diff --check`: empty output. Working-tree change list at batch end: `?? docs/tasks/ai-week7-8/decisions.md` + `M docs/tasks/ai-week7-8/progress.md` — exactly the two allowed files. Patch validation against a pristine checkout of `9f7f550`: `git apply --check` exit 0, real apply reproduces exactly the two files (byte-identical to the working tree), `git apply --stat` = 2 files changed. Key decision evidence anchors: seam raise `material_tasks.py:174` + `_handle_material` commit semantics; `claim_pending_material` commits the claim, `transition_material_status` flushes only (material_service.py:94–120, 136–151); `GeminiOCRProvider.__init__` settings-default credential pattern (gemini_provider.py:74–80); postgres provider session-backed/never-commit; `storage.py` boto3 `_s3_client()` + upload-URL only; `config.py:45–47` unused `omniroute_*`; `litellm-config.yaml` `os.environ/OPENAI_API_KEY` + `master_key` + `default_model: gpt-4o-mini` + budget 10.0/30d; compose `backend` env `LITELLM_API_BASE=http://litellm:4000`, `celery_worker` env with S3 but no AI/gateway vars (F16), `litellm` env with master+salt only.
+8. **Deviations from the roadmap:** none in scope or order — B1 executed exactly as specified (read → decide → record; only the two allowed files changed). Standing execution-model fact (not a deviation, same as B0): the roadmap's "committed decision note" is delivered as a validated patch; the executor never commits or pushes (lifecycle rule 9) — Seyam applies and commits. Two forward-looking items are recorded inside the decisions note as consequences/open items, not deviations: the ADR-0009 §3.4 OmniRoute-adapter tension (resolved on evidence, flagged for ratification, non-blocking) and the B4-side verification of the `openai==3.24.0` pin.
+9. **Blockers / regressions / unresolved questions:** none blocking. Open for ratification (non-blocking, `decisions.md` §8): (1) OmniRoute resolution per above; (2) BGE-M3 instantiation scope confirmed at B5 (roadmap §11.2); (3) `openai` pin compatibility verified at B4; (4) gateway `/v1` surface proven live at B6. Coordination follow-ups for Seyam when applying this patch: inform Backend that the enqueue contract is unchanged (roadmap B1 acceptance; the contract restatement is in `decisions.md` §6); the H1/H2 dependencies are unchanged.
+10. **Final state and next authorized batch:** HEAD unchanged at `9f7f55046444f0aa8ca95db02dc8a8a3a5894630` (no commits made); working tree contains exactly the two allowed changes (`decisions.md` new, `progress.md` modified). Gate G1: B0 leg passed (B0 record), B1 leg **decisions recorded in writing** — Phase 0 complete pending Seyam's review of this patch. Next authorized batch: **B2 — Pipeline stage 1: ingest + targeted-OCR enrichment**, awaiting Seyam's explicit instruction. B2 must not start without it.
