@@ -11,16 +11,16 @@ dedicated AI-tests job).
 
 | Date | Scope | Coverage | Notes |
 |---|---|---|---|
-| 2026-10-04 | backend/app (core suite) | **67%** (1597 stmts, 521 missed) | First measurement. Measured post-W7 merge (includes material_tasks at 90%). Two config tests failed due to temp-container env limitations, not code defects. |
+| 2026-10-04 | `backend/app` (core suite) | **67%** (1597 stmts, 521 missed) | First measurement. **Confirmed identical in CI** (263 passed, 28.54s). Weakest areas: pal/providers 20-42%, chunking 29% — AI/ML improvement targets as W8 chain lands. |
 
 ## Measurement Command
 
-See the CI workflow (backend job) — coverage flags:
---cov=app --cov-report=term --cov-report=xml
+CI backend job runs: pytest with `--cov=app --cov-report=term --cov-report=xml`
 
 ## Weakest Areas (improvement candidates)
 
 | File | Coverage | Note |
 |---|---|---|
-| profile_service.py | 55% | Lowest — candidate for adding tests |
-| (future) ingestion chain | - | AI/ML: add tests as chain lands in W8 |
+| profile_service.py | 55% | Lowest service — candidate for adding tests |
+| pal/providers/* | 20-42% | AI/ML targets as W8 ingestion chain lands |
+| documents/chunking.py | 29% | Will rise when W8 chain adds chunking tests |
