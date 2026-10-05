@@ -106,6 +106,12 @@ jobs:
             LITELLM_MASTER_KEY=${{ secrets.LITELLM_MASTER_KEY }}
             LITELLM_SALT_KEY=${{ secrets.LITELLM_SALT_KEY }}
 
+            # Week 7-8 AI runtime (H1): gateway credential for the worker,
+            # Gemini key for the gateway's reasoning upstream (litellm
+            # container) AND the worker's direct Gemini OCR.
+            LITELLM_API_KEY=${{ secrets.LITELLM_API_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+
             GRAFANA_ADMIN_USER=${{ secrets.GRAFANA_ADMIN_USER }}
             GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
 
@@ -127,6 +133,20 @@ jobs:
             EOF
 
             chmod 600 infra/.env.runtime
+
+            # Fail the deploy loudly if a Week 7-8 AI runtime secret is empty
+            # or missing, instead of silently writing empty values that would
+            # surface later as provider ConfigurationErrors (or, worse, be
+            # papered over by re-enabling mock defaults). Only the variable
+            # NAME is printed — never a secret value.
+            for required_var in LITELLM_API_KEY GEMINI_API_KEY; do
+              if ! grep -q "^${required_var}=..*" infra/.env.runtime; then
+                echo "ERROR: required secret ${required_var} is empty or missing in .env.runtime."
+                echo "       Create it in GitHub (Settings > Secrets and variables > Actions) before deploying."
+                exit 1
+              fi
+            done
+
             chmod +x infra/deploy.sh
 
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io \

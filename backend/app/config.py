@@ -36,15 +36,22 @@ class Settings(BaseSettings):
     ai_embedding_device: str = "auto"
     ai_reasoning_provider: str = "mock"
     ai_reasoning_fallbacks: str = ""
+    # Must equal the gateway's model_list alias (infra/litellm-config.yaml);
+    # the worker sends it as the chat-completion model name.
+    ai_reasoning_model: str = "gemini-2.5-flash"
+
+    # LiteLLM gateway (ADR-0005) — OpenAI-compatible reasoning surface.
+    # The key is a LiteLLM virtual/master key; staging env wiring is a
+    # DevOps task (H1), not an application concern.
+    litellm_api_base: str = "http://litellm:4000"
+    litellm_api_key: str = ""
     ai_vector_db_provider: str = "mock"
 
     # Chunking
     chunk_size: int = 1200
     chunk_overlap: int = 150
 
-    # OmniRoute / External AI Gateway
-    omniroute_api_base: str = "https://api.omniroute.ai/v1"
-    omniroute_api_key: str = ""
+    # OCR text-length gate (targeted-OCR eligibility; services/ocr.py)
     ocr_min_text_chars: int = 50
 
     # S3-compatible object storage (MinIO) for course materials

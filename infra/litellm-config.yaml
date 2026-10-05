@@ -10,7 +10,7 @@
 #    • Set via env var (never commit the real value).
 #    • Rotate quarterly or immediately on suspected compromise.
 #
-# 2. Provider API keys (e.g. OPENAI_API_KEY) — passed as env vars.
+# 2. Provider API keys (e.g. GEMINI_API_KEY) — passed as env vars.
 #    • Rotate per provider's recommended schedule.
 #    • Use separate keys for staging vs production.
 #
@@ -20,17 +20,26 @@
 # =============================================================================
 
 model_list:
-  # Primary model — cost-effective for staging workloads
-  - model_name: "gpt-4o-mini"
+  # Primary (and only) reasoning model — Google Gemini via LiteLLM's AI
+  # Studio integration ("gemini/" prefix; key resolved from the container's
+  # GEMINI_API_KEY environment variable). The alias MUST stay identical to
+  # the application's AI_REASONING_MODEL (celery_worker environment in
+  # docker-compose.staging.yml and the config.py default) because the worker
+  # sends the alias as the chat-completion model name.
+  #
+  # FALLBACK POLICY (B6-PREP-GEMINI): intentionally a single model with NO
+  # secondary fallback entry. The application never requests a fallback
+  # model (AI_REASONING_FALLBACKS is unset -> empty PAL chain, and no
+  # general_settings.fallbacks is configured), so a second entry would be
+  # unreachable configuration adding an unverifiable budget-accounting
+  # surface. Model/fallback routing belongs to the gateway (decisions.md
+  # §3.5): adding a verified Gemini fallback later is a config-only change.
+  # No OpenAI entry remains — no OpenAI provider key is needed by this
+  # deployment.
+  - model_name: "gemini-2.5-flash"
     litellm_params:
-      model: "openai/gpt-4o-mini"
-      api_key: "os.environ/OPENAI_API_KEY"
-
-  # Fallback model
-  - model_name: "gpt-3.5-turbo"
-    litellm_params:
-      model: "openai/gpt-3.5-turbo"
-      api_key: "os.environ/OPENAI_API_KEY"
+      model: "gemini/gemini-2.5-flash"
+      api_key: "os.environ/GEMINI_API_KEY"
 
 general_settings:
   # Master key for authenticating requests to the proxy
@@ -49,5 +58,6 @@ litellm_settings:
   # Enable spend tracking
   success_callback: ["langfuse"]
 
-  # Set default model when none specified
-  default_model: "gpt-4o-mini"
+  # Set default model when none specified (kept in step with the primary
+  # model_list alias; the application always sends an explicit model).
+  default_model: "gemini-2.5-flash"

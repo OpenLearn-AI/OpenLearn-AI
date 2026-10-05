@@ -3,8 +3,12 @@
 ``process_material`` is the task consumed by name through
 ``app.workers.publishing.enqueue_material_processing``. It drives the material
 status lifecycle exclusively through the existing material service transition
-rules. The content-processing step is a deliberate seam: no backend processing
-callable exists yet, so the task never fabricates a ``ready`` result.
+rules. The content-processing step (wired in batch B5) composes the AI/ML
+pipeline: storage fetch → Stage 1 (ingest + targeted OCR) → Stage 2
+(chunk → embed → persist), with providers built through the existing PAL
+factory and the pgvector provider bound to this task's live ``AsyncSession``
+so vector rows commit atomically with the ``ready`` transition (decisions.md
+§2.4).
 
 Phase 1B ownership model: each ``process_material`` invocation creates a
 task-local async engine and session factory inside its own event loop
@@ -18,6 +22,7 @@ deliveries of the same material can never claim it more than once.
 """
 
 import asyncio
+import tempfile
 import uuid
 
 import structlog
@@ -29,11 +34,18 @@ from sqlalchemy.ext.asyncio import (
 
 from app.config import settings
 from app.models.material import FAILED_STATUS, READY_STATUS, Material
+from app.pal.factory import (
+    get_embedding_provider,
+    get_ocr_provider,
+    get_vector_db_provider,
+)
+from app.services.document_pipeline import chunk_embed_and_persist, ingest_and_enrich
 from app.services.material_service import (
     claim_pending_material,
     get_material_by_id,
     transition_material_status,
 )
+from app.services.storage import download_material_to_temp
 from app.workers.celery_app import celery_app
 from app.workers.publishing import MATERIAL_PROCESSING_TASK_NAME
 
@@ -124,6 +136,7 @@ async def _handle_material(
                 s3_key,
                 course_id,
                 owner_id,
+                session=session,
             )
         except Exception:
             logger.exception(
@@ -164,14 +177,56 @@ async def _process_material_content(
     s3_key: str,
     course_id: str,
     owner_id: str,
+    *,
+    session: AsyncSession,
 ) -> None:
-    """[AI/ML-owned] Content-processing boundary.
+    """[AI/ML-owned] Content-processing boundary, wired in batch B5.
 
-    No backend processing callable exists yet; the AI/ML team provides the
-    implementation behind this seam. It intentionally raises so a material is
-    never marked ``ready`` without real processing.
+    Composition per decisions.md §5–§7 (no pipeline logic of its own):
+
+    * fetches the stored object into a per-task temporary directory via the
+      Backend-agreed storage helper; the whole directory (downloaded source
+      plus OCR page artifacts) is deleted deterministically by the
+      ``TemporaryDirectory`` context on success and on failure;
+    * runs Stage 1 (``ingest_and_enrich``) and Stage 2
+      (``chunk_embed_and_persist``) from ``app.services.document_pipeline``
+      with providers built through the existing PAL factory from settings —
+      no second selection mechanism, no credentials here;
+    * the pgvector provider is session-backed: it receives this task's live
+      ``AsyncSession`` (decisions.md §2.4), so vector upserts commit
+      atomically with the caller's ``ready`` transition, and the existing
+      failure path (rollback → ``failed`` → re-raise) discards partial
+      vector writes;
+    * synchronous calls (storage download, Docling ingestion, chunking) run
+      inline — the event loop is task-local (B1 §2.3 sync/async boundary);
+    * ``course_id``/``owner_id`` stay part of the pinned positional seam
+      contract; the pipeline stages consume ``material.id`` and ``s3_key``.
+
+    Any exception propagates to ``_handle_material``, which records the
+    material as ``failed`` and re-raises (pinned lifecycle unchanged).
     """
-    raise NotImplementedError(
-        "material content processing is not implemented yet "
-        "(AI/ML-owned pipeline contract)"
-    )
+    with tempfile.TemporaryDirectory(prefix="material-processing-") as temp_dir:
+        local_path = download_material_to_temp(s3_key, temp_dir)
+
+        ocr_provider = get_ocr_provider()
+        document = await ingest_and_enrich(local_path, ocr_provider=ocr_provider)
+
+        embedding_provider = get_embedding_provider()
+        vector_db_provider = get_vector_db_provider(session=session)
+        result = await chunk_embed_and_persist(
+            document,
+            material_id=str(material.id),
+            embedding_provider=embedding_provider,
+            vector_db_provider=vector_db_provider,
+        )
+
+        logger.info(
+            "material_content_processed",
+            material_id=str(material.id),
+            s3_key=s3_key,
+            document_id=result.document_id,
+            chunk_count=result.chunk_count,
+            embedded_count=result.embedded_count,
+            upserted_count=result.upserted_count,
+            skipped=result.skipped,
+        )

@@ -26,11 +26,22 @@ Phase 1D locked contract: re-processing a material that is already
 status string (never calls the content seam, never changes the persisted
 status); a missing material returns ``None``. A separate delivery-
 configuration tripwire guards the intended Celery settings.
+
+B5: the content seam is wired (fetch → Stage 1 → Stage 2). The pinned
+lifecycle stubs now accept the keyword-only ``session`` argument the task
+passes to the seam (decisions.md §6); the wired-path tests exercise the real
+seam body end-to-end — storage fetch fake, Docling conversion faked at the
+production import site (same isolation strategy as
+``tests/services/test_document_pipeline_stage1.py``), PAL providers built
+through the real factory — against the real database, including the atomic
+vector/``ready`` commit and the rollback-discards-vectors failure path.
 """
 
 import asyncio
 import os
 import uuid
+from pathlib import Path, PurePosixPath
+from unittest.mock import MagicMock
 
 os.environ.setdefault("REDIS_PASSWORD", "test-redis-password")
 
@@ -60,6 +71,24 @@ from conftest import (  # noqa: E402
     _create_material,
     _create_user,
     _delete_user_by_subject,
+)
+from docling.datamodel.base_models import ConversionStatus  # noqa: E402
+from docling.datamodel.document import ConversionResult  # noqa: E402
+from docling_core.types.doc.document import (  # noqa: E402
+    DoclingDocument,
+    PageItem,
+    ProvenanceItem,
+    Size,
+    TextItem,
+)
+from docling_core.types.doc.labels import DocItemLabel  # noqa: E402
+
+from app.documents.exceptions import UnsupportedDocumentTypeError  # noqa: E402
+from app.pal.providers.vector_db.mock_provider import (  # noqa: E402
+    MockVectorDBProvider,
+)
+from app.pal.providers.vector_db.postgres_provider import (  # noqa: E402
+    PostgresVectorDBProvider,
 )
 
 @pytest_asyncio.fixture
@@ -124,9 +153,13 @@ async def test_process_material_drives_pending_to_ready_and_commits(
     s3_key = material.s3_key
 
     calls = []
+    seam_sessions = []
 
-    async def fake_process_content(inner_material, inner_s3_key, course_id, owner_id):
+    async def fake_process_content(
+        inner_material, inner_s3_key, course_id, owner_id, *, session
+    ):
         calls.append((inner_material.id, inner_s3_key, course_id, owner_id))
+        seam_sessions.append(session)
 
     monkeypatch.setattr(material_tasks, "_process_material_content", fake_process_content)
 
@@ -144,6 +177,9 @@ async def test_process_material_drives_pending_to_ready_and_commits(
     assert material.status == READY_STATUS
 
     assert calls == [(material.id, s3_key, str(course.id), str(owner.id))]
+    # B5: the seam receives the task's live session (decisions.md §2.4/§6).
+    assert len(seam_sessions) == 1
+    assert isinstance(seam_sessions[0], AsyncSession)
 
     await db_session.delete(owner)
     await db_session.commit()
@@ -319,7 +355,9 @@ async def test_process_material_concurrent_double_delivery_claims_seam_exactly_o
     winner_claimed = asyncio.Event()
     release_winner = asyncio.Event()
 
-    async def barrier_content(inner_material, inner_s3_key, course_id, owner_id):
+    async def barrier_content(
+        inner_material, inner_s3_key, course_id, owner_id, *, session
+    ):
         seam_calls.append((inner_material.id, inner_s3_key))
         winner_claimed.set()
         await release_winner.wait()
@@ -623,3 +661,412 @@ def test_process_material_sequential_tasks_use_distinct_loops_in_same_process(
         assert statuses[seeded["second_id"]] == READY_STATUS
     finally:
         asyncio.run(_cleanup_by_subject("material-seq-owner"))
+
+
+# ---------------------------------------------------------------------------
+# B5 — wired content-processing path (fetch → Stage 1 → Stage 2)
+#
+# The tests below exercise the REAL ``_process_material_content`` body:
+# the storage fetch is replaced with a deterministic fake honoring the
+# helper's contract, Docling conversion is faked at the production import
+# site (same isolation strategy as tests/services/test_document_pipeline_
+# stage1.py), and the PAL providers are built through the REAL factory from
+# settings. Everything else — claim, session/transaction lifecycle, the
+# document pipeline stages, the chunker, status transitions — runs for real
+# against the database.
+# ---------------------------------------------------------------------------
+
+
+def _escape_pdf_text(text: str) -> str:
+    return text.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+
+
+def _build_single_page_pdf(page_text: str) -> bytes:
+    """A valid deterministic one-page PDF (same fixture strategy as the
+    Stage-1 suite: hand-written raw bytes, base-14 font, no conversion)."""
+    objects: dict[int, bytes] = {}
+    objects[1] = b"<< /Type /Catalog /Pages 2 0 R >>"
+    objects[2] = b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+    objects[3] = (
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+    )
+    stream = f"BT /F1 24 Tf 72 700 Td ({_escape_pdf_text(page_text)}) Tj ET".encode()
+    objects[4] = b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream"
+    objects[5] = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: dict[int, int] = {}
+    for obj_num in sorted(objects):
+        offsets[obj_num] = len(out)
+        out += f"{obj_num} 0 obj\n".encode() + objects[obj_num] + b"\nendobj\n"
+
+    xref_offset = len(out)
+    out += b"xref\n" + f"0 {len(objects) + 1}\n".encode() + b"0000000000 65535 f \n"
+    for obj_num in sorted(objects):
+        out += f"{offsets[obj_num]:010d} 00000 n \n".encode()
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
+    out += f"startxref\n{xref_offset}\n%%EOF\n".encode()
+    return bytes(out)
+
+
+def _text_item(ref: str, text: str, page_no: int) -> TextItem:
+    return TextItem(
+        self_ref=ref,
+        label=DocItemLabel.TEXT,
+        orig=text,
+        text=text,
+        prov=[
+            ProvenanceItem(
+                page_no=page_no,
+                bbox={
+                    "l": 0.0,
+                    "t": 0.0,
+                    "r": 100.0,
+                    "b": 100.0,
+                    "coord_origin": "TOPLEFT",
+                },
+                charspan=(0, len(text)),
+            )
+        ],
+    )
+
+
+def _conversion_result(page_texts: list[str]) -> ConversionResult:
+    """A real ConversionResult envelope with a one-page DoclingDocument."""
+    document = DoclingDocument(
+        name="mocked-doc",
+        pages={i + 1: PageItem(page_no=i + 1, size=Size(width=612.0, height=792.0)) for i in range(len(page_texts))},
+        texts=[
+            _text_item(f"#/texts/{i}", page_text, i + 1)
+            for i, page_text in enumerate(page_texts)
+        ],
+    )
+    return ConversionResult.model_construct(
+        status=ConversionStatus.SUCCESS,
+        document=document,
+        errors=[],
+    )
+
+
+def _install_fake_converter(monkeypatch, page_texts: list[str]) -> MagicMock:
+    """Patch DocumentConverter in the production module's namespace."""
+    cls_mock = MagicMock(name="DocumentConverter")
+    cls_mock.return_value.convert.return_value = _conversion_result(page_texts)
+    monkeypatch.setattr("app.services.ingestion.DocumentConverter", cls_mock)
+    return cls_mock
+
+
+class _FakeStorageFetch:
+    """Deterministic stand-in for the Backend storage fetch helper.
+
+    Records every ``(s3_key, destination_dir)`` call and writes real bytes
+    into the caller-owned directory per the helper's contract; when ``error``
+    is set it raises after recording, to exercise the failure path's cleanup.
+    """
+
+    def __init__(self, content: bytes, error: Exception | None = None) -> None:
+        self.content = content
+        self.error = error
+        self.calls: list[tuple[str, str]] = []
+
+    def __call__(self, s3_key: str, destination_dir: str) -> Path:
+        self.calls.append((s3_key, destination_dir))
+        if self.error is not None:
+            raise self.error
+        destination = Path(destination_dir) / PurePosixPath(s3_key).name
+        destination.write_bytes(self.content)
+        return destination
+
+
+def _spy_on_seam_vector_provider(monkeypatch, post_upsert_error=None) -> dict:
+    """Wrap the REAL factory getter to capture what the seam builds.
+
+    The provider instance is still created by ``get_vector_db_provider`` from
+    settings (the production selection mechanism); the spy only records the
+    instance, the session the seam handed it, and the records upserted.
+    With ``post_upsert_error`` set, the wrapped upsert raises AFTER the real
+    provider executed — injecting a failure inside content processing with
+    the vector statements already on the session.
+    """
+    captured: dict = {"records": [], "session": None, "provider": None}
+    real_get = material_tasks.get_vector_db_provider
+
+    def spy(provider=None, session=None):
+        instance = real_get(provider=provider, session=session)
+        original_upsert = instance.upsert
+
+        async def recording_upsert(records):
+            captured["records"].extend(records)
+            result = await original_upsert(records)
+            if post_upsert_error is not None:
+                raise post_upsert_error
+            return result
+
+        instance.upsert = recording_upsert
+        captured["provider"] = instance
+        captured["session"] = session
+        return instance
+
+    monkeypatch.setattr(material_tasks, "get_vector_db_provider", spy)
+    return captured
+
+
+async def _count_vector_records(material_id: str) -> int:
+    """Count committed vector rows for a material via an independent engine
+    (same connection-independence rule as ``_read_material_status``)."""
+    engine = create_async_engine(settings.database_url)
+    factory = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    try:
+        async with factory() as db:
+            result = await db.execute(
+                text(
+                    "SELECT COUNT(*) FROM vector_records "
+                    "WHERE metadata->>'material_id' = :mid"
+                ),
+                {"mid": material_id},
+            )
+            return int(result.scalar_one())
+    finally:
+        await engine.dispose()
+
+
+_PAGE_TEXT = (
+    "Wired pipeline fixture page: this single-page PDF carries well over the "
+    "fifty-character OCR threshold, so the targeted-OCR path never fires and "
+    "the mock OCR provider is never invoked."
+)
+
+
+@pytest.mark.asyncio
+async def test_wired_pipeline_fetch_ingest_persist_marks_ready_and_cleans_temp(
+    db_session, worker_session_factory, monkeypatch
+):
+    """B5 wired happy path: fetch → Stage 1 → Stage 2 → ``ready``.
+
+    Uses the real seam, real factory (settings default to the mock vector
+    store), real chunker, and the real lifecycle; only the storage fetch and
+    Docling conversion are faked. Asserts argument propagation into the
+    fetch, material-scoped vector identities, the live session passed to the
+    provider, and deterministic temp-directory cleanup after success.
+    """
+    owner = await _create_user(
+        db_session, "b5-wired-ready-owner", "b5-wired-ready@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    s3_key = material.s3_key
+
+    _install_fake_converter(monkeypatch, [_PAGE_TEXT])
+    fetch = _FakeStorageFetch(_build_single_page_pdf(_PAGE_TEXT))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+    captured = _spy_on_seam_vector_provider(monkeypatch)
+
+    status = await material_tasks._handle_material(
+        str(material.id),
+        s3_key,
+        str(course.id),
+        str(owner.id),
+        session_factory=worker_session_factory,
+    )
+
+    assert status == READY_STATUS
+    await db_session.refresh(material)
+    assert material.status == READY_STATUS
+
+    # Task arguments propagate into the storage fetch.
+    assert [call[0] for call in fetch.calls] == [s3_key]
+    assert len(fetch.calls) == 1
+
+    # The seam built the factory's provider and handed it the live session.
+    assert isinstance(captured["provider"], MockVectorDBProvider)
+    assert isinstance(captured["session"], AsyncSession)
+
+    # Stage-2 records are material-scoped with the full provenance payload.
+    records = captured["records"]
+    assert len(records) >= 1
+    for record in records:
+        assert record.id.startswith(f"{material.id}:")
+        assert record.metadata["material_id"] == str(material.id)
+        assert record.metadata["document_id"] == PurePosixPath(s3_key).stem
+        assert record.content
+        assert len(record.vector) == settings.ai_embedding_dimension
+
+    # Deterministic cleanup: the per-task temp directory is gone.
+    assert not Path(fetch.calls[0][1]).exists()
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_wired_pipeline_persists_vectors_atomically_with_ready_transition(
+    db_session, worker_session_factory, monkeypatch
+):
+    """B5 atomicity (success): with the session-backed postgres vector store
+    configured, the upsert executes on the task's live session and the rows
+    become visible from an independent connection exactly when the material
+    is ``ready`` — one commit covers vectors and status together.
+    """
+    owner = await _create_user(
+        db_session, "b5-wired-atomic-owner", "b5-wired-atomic@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    s3_key = material.s3_key
+
+    monkeypatch.setattr(settings, "ai_vector_db_provider", "postgres")
+    _install_fake_converter(monkeypatch, [_PAGE_TEXT])
+    fetch = _FakeStorageFetch(_build_single_page_pdf(_PAGE_TEXT))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+    captured = _spy_on_seam_vector_provider(monkeypatch)
+
+    status = await material_tasks._handle_material(
+        str(material.id),
+        s3_key,
+        str(course.id),
+        str(owner.id),
+        session_factory=worker_session_factory,
+    )
+
+    assert status == READY_STATUS
+    assert isinstance(captured["provider"], PostgresVectorDBProvider)
+    assert isinstance(captured["session"], AsyncSession)
+
+    assert await _read_material_status(material.id) == READY_STATUS
+    # Committed atomically with the ready transition: every record handed to
+    # the provider is durable on an independent connection.
+    assert (
+        await _count_vector_records(str(material.id))
+        == len(captured["records"])
+    )
+    assert len(captured["records"]) >= 1
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_wired_pipeline_rollback_discards_vectors_and_marks_failed(
+    db_session, worker_session_factory, monkeypatch
+):
+    """B5 atomicity (failure): an exception inside content processing AFTER
+    the vector upsert executed on the shared session (decisions.md §2.4) —
+    triggered by a stage-2 error injected post-upsert — follows the pinned
+    failure path: rollback discards the uncommitted vector rows, the
+    material lands in ``failed``, and no partial vector state survives.
+    """
+    owner = await _create_user(
+        db_session, "b5-wired-rollback-owner", "b5-wired-rollback@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    s3_key = material.s3_key
+
+    monkeypatch.setattr(settings, "ai_vector_db_provider", "postgres")
+    _install_fake_converter(monkeypatch, [_PAGE_TEXT])
+    fetch = _FakeStorageFetch(_build_single_page_pdf(_PAGE_TEXT))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+    captured = _spy_on_seam_vector_provider(
+        monkeypatch,
+        post_upsert_error=RuntimeError("forced post-upsert failure"),
+    )
+
+    with pytest.raises(RuntimeError, match="forced post-upsert failure"):
+        await material_tasks._handle_material(
+            str(material.id),
+            s3_key,
+            str(course.id),
+            str(owner.id),
+            session_factory=worker_session_factory,
+        )
+
+    # The upsert really executed on the session before the failure...
+    assert len(captured["records"]) >= 1
+    # ...and the pinned failure path's rollback discarded every uncommitted
+    # row while the material itself was recorded ``failed``.
+    assert await _count_vector_records(str(material.id)) == 0
+    assert await _read_material_status(material.id) == FAILED_STATUS
+    assert not Path(fetch.calls[0][1]).exists()
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_wired_pipeline_fetch_failure_marks_failed_and_cleans_temp(
+    db_session, worker_session_factory, monkeypatch
+):
+    """B5 failure path (storage): a fetch error propagates unchanged, the
+    material is recorded ``failed`` through the pinned lifecycle, and the
+    per-task temp directory is cleaned up.
+    """
+    owner = await _create_user(
+        db_session, "b5-wired-fetchfail-owner", "b5-wired-fetchfail@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    s3_key = material.s3_key
+
+    fetch = _FakeStorageFetch(b"", error=RuntimeError("storage download boom"))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+
+    with pytest.raises(RuntimeError, match="storage download boom"):
+        await material_tasks._handle_material(
+            str(material.id),
+            s3_key,
+            str(course.id),
+            str(owner.id),
+            session_factory=worker_session_factory,
+        )
+
+    assert await _read_material_status(material.id) == FAILED_STATUS
+    assert len(fetch.calls) == 1
+    assert not Path(fetch.calls[0][1]).exists()
+    assert await _count_vector_records(str(material.id)) == 0
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_wired_pipeline_stage_failure_marks_failed_and_cleans_temp(
+    db_session, worker_session_factory, monkeypatch
+):
+    """B5 failure path (processing stage): an unsupported document extension
+    fails Stage 1 with its real typed error before any conversion runs; the
+    material is recorded ``failed`` and the temp directory is cleaned up.
+    """
+    owner = await _create_user(
+        db_session, "b5-wired-stagefail-owner", "b5-wired-stagefail@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    # The task consumes the s3_key argument as-is; a key outside the seeded
+    # material's own value exercises the ingestion error path (.xyz is not a
+    # supported ingestion format).
+    s3_key = f"courses/{course.id}/materials/{uuid.uuid4()}-notes.xyz"
+
+    fetch = _FakeStorageFetch(b"not a real document")
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+
+    with pytest.raises(UnsupportedDocumentTypeError):
+        await material_tasks._handle_material(
+            str(material.id),
+            s3_key,
+            str(course.id),
+            str(owner.id),
+            session_factory=worker_session_factory,
+        )
+
+    assert await _read_material_status(material.id) == FAILED_STATUS
+    assert [call[0] for call in fetch.calls] == [s3_key]
+    assert not Path(fetch.calls[0][1]).exists()
+    assert await _count_vector_records(str(material.id)) == 0
+
+    await db_session.delete(owner)
+    await db_session.commit()

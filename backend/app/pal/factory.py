@@ -10,6 +10,7 @@ from app.pal.providers.embedding.bge_m3_provider import BGEM3EmbeddingProvider
 from app.pal.providers.embedding.mock_provider import MockEmbeddingProvider
 from app.pal.providers.ocr.gemini_provider import GeminiOCRProvider
 from app.pal.providers.ocr.mock_provider import MockOCRProvider
+from app.pal.providers.reasoning.litellm_provider import LiteLLMReasoningProvider
 from app.pal.providers.reasoning.mock_provider import MockReasoningProvider
 from app.pal.providers.vector_db.mock_provider import MockVectorDBProvider
 from app.pal.providers.vector_db.postgres_provider import PostgresVectorDBProvider
@@ -50,6 +51,8 @@ def get_reasoning_provider(provider: str | None = None) -> ReasoningInterface:
     )
     if provider_name == "mock":
         return MockReasoningProvider()
+    if provider_name == "litellm":
+        return LiteLLMReasoningProvider()
 
     raise ConfigurationError(f"Unsupported reasoning provider: {provider_name}")
 
