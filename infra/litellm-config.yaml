@@ -36,9 +36,9 @@ model_list:
   # §3.5): adding a verified Gemini fallback later is a config-only change.
   # No OpenAI entry remains — no OpenAI provider key is needed by this
   # deployment.
-  - model_name: "gemini-2.5-flash"
+  - model_name: "gemini-3.6-flash"
     litellm_params:
-      model: "gemini/gemini-2.5-flash"
+      model: "gemini/gemini-3.6-flash"
       api_key: "os.environ/GEMINI_API_KEY"
 
 general_settings:
@@ -60,4 +60,4 @@ litellm_settings:
 
   # Set default model when none specified (kept in step with the primary
   # model_list alias; the application always sends an explicit model).
-  default_model: "gemini-2.5-flash"
+  default_model: "gemini-3.6-flash"
