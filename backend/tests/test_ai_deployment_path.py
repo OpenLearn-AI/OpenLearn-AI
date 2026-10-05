@@ -39,8 +39,8 @@ def test_gateway_config_has_no_openai_upstream() -> None:
     assert "OPENAI_API_KEY" not in text  # the deployment needs no OpenAI key
     # The single reasoning upstream is Gemini via the AI Studio integration,
     # keyed by the container's GEMINI_API_KEY.
-    assert 'model_name: "gemini-2.5-flash"' in text
-    assert 'model: "gemini/gemini-2.5-flash"' in text
+    assert 'model_name: "gemini-3.6-flash"' in text
+    assert 'model: "gemini/gemini-3.6-flash"' in text
     assert 'api_key: "os.environ/GEMINI_API_KEY"' in text
 
 
@@ -52,7 +52,7 @@ def test_gateway_config_preserves_budget_and_auth_settings() -> None:
     assert 'budget_duration: "30d"' in text
     assert "drop_params: true" in text
     assert 'success_callback: ["langfuse"]' in text
-    assert 'default_model: "gemini-2.5-flash"' in text
+    assert 'default_model: "gemini-3.6-flash"' in text
 
 
 def test_gateway_alias_matches_application_default() -> None:
@@ -63,8 +63,8 @@ def test_gateway_alias_matches_application_default() -> None:
     # instance) so this assertion cannot be perturbed by environment
     # variables in the test sandbox or CI.
     app_default = Settings.model_fields["ai_reasoning_model"].default
-    assert app_default == "gemini-2.5-flash"
-    assert 'model_name: "gemini-2.5-flash"' in config_text
+    assert app_default == "gemini-3.6-flash"
+    assert 'model_name: "gemini-3.6-flash"' in config_text
 
     # The worker env must send the same alias as its chat-completion model.
     match = re.search(r"^\s*AI_REASONING_MODEL:\s*(\S+)\s*$", compose_text, re.M)

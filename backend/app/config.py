@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     ai_reasoning_fallbacks: str = ""
     # Must equal the gateway's model_list alias (infra/litellm-config.yaml);
     # the worker sends it as the chat-completion model name.
-    ai_reasoning_model: str = "gemini-2.5-flash"
+    ai_reasoning_model: str = "gemini-3.6-flash"
 
     # LiteLLM gateway (ADR-0005) — OpenAI-compatible reasoning surface.
     # The key is a LiteLLM virtual/master key; staging env wiring is a
