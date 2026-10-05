@@ -35,7 +35,7 @@ from app.pal.providers.reasoning.mock_provider import MockReasoningProvider
 
 _GATEWAY_KEY = "sk-test-gateway-key"
 _GATEWAY_URL = "http://litellm:4000"
-_GATEWAY_MODEL = "gpt-4o-mini"
+_GATEWAY_MODEL = "gemini-2.5-flash"
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ def _usage(prompt: int = 10, completion: int = 20, total: int = 30) -> Any:
 
 def _chat_response(
     text: str | None = "Hello world",
-    model: str = "gpt-4o-mini",
+    model: str = "gemini-2.5-flash",
     finish_reason: str | None = "stop",
     usage: Any = None,
 ) -> Any:
@@ -245,7 +245,7 @@ async def test_factory_provider_uses_configured_model(
     result = await provider.reason("hi")
 
     assert captured["create_kwargs"][0]["model"] == _GATEWAY_MODEL
-    assert result.model == "gpt-4o-mini"
+    assert result.model == "gemini-2.5-flash"
 
 
 def test_mock_remains_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -296,7 +296,7 @@ async def test_reason_maps_successful_response_to_pal_contract(
 
     assert isinstance(result, ReasoningResult)
     assert result.text == "Hello world"
-    assert result.model == "gpt-4o-mini"  # served model reported by the gateway
+    assert result.model == "gemini-2.5-flash"  # served model reported by the gateway
     assert result.provider == "litellm"
     assert result.usage is not None
     assert result.usage.prompt_tokens == 7
@@ -360,13 +360,13 @@ async def test_reason_honors_explicit_overrides(
 
     result = await provider.reason(
         "hi",
-        model="gpt-3.5-turbo",
+        model="gemini-2.0-flash",
         temperature=0.2,
         max_tokens=64,
     )
 
     kwargs = captured["create_kwargs"][0]
-    assert kwargs["model"] == "gpt-3.5-turbo"  # explicit override wins
+    assert kwargs["model"] == "gemini-2.0-flash"  # explicit override wins
     assert kwargs["temperature"] == 0.2
     assert kwargs["max_tokens"] == 64
     assert result.model == "served-model-id"  # the gateway's served model
@@ -390,7 +390,7 @@ async def test_reason_no_choices_raises_provider_server_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     provider, _ = _configured_provider(
-        monkeypatch, results=[SimpleNamespace(choices=[], model="gpt-4o-mini")]
+        monkeypatch, results=[SimpleNamespace(choices=[], model="gemini-2.5-flash")]
     )
 
     with pytest.raises(ProviderServerError, match="no choices"):

@@ -68,8 +68,10 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
       # Upstream provider key referenced by litellm-config.yaml
-      # (api_key: os.environ/OPENAI_API_KEY) for gpt-4o-mini / gpt-3.5-turbo.
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # (api_key: os.environ/GEMINI_API_KEY) for gemini/gemini-2.5-flash.
+      # Also the same key the worker uses for direct Gemini OCR — one Google
+      # AI Studio key serves both roles; no separate OpenAI key is required.
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     command: ["--config", "/app/config.yaml", "--port", "4000"]
 
   db:
@@ -229,7 +231,8 @@ services:
       LITELLM_API_BASE: http://litellm:4000
       LITELLM_API_KEY: ${LITELLM_API_KEY}
       AI_REASONING_PROVIDER: litellm
-      AI_REASONING_MODEL: gpt-4o-mini
+      # Must equal the gateway's model_list alias (infra/litellm-config.yaml).
+      AI_REASONING_MODEL: gemini-2.5-flash
       AI_EMBEDDING_PROVIDER: bge-m3
       AI_EMBEDDING_MODEL: BAAI/bge-m3
       AI_EMBEDDING_DIMENSION: "1024"
