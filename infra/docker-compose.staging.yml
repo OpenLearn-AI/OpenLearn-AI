@@ -67,6 +67,9 @@ services:
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+      # Upstream provider key referenced by litellm-config.yaml
+      # (api_key: os.environ/OPENAI_API_KEY) for gpt-4o-mini / gpt-3.5-turbo.
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     command: ["--config", "/app/config.yaml", "--port", "4000"]
 
   db:
@@ -220,6 +223,27 @@ services:
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       S3_REGION_NAME: ${S3_REGION_NAME}
+      # ── Week 7-8 AI providers (roadmap F16/H1) ──
+      # Without these the config defaults silently select the mock providers.
+      # Values must match the PAL factory names (app/pal/factory.py).
+      LITELLM_API_BASE: http://litellm:4000
+      LITELLM_API_KEY: ${LITELLM_API_KEY}
+      AI_REASONING_PROVIDER: litellm
+      AI_REASONING_MODEL: gpt-4o-mini
+      AI_EMBEDDING_PROVIDER: bge-m3
+      AI_EMBEDDING_MODEL: BAAI/bge-m3
+      AI_EMBEDDING_DIMENSION: "1024"
+      AI_EMBEDDING_DEVICE: cpu
+      AI_VECTOR_DB_PROVIDER: postgres
+      AI_OCR_PROVIDER: gemini
+      AI_OCR_MODEL: gemini-2.5-flash
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    volumes:
+      # Persistent model cache (BGE-M3 via HuggingFace, Docling artifacts):
+      # survives worker recreation so the 2 GB+ models are downloaded once,
+      # not on every deploy. Requires the cache dir to pre-exist in the image
+      # (backend/Dockerfile) so the volume inherits appuser ownership.
+      - worker_cache_staging_data:/home/appuser/.cache
     depends_on:
       redis:
         condition: service_healthy
@@ -284,3 +308,4 @@ volumes:
   minio_staging_data:
   keycloak_staging_data:
   alloy_data:
+  worker_cache_staging_data:
