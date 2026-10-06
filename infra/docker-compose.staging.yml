@@ -214,7 +214,10 @@ services:
     image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     user: "1000:1000"
     restart: unless-stopped
-    command: celery -A app.workers.celery_app worker --loglevel=info -E
+    # W8: listen on both queues — default (celery) + the dedicated
+    # ingestion_queue where material processing tasks are routed.
+    # Routing without a listener = silently lost tasks.
+    command: celery -A app.workers.celery_app worker --loglevel=info -E -Q celery,ingestion_queue
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       DATABASE_URL: ${DATABASE_URL}
