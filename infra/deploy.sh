@@ -335,12 +335,15 @@ else
 fi
 
 # 6. Start one-shot jobs
-# Run minio-init separately BEFORE `up --wait`: a one-shot container that
-# exits (even with code 0) makes `up --wait` report overall failure —
-# which marked two fully-successful deploys as failed (W7/W8 incidents).
+# minio-init is gated behind the "init" compose profile, so it is invisible
+# to the main `up --wait` entirely. We start it explicitly here (with
+# --profile init) and wait for its real exit code. Rationale: a one-shot
+# container that exits — even with code 0 — made `up --wait` report overall
+# failure, marking two fully-successful deploys as failed (W7/W8 incidents).
 docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
+  --profile init \
   up -d minio-init
 
 echo "==> Waiting for one-shot jobs to complete..."
@@ -348,6 +351,7 @@ echo "==> Waiting for one-shot jobs to complete..."
 docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
+  --profile init \
   wait minio-init
 
 # 7. Start services
