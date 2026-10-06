@@ -178,6 +178,10 @@ services:
   minio-init:
     # One-shot: creates the bucket using boto3 already present in our backend image.
     # No extra image dependency, idempotent on every deploy.
+    # W8 fix: gated behind the "init" compose profile so `up --wait` never
+    # waits on this one-shot container (which exits before --wait starts
+    # listening, making fully-successful deploys report exit 1).
+    profiles: ["init"]
     image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: "no"
     depends_on:
