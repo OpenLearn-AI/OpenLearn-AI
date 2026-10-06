@@ -334,7 +334,23 @@ else
     run --rm --no-deps backend alembic upgrade head
 fi
 
-# 6. Start services
+# 6. Start one-shot jobs
+# Run minio-init separately BEFORE `up --wait`: a one-shot container that
+# exits (even with code 0) makes `up --wait` report overall failure —
+# which marked two fully-successful deploys as failed (W7/W8 incidents).
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  up -d minio-init
+
+echo "==> Waiting for one-shot jobs to complete..."
+
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  wait minio-init
+
+# 7. Start services
 echo "==> Starting services..."
 
 docker compose \
@@ -342,7 +358,7 @@ docker compose \
   -f "$COMPOSE_FILE" \
   up -d --remove-orphans --wait --wait-timeout 180
 
-# 7. Health checks
+# 8. Health checks
 echo "==> Checking backend..."
 
 curl --fail --silent --show-error \
@@ -357,11 +373,11 @@ curl --fail --silent --show-error \
 
 echo "==> Frontend health check passed."
 
-# 8. Post-health cleanup
+# 9. Post-health cleanup
 echo "==> Post-health cleanup..."
 cleanup_openlearn_old_images
 
-# 9. Final telemetry
+# 10. Final telemetry
 read -r FINAL_TOTAL FINAL_USED FINAL_AVAILABLE FINAL_PERCENT <<< "$(get_disk_stats)"
 
 echo
