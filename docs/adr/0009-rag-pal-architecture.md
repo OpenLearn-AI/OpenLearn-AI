@@ -25,7 +25,7 @@ configuration, provider construction, and ordered fallback.
 |---|---|
 | Interfaces: OCR, Embeddings, Reasoning, VectorDB | Document ingestion (Docling) |
 | Normalized result models | OCR triggering decision |
-| Provider adapters (mock, local, OmniRoute) | Canonical Document, chunking (Chonkie) |
+| Provider adapters (mock, local, OmniRoute) | Canonical Document, structure-aware chunking |
 | Exception hierarchy, factory, router | Retrieval + context construction (RAG service) |
 | Provider configuration | WebSocket protocol, background jobs, auth, business logic |
 
@@ -51,7 +51,7 @@ PDF
  → Docling                  (primary parser)
  → targeted OCR             (only pages with insufficient text)
  → Canonical Document
- → Chonkie chunks           (structure-aware; simple fallback if it blocks)
+ → Structure-aware chunks   (deterministic chunker; §3.2)
  → Embeddings (batch)
  → PostgreSQL + pgvector
  → Retrieval (top_k, filters)
@@ -90,6 +90,36 @@ Application-level Pydantic models (not PAL models):
 
 RAG never reduces retrieved content to bare strings; `chunk_id`, `document_id`,
 and page references must survive into the answer's sources.
+
+**Chunking as implemented.** Structure-aware chunking is a deterministic,
+dependency-free application module (`app/documents/chunking.py`), not a
+third-party chunking library. Chonkie's chunkers operate on a single plain string
+and expose only text/offsets/token_count, so page boundaries, section metadata,
+ID assignment, and overlap bookkeeping would have stayed in this codebase
+anyway; the fallback this decision already authorized — simple structure-aware
+chunking — is what ships. The algorithm is deterministic (no randomness, clocks,
+or locale dependence):
+
+1. Each page's text is split into paragraphs on blank lines; every paragraph
+   keeps its page number and the page's `section` metadata when present.
+   Paragraphs longer than `chunk_size` are split at sentence boundaries, and a
+   sentence still longer than `chunk_size` is hard-split at whitespace, so every
+   atomic piece satisfies `len <= chunk_size`.
+2. Pieces are packed greedily into chunks of at most `chunk_size` characters,
+   deliberately crossing page boundaries so obvious structure stays intact; up to
+   `chunk_overlap` characters worth of the previous chunk's trailing pieces are
+   carried into the next chunk when they fit.
+3. Each chunk records `chunk_id` (`{document_id}:{seq}`, zero-based),
+   `document_id`, `text`, sorted unique `pages`, `section` (from the first
+   contributing piece that has one), the document `language` (never invented per
+   chunk), and `char_count`/`page_count` metadata.
+
+Sizing is configuration, not code: `chunk_document()` accepts `chunk_size` and
+`chunk_overlap` explicitly, or falls back to the application settings —
+**`chunk_size = 1200`, `chunk_overlap = 150`** (characters) — and requires
+`1 <= chunk_size` and `0 <= chunk_overlap < chunk_size` (`ValueError`
+otherwise). Empty or whitespace-only pages produce no chunks, and a document with
+no usable text yields an empty list rather than meaningless empty chunks.
 
 ### 3.3 Storage and retrieval
 
