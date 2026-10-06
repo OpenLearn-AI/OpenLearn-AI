@@ -84,9 +84,15 @@ Application-level Pydantic models (not PAL models):
 - `CanonicalDocument`: `document_id`, `source`, `title`, `language` (from metadata
   or a simple deterministic heuristic), `pages` (`page_number`, `text`,
   structure/metadata, optional OCR metadata).
-- `Chunk`: `chunk_id = "{document_id}:{sequence}"` (deterministic → idempotent
-  re-ingestion), `document_id`, `pages: list[int]` (chunks may span pages),
-  `text`, source metadata.
+- `Chunk`: `chunk_id = "{document_id}:{sequence}"` (deterministic, so
+  re-ingesting the same document reproduces the same chunk identity),
+  `document_id`, `pages: list[int]` (chunks may span pages), `text`,
+  source metadata.
+
+Chunk identity is **document-scoped**: `chunk_id` is unique only within one
+document, because `document_id` is the source file's stem and two different
+materials can share it. `chunk_id` is therefore not a storage identity — the
+material-scoped vector-record id is what storage upserts on (§3.3).
 
 RAG never reduces retrieved content to bare strings; `chunk_id`, `document_id`,
 and page references must survive into the answer's sources.
@@ -132,6 +138,45 @@ v1 storage is **PostgreSQL + pgvector**. No other vector database.
 - The pgvector implementation may live as an application store rather than a PAL
   adapter if simpler this week; the contract stays the same.
 - `top_k` is configurable (default ~5); no fixed range is frozen into the architecture.
+
+#### Provenance and vector identity
+
+Five identities exist in this pipeline and are not interchangeable:
+
+| Identity | Value | Scope |
+|---|---|---|
+| Source document | `document_id = source_path.stem` (`app/services/ingestion.py`) | The ingested source file's identity — **not** the Material id |
+| Chunk | `chunk_id = "{document_id}:{sequence}"`, sequence zero-based (`app/documents/chunking.py`) | Within one document only |
+| Material | `material_id` (`materials.id`) | The uploaded object whose content is being processed |
+| Vector storage | `id = "{material_id}:{chunk_id}"` (`app/services/document_pipeline.py`) | Primary key of `vector_records` |
+| Provenance | `metadata` JSONB payload on the vector record | Queryable record of the above |
+
+```text
+source file
+  -> document_id = source_path.stem
+  -> chunk_id = {document_id}:{sequence}
+  -> vector record
+       -> id = {material_id}:{chunk_id}
+       -> metadata = provenance fields
+```
+
+The `metadata` payload carries `material_id`, `document_id`, `chunk_id`,
+`pages`, `section`, `language`, `char_count`, and `page_count`. It is stored in
+`vector_records.metadata_` (the attribute name; the column is `metadata`,
+`app/models/vector_record.py`). `CanonicalDocument` and `Chunk` are
+application-level Pydantic domain models, not database entities, so this table
+intentionally has no foreign key to either — document and chunk provenance
+travels as JSONB only.
+
+Vector-record ids are **material-scoped** by design. `document_id` is a
+filename stem, so two different materials can produce the same `document_id`
+and therefore the same `chunk_id`; using `document_id:chunk_id` as the storage
+id would collide across those materials. Prefixing `material_id` keeps
+materials independent and gives same-material re-ingestion a deterministic
+identity: re-processing one material recomputes the same ids, so the pgvector
+provider's upsert (`ON CONFLICT (id) DO UPDATE`) refreshes that material's rows
+instead of duplicating them. Retrieval by material therefore filters on
+`metadata` (`metadata @> filters`), not on a foreign key.
 
 The RAG service owns query embedding → search → context construction → reasoning
 call → source preservation.
