@@ -1334,11 +1334,16 @@ async def test_api_full_flow_pending_then_ready_via_worker(
     fake_publisher,
     monkeypatch,
 ):
-    """End-to-end contract: identity -> course -> upload url -> register (202 +
-    job id) -> ``pending`` row -> real worker -> ``ready``.
+    """Authenticated API flow through the real ``_handle_material`` lifecycle.
 
-    Only the AI/ML content seam is faked; ``_handle_material`` and the status
-    lifecycle around it run for real against the database.
+    Covers: identity (``/auth/me``) -> course creation -> upload URL ->
+    material registration (202 + job id) -> ``pending`` row -> real
+    ``_handle_material(...)`` execution -> real database status transition to
+    ``ready``.
+
+    Not exercised: ``_process_material_content`` is monkeypatched, and the
+    Celery publisher/broker is faked, so no worker or broker runs. No external
+    storage download, ingestion, chunking, embedding, or vector upsert happens.
     """
     private_key, _ = rsa_keypair
     instructor = await _create_user(
@@ -1422,7 +1427,10 @@ async def test_api_full_flow_pending_then_ready_via_worker(
             )
             assert final.scalar_one().status == READY_STATUS
     finally:
-        await engine.dispose()
-
-    await db_session.delete(instructor)
-    await db_session.commit()
+        # Cleanup must run even if an assertion above failed; the engine is
+        # disposed even if cleanup itself fails.
+        try:
+            await db_session.delete(instructor)
+            await db_session.commit()
+        finally:
+            await engine.dispose()

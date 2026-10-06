@@ -174,9 +174,20 @@ and therefore the same `chunk_id`; using `document_id:chunk_id` as the storage
 id would collide across those materials. Prefixing `material_id` keeps
 materials independent and gives same-material re-ingestion a deterministic
 identity: re-processing one material recomputes the same ids, so the pgvector
-provider's upsert (`ON CONFLICT (id) DO UPDATE`) refreshes that material's rows
-instead of duplicating them. Retrieval by material therefore filters on
-`metadata` (`metadata @> filters`), not on a foreign key.
+provider's upsert (`ON CONFLICT (id) DO UPDATE`) overwrites rows whose ids are
+identical instead of duplicating them. Retrieval by material therefore filters
+on `metadata` (`metadata @> filters`), not on a foreign key.
+
+**Known limitations (not implemented; deferred future work).**
+
+- *Stale chunks on re-ingestion.* Upsert only overwrites identical ids. If a
+  later run of the same material produces fewer chunks, the obsolete
+  higher-sequence vector rows are **not** currently deleted.
+- *No lifecycle tie to deletion.* Because `vector_records` has no foreign key
+  (the domain models are Pydantic, not entities), vector cleanup is not
+  automatically tied to material, course, or user deletion. Vector rows for
+  deleted materials or courses are not currently cleaned up; cleanup (for
+  example, delete by `material_id` metadata) is future work.
 
 The RAG service owns query embedding → search → context construction → reasoning
 call → source preservation.
