@@ -17,10 +17,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import structlog
+
 from app.config import settings
 from app.documents import CanonicalDocument, Page
 from app.pal.interfaces.ocr import OCRInterface
 from app.pal.models.types import OCRResult
+
+logger = structlog.get_logger(__name__)
 
 #: Application-level dependency that maps an eligible page to the OCR-able
 #: source artifact string handed to ``OCRInterface.extract_text`` (e.g. a
@@ -78,12 +82,62 @@ async def enrich_document_with_ocr(
     instantiates a concrete provider and never produces page artifacts.
     Pages are processed sequentially, so resolver/provider call order and the
     page-to-source mapping are deterministic.
+
+    Observability (B7 acceptance: "OCR loop fires only on pages below
+    ``ocr_min_text_chars`` (log/metadata evidence)"): two structured events
+    are emitted through the application's existing structlog pipeline.
+
+    * ``ocr_gate_evaluated`` — once per document, BEFORE any provider call,
+    carrying the per-page gate decision (page number, extracted character
+    count, ``needs_ocr``) so the decision evidence survives even a
+    mid-enrichment provider failure;
+    * ``ocr_enrichment_applied`` — after the loop, only when at least one
+    page was OCR-enriched, carrying page number, before/after character
+    counts, and the provider name per enriched page.
+
+    No page text, metadata, resolver, or provider behavior is changed by
+    this logging.
     """
-    for page in document.pages:
-        if not needs_ocr(page.text):
+    # Compute and log every gate decision up front: one evidence line per
+    # document, emitted before the first resolver/provider call.
+    decisions: list[tuple[Page, bool]] = [
+        (page, needs_ocr(page.text)) for page in document.pages
+    ]
+    logger.info(
+        "ocr_gate_evaluated",
+        document_id=document.document_id,
+        threshold=settings.ocr_min_text_chars,
+        pages=[
+            {
+                "page": page.page_number,
+                "chars": len(page.text),
+                "needs_ocr": needs,
+            }
+            for page, needs in decisions
+        ],
+    )
+
+    applied: list[dict[str, object]] = []
+    for page, needs in decisions:
+        if not needs:
             continue
         source = page_source_resolver(document, page)
         result = await ocr_provider.extract_text(source)
+        chars_before = len(page.text)
         page.text = result.text
         page.metadata = {**page.metadata, _OCR_METADATA_KEY: _ocr_metadata(result, source)}
+        applied.append(
+            {
+                "page": page.page_number,
+                "chars_before": chars_before,
+                "chars_after": len(result.text),
+                "provider": result.provider,
+            }
+        )
+    if applied:
+        logger.info(
+            "ocr_enrichment_applied",
+            document_id=document.document_id,
+            applied=applied,
+        )
     return document
