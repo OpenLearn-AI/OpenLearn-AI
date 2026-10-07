@@ -12,6 +12,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# System runtime libraries required by the full opencv-python distribution
+# (pulled transitively via docling -> docling-slim[standard] -> rapidocr):
+# its bundled Qt/FFmpeg libraries link libxcb.so.1, libGL.so.1,
+# libglib-2.0.so.0, and libgthread-2.0.so.0, none of which ship with
+# python:3.11-slim. libxcb1 is pulled transitively by libgl1.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libgl1 \
+        libglib2.0-0t64 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt /tmp/requirements.cachekey
 
 RUN --mount=type=bind,from=builder,source=/wheels,target=/wheels \
