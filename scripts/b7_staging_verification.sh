@@ -24,6 +24,18 @@
 #   * OCR: consumes the ocr_gate_evaluated / ocr_enrichment_applied worker
 #     log events (B7-PHASE2 app-side observability) when the deployed image
 #     provides them, and fixes the OCR-trigger baseline comparison.
+#   * EXECUTION CONTEXT (follow-up fix, 2026-10-07): every application-
+#     importing Python probe now runs through ONE helper (worker_py) that
+#     re-establishes the runtime-equivalent import context inside the worker
+#     container (exec CWD = image WORKDIR, PYTHONPATH = that directory, both
+#     detected and proven before any probe). The previous bare
+#     `docker exec <worker> python /tmp/snippet.py` started the interpreter
+#     with the snippet's OWN directory at sys.path[0] — the CWD is never
+#     searched for script-by-path execution — so the "app" package (not
+#     pip-installed, no ENV PYTHONPATH in the image; the running worker only
+#     resolves it because celery -A puts its process CWD on sys.path) was
+#     unimportable and every probe died with ModuleNotFoundError before any
+#     application check could execute.
 #
 # One controlled run on the staging VPS (from the repository root). It prints
 # a PASS / FAIL / BLOCKED / NOT OBSERVABLE line for every B7 acceptance item
@@ -111,6 +123,9 @@ CID_BACKEND="" CID_WORKER="" CID_DB="" CID_REDIS="" CID_LITELLM="" CID_MINIO=""
 PG_USER="" PG_DB=""
 VEC_BASELINE=""
 TEST_DB_NAME=""
+WORKER_APPDIR=""        # application root inside the worker container (proven)
+WORKER_PYPATH_BASE=""   # pre-existing container PYTHONPATH (prepended-to, never overwritten)
+APP_CONTEXT_OK=0         # 1 once 'import app' is proven with the corrected context
 
 REQUIRED_IDS="REPO CONTAINERS WORKER_READY WCONFIG EMB_FACTORY VEC_PROVIDER RSN_FACTORY LIT_MODELS RSN_CALL E2E_LIFECYCLE E2E_VECTORS E2E_PROVENANCE E2E_DISCRIM OCR_GATE FORCED_FAIL DB_SCHEMA CLEANUP"
 
@@ -153,6 +168,47 @@ push_file() { # push_file <cid> <host-src> <container-dst>
   local cid="$1" src="$2" dst="$3"
   docker exec "$cid" mkdir -p "$(dirname "$dst")" >/dev/null 2>&1 || return 1
   docker exec -i "$cid" sh -c 'cat > "$1"' sh "$dst" < "$src"
+}
+
+worker_py() { # worker_py <timeout-seconds|0> <python-args...>
+  # THE single execution path for Python probes that import application
+  # modules inside the worker container. Why this helper exists: the backend
+  # image (backend/Dockerfile) declares WORKDIR /app and COPYs the backend
+  # source there, but the "app" package is neither pip-installed nor covered
+  # by an ENV PYTHONPATH — the running worker only resolves "app.*" because
+  # `celery -A app.workers.celery_app` puts its process CWD (/app) on
+  # sys.path. A bare `docker exec <worker> python /tmp/x.py` does NOT get
+  # that context: for script-by-path execution sys.path[0] is the SCRIPT's
+  # own directory and the CWD is never searched, so every probe died with
+  # "ModuleNotFoundError: No module named 'app'" before any application
+  # check could run (2026-10-07 staging run).
+  #
+  # This helper re-establishes the exact runtime-equivalent context:
+  #   * exec CWD = $WORKER_APPDIR (the image WORKDIR, detected and proven in
+  #     SECTION 2 — never guessed);
+  #   * PYTHONPATH = $WORKER_APPDIR, with any pre-existing container
+  #     PYTHONPATH appended (additive, per-exec-process only — the
+  #     container's normal environment is preserved, nothing is overridden);
+  #   * argv, exit codes, stdout and stderr pass through unchanged (a
+  #     timeout rc=124 from the probe itself stays distinguishable from a
+  #     refusal rc=125).
+  # <timeout-seconds> of 0 means "no timeout wrapper". When the import
+  # context could not be established the helper REFUSES (rc=125, stderr
+  # marker) instead of executing a probe that is doomed to fail with
+  # ModuleNotFoundError — the callers' existing failure branches then report
+  # a verifier-execution problem, never an application verdict.
+  local tmo="${1:-0}"; shift
+  if [ -z "$CID_WORKER" ] || [ -z "$WORKER_APPDIR" ]; then
+    printf 'worker_py: application import context not established — probe NOT executed: python %s\n' "$*" >&2
+    return 125
+  fi
+  local pyenv="$WORKER_APPDIR"
+  [ -n "$WORKER_PYPATH_BASE" ] && pyenv="$WORKER_APPDIR:$WORKER_PYPATH_BASE"
+  if [ "$tmo" -gt 0 ] 2>/dev/null; then
+    timeout "$tmo" docker exec -w "$WORKER_APPDIR" -e PYTHONPATH="$pyenv" "$CID_WORKER" python "$@"
+  else
+    docker exec -w "$WORKER_APPDIR" -e PYTHONPATH="$pyenv" "$CID_WORKER" python "$@"
+  fi
 }
 
 env_state() { # env_state <cid> <VARNAME> -> prints SET or MISSING (never the value)
@@ -234,7 +290,7 @@ fi
 
 log "host kernel: $(uname -sr 2>/dev/null || echo '?')"
 log "run mark: $MARK"
-log "verifier: scripts/b7_staging_verification.sh (tracked, B7-PHASE2 fixes — supersedes the VPS-local w7.sh)"
+log "verifier: scripts/b7_staging_verification.sh (tracked, B7-PHASE2 fixes + execution-context follow-up — supersedes the VPS-local w7.sh)"
 log "host temp dir: $TMP_HOST (removed at exit)"
 
 # ============================================================================
@@ -302,6 +358,43 @@ if [ -n "$CID_DB" ]; then
   PG_USER="$(docker exec "$CID_DB" printenv POSTGRES_USER 2>/dev/null || printf 'postgres')"
   PG_DB="$(docker exec "$CID_DB" printenv POSTGRES_DB 2>/dev/null || printf 'postgres')"
   log "db user/database (non-secret): $PG_USER / $PG_DB"
+fi
+
+# ---- Application import context (worker_py) ---------------------------------
+# Detect — never guess — the application root inside the worker container,
+# prove that it holds the app package, and prove that `import app` works with
+# the runtime-equivalent context BEFORE any probe runs. The default exec CWD
+# equals the image WORKDIR (docker-compose.staging.yml sets no working_dir
+# override for celery_worker); /app is kept as a verified fallback candidate.
+# The proof probe is side-effect free: backend/app/__init__.py is empty.
+if [ -n "$CID_WORKER" ]; then
+  DEFDIR="$(docker exec "$CID_WORKER" sh -c 'pwd' 2>/dev/null | tr -d '[:space:]' || true)"
+  CAND=""
+  for d in "$DEFDIR" /app; do
+    [ -n "$d" ] || continue
+    if docker exec -w "$d" "$CID_WORKER" test -f ./app/__init__.py >/dev/null 2>&1; then
+      CAND="$d"; break
+    fi
+  done
+  if [ -n "$CAND" ]; then
+    WORKER_APPDIR="$CAND"
+    WORKER_PYPATH_BASE="$(docker exec "$CID_WORKER" sh -c 'printf %s "${PYTHONPATH:-}"' 2>/dev/null || true)"
+    if APP_IMPORT_ERR="$(worker_py 0 -c 'import app' 2>&1)"; then
+      APP_CONTEXT_OK=1
+      log "application import context: OK (exec CWD=$WORKER_APPDIR; base container PYTHONPATH: ${WORKER_PYPATH_BASE:-<none>}; 'import app' proven — probes below run in the runtime-equivalent context)"
+      result APP_CONTEXT PASS "verifier established the application import context inside the worker container (exec CWD=$WORKER_APPDIR + PYTHONPATH; 'import app' proven before any probe) — application-level results below are real runtime verdicts"
+    else
+      log "WARNING: 'import app' failed even with the corrected execution context (CWD=$WORKER_APPDIR, PYTHONPATH=$WORKER_APPDIR):"
+      printf '%s\n' "$APP_IMPORT_ERR" | tail -n 5 | sed 's/^/  /'
+      log "This is an image-level import problem (the deployed image cannot import its own app package), NOT a verifier execution defect and NOT a probe verdict."
+    fi
+  else
+    log "WARNING: no directory holding the app package was found in the worker container (default exec CWD=${DEFDIR:-<unavailable>}; the /app fallback failed as well)."
+    log "Every application-importing probe will REFUSE to execute (rc=125) instead of failing with a misleading ModuleNotFoundError."
+  fi
+  if [ "$APP_CONTEXT_OK" != "1" ]; then
+    result APP_CONTEXT WARN "application import context NOT established — every application-importing probe result in this run is a VERIFIER-EXECUTION failure, not an application verdict"
+  fi
 fi
 
 # ============================================================================
@@ -373,7 +466,7 @@ elif [ "$B7_INSTALL_TEST_DEPS" = "1" ] && [ -n "$CID_WORKER" ]; then
   log "user-site (ephemeral; a container recreation reverts it) and running the suite"
   log "against a temporary database that is dropped afterwards. This does NOT modify"
   log "any tracked repository file or any staging configuration."
-  if docker exec "$CID_WORKER" python -m pip install --user --quiet --disable-pip-version-check \
+  if worker_py 0 -m pip install --user --quiet --disable-pip-version-check \
        pytest==8.3.3 pytest-asyncio==0.24.0 httpx==0.28.1 ruff==0.7.4 >/dev/null 2>&1; then
     TEST_DB_NAME="b7_verify_tmp_${TS_EPOCH}"
     if docker exec "$CID_DB" psql -U "$PG_USER" -d "$PG_DB" -c "CREATE DATABASE \"$TEST_DB_NAME\"" >/dev/null 2>&1; then
@@ -386,7 +479,7 @@ with open(sys.argv[2], "w") as fh:
     fh.write(head + "/" + sys.argv[1])
 PY
       push_file "$CID_WORKER" "$TMP_HOST/b7_make_test_url.py" "$CONTAINER_TMP/b7_make_test_url.py" || true
-      docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_make_test_url.py" "$TEST_DB_NAME" "$CONTAINER_TMP/test_db_url" >/dev/null 2>&1
+      worker_py 0 "$CONTAINER_TMP/b7_make_test_url.py" "$TEST_DB_NAME" "$CONTAINER_TMP/test_db_url" >/dev/null 2>&1
       cat > "$TMP_HOST/b7_run_tests.sh" <<SH
 #!/bin/sh
 cd /app
@@ -490,7 +583,7 @@ for k, v in pairs:
     print(f"B7CFG|{k}|{v}")
 PY
   if push_file "$CID_WORKER" "$TMP_HOST/b7_config_report.py" "$CONTAINER_TMP/b7_config_report.py" \
-     && docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_config_report.py" > "$TMP_HOST/config.txt" 2>&1; then
+     && worker_py 0 "$CONTAINER_TMP/b7_config_report.py" > "$TMP_HOST/config.txt" 2>&1; then
     sed 's/^/  /' "$TMP_HOST/config.txt"
     EMB_P="$(grep_val "$TMP_HOST/config.txt" ai_embedding_provider)"
     EMB_D="$(grep_val "$TMP_HOST/config.txt" ai_embedding_dimension)"
@@ -631,7 +724,7 @@ if [ -z "$CID_WORKER" ]; then
   result RSN_FACTORY FAIL "worker container not found"
 else
   push_file "$CID_WORKER" "$TMP_HOST/b7_provider_checks.py" "$CONTAINER_TMP/b7_provider_checks.py" || true
-  if timeout 300 docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_provider_checks.py" > "$TMP_HOST/providers.txt" 2>&1; then
+  if worker_py 300 "$CONTAINER_TMP/b7_provider_checks.py" > "$TMP_HOST/providers.txt" 2>&1; then
     sed 's/^/  /' "$TMP_HOST/providers.txt"
     if grep_marker "$TMP_HOST/providers.txt" '"tag":"B7EMBF","concrete":"BGEM3EmbeddingProvider","provider":"bge-m3","dimension":1024' \
        && grep_marker "$TMP_HOST/providers.txt" '"healthy":true' ; then
@@ -704,7 +797,7 @@ PY
     push_file "$CID_WORKER" "$TMP_HOST/b7_embed_proof.py" "$CONTAINER_TMP/b7_embed_proof.py" || true
     log "running one real BGE-M3 embed (loads the model in this exec process; may take a"
     log "while on first run if the HF cache volume is cold; ~2 GB RAM)..."
-    if timeout 420 docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_embed_proof.py" > "$TMP_HOST/embed.txt" 2>&1; then
+    if worker_py 420 "$CONTAINER_TMP/b7_embed_proof.py" > "$TMP_HOST/embed.txt" 2>&1; then
       sed 's/^/  /' "$TMP_HOST/embed.txt"
       if grep_marker "$TMP_HOST/embed.txt" '"normalized_ok":true' \
          && grep_marker "$TMP_HOST/embed.txt" '"dimension":1024'; then
@@ -758,7 +851,7 @@ except ValueError:
     print("B7LIT|models|<non-json response>")
 PY
   push_file "$CID_WORKER" "$TMP_HOST/b7_litellm_models.py" "$CONTAINER_TMP/b7_litellm_models.py" || true
-  if docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_litellm_models.py" > "$TMP_HOST/litellm.txt" 2>&1; then
+  if worker_py 0 "$CONTAINER_TMP/b7_litellm_models.py" > "$TMP_HOST/litellm.txt" 2>&1; then
     log "authenticated GET LITELLM_API_BASE/v1/models (key used from env, never printed):"
     sed 's/^/  /' "$TMP_HOST/litellm.txt"
     if grep_marker "$TMP_HOST/litellm.txt" "B7LIT|status|200" \
@@ -885,7 +978,7 @@ asyncio.run(main())
 PY
     push_file "$CID_WORKER" "$TMP_HOST/b7_reason_call.py" "$CONTAINER_TMP/b7_reason_call.py" || true
     log "one real PAL reasoning call through the configured gateway (max_tokens ladder 2048 -> 8192 for thinking-capable models)..."
-    if timeout 300 docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_reason_call.py" > "$TMP_HOST/reason.txt" 2>&1; then
+    if worker_py 300 "$CONTAINER_TMP/b7_reason_call.py" > "$TMP_HOST/reason.txt" 2>&1; then
       sed 's/^/  /' "$TMP_HOST/reason.txt"
       VERDICT="$(grep -oE '"verdict":"[A-Z_]+"' "$TMP_HOST/reason.txt" | head -n1 | cut -d'"' -f4)"
       case "$VERDICT" in
@@ -1134,7 +1227,7 @@ run_e2e() { # run_e2e <pdf-host-path> <upload 1|0> <timeout> <ids-file> <outfile
   local runmark="${MARK}-$(basename "$pdf" | tr -cd 'a-zA-Z0-9' | cut -c1-40)"
   push_file "$CID_WORKER" "$pdf" "$CONTAINER_TMP/$(basename "$pdf")" || return 9
   docker exec "$CID_WORKER" rm -f "$idsf" >/dev/null 2>&1
-  timeout "$((tmo + 60))" docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_e2e_run.py" \
+  worker_py "$((tmo + 60))" "$CONTAINER_TMP/b7_e2e_run.py" \
     "$runmark" "$CONTAINER_TMP/$(basename "$pdf")" \
     "$upload" "$tmo" "$idsf" > "$outfile" 2>&1
 }
@@ -1234,7 +1327,7 @@ else
   log "ocr_min_text_chars (settings): ${THR:-?} (repo default 50; OCR_MIN_TEXT_CHARS is not set in the staging compose)"
   push_file "$CID_WORKER" "$ROOT/$PDF_REL" "$CONTAINER_TMP/smoke.pdf" || true
   push_file "$CID_WORKER" "$TMP_HOST/b7_page_chars.py" "$CONTAINER_TMP/b7_page_chars.py" || true
-  if timeout 240 docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_page_chars.py" "$CONTAINER_TMP/smoke.pdf" > "$TMP_HOST/ocr.txt" 2>&1; then
+  if worker_py 240 "$CONTAINER_TMP/b7_page_chars.py" "$CONTAINER_TMP/smoke.pdf" > "$TMP_HOST/ocr.txt" 2>&1; then
     sed 's/^/  /' "$TMP_HOST/ocr.txt"
     if grep_marker "$TMP_HOST/ocr.txt" '"pages_below_threshold":0'; then
       result OCR_GATE PASS "gate math verified on the real ingested smoke PDF: every page text >= ocr_min_text_chars (${THR:-50}) so the OCR loop correctly skips every page (no OCR provider call is possible for this input)"
@@ -1279,7 +1372,7 @@ if [ "$B7_RUN_OCR_TRIGGER" = "1" ]; then
     # Baseline for the comparison must be the SCANNED PDF's own Docling
     # extraction (the old verifier compared against the SMOKE PDF's chars).
     push_file "$CID_WORKER" "$ROOT/$PDF_TRIGGER_REL" "$CONTAINER_TMP/trigger.pdf" || true
-    if timeout 240 docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_page_chars.py" "$CONTAINER_TMP/trigger.pdf" > "$TMP_HOST/ocr_trigger_baseline.txt" 2>&1; then
+    if worker_py 240 "$CONTAINER_TMP/b7_page_chars.py" "$CONTAINER_TMP/trigger.pdf" > "$TMP_HOST/ocr_trigger_baseline.txt" 2>&1; then
       sed 's/^/  /' "$TMP_HOST/ocr_trigger_baseline.txt"
       DOC_CHARS="$(grep -oE '"chars":[0-9]+' "$TMP_HOST/ocr_trigger_baseline.txt" | grep -oE '[0-9]+' | sort -n | tail -n1)"
       BELOW="$(grep -oE '"pages_below_threshold":[0-9]+' "$TMP_HOST/ocr_trigger_baseline.txt" | grep -oE '[0-9]+$')"
@@ -1624,7 +1717,7 @@ push_file "$CID_WORKER" "$TMP_HOST/b7_cleanup_previous.py" "$CONTAINER_TMP/b7_cl
 run_forced_failure() {
   local idsf="$CONTAINER_TMP/ids_fail.json" outfile="$TMP_HOST/forced.txt"
   docker exec "$CID_WORKER" rm -f "$idsf" >/dev/null 2>&1
-  timeout "$((B7_FAIL_TIMEOUT + 60))" docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_e2e_run.py" \
+  worker_py "$((B7_FAIL_TIMEOUT + 60))" "$CONTAINER_TMP/b7_e2e_run.py" \
     "$MARK-fail" "$CONTAINER_TMP/does-not-exist-b7.pdf" 0 "$B7_FAIL_TIMEOUT" "$idsf" > "$outfile" 2>&1
 }
 
@@ -1773,7 +1866,7 @@ if [ -n "$CID_DB" ]; then
   if [ "$DBQ_RC" != "0" ] || [ -z "$DB_VER" ]; then
     DB_EVIDENCE_ERROR=1
   fi
-  REPO_HEADS="$(timeout 90 docker exec "$CID_WORKER" python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; s = ScriptDirectory.from_config(Config('alembic.ini')); print(','.join(s.get_heads()))" 2>/dev/null | tr -d '[:space:]' || true)"
+  REPO_HEADS="$(worker_py 90 -c "from alembic.config import Config; from alembic.script import ScriptDirectory; s = ScriptDirectory.from_config(Config('alembic.ini')); print(','.join(s.get_heads()))" 2>/dev/null | tr -d '[:space:]' || true)"
   log "  repo migration heads (in-image scan): ${REPO_HEADS:-<unavailable>}"
   if [ -n "$DB_VER" ] && [ -n "$REPO_HEADS" ]; then
     case ",$REPO_HEADS," in
@@ -1837,7 +1930,7 @@ for idsf in ids_e2e.json ids_fail.json ids_ocr.json; do
     CLEAN_NOTE="$CLEAN_NOTE[$idsf push failed]"
     continue
   fi
-  OUT_C="$(docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_cleanup.py" "$CONTAINER_TMP/one_ids.json" 2>&1)"
+  OUT_C="$(worker_py 0 "$CONTAINER_TMP/b7_cleanup.py" "$CONTAINER_TMP/one_ids.json" 2>&1)"
   printf '%s\n' "$OUT_C" | sed 's/^/  cleanup: /'
   if ! printf '%s\n' "$OUT_C" | grep -q '"step":"leftover_check","materials":0,"vectors":0'; then
     CLEAN_OK=0
@@ -1909,7 +2002,7 @@ if [ -n "$PRIOR_USERS" ] || [ -n "$PRIOR_COURSES" ] || [ -n "$PRIOR_MATERIALS" ]
     log ""
     log "B7_CLEAN_PREVIOUS_B7=1 — deleting the resources listed above (exact UUIDs,"
     log "FK order, explicit vector + S3 cleanup; inventory + outcome below):"
-    OUT_P="$(docker exec "$CID_WORKER" python "$CONTAINER_TMP/b7_cleanup_previous.py" "$MARK" 2>&1)"
+    OUT_P="$(worker_py 0 "$CONTAINER_TMP/b7_cleanup_previous.py" "$MARK" 2>&1)"
     printf '%s\n' "$OUT_P" | sed 's/^/  previous-cleanup: /'
     # Verdict by re-querying the same issuer-scoped predicate, not by parsing
     # the cleanup output (the state of the database is the evidence).
