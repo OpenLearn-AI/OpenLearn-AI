@@ -239,7 +239,10 @@ services:
       AI_EMBEDDING_DEVICE: cpu
       AI_VECTOR_DB_PROVIDER: postgres
       AI_OCR_PROVIDER: gemini
-      AI_OCR_MODEL: gemini-2.5-flash
+      # Must equal the application's ai_ocr_model default (backend/app/config.py).
+      # gemini-2.5-flash is rejected with HTTP 404 ("no longer available to new
+      # users") on this Google account — B8 staging run b8v1791396817.
+      AI_OCR_MODEL: gemini-3.6-flash
       GEMINI_API_KEY: ${GEMINI_API_KEY}
     volumes:
       # Persistent model cache (BGE-M3 via HuggingFace, Docling artifacts):

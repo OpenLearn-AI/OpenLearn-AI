@@ -125,7 +125,7 @@ def _configured_provider(
     outcomes: list[Any],
 ) -> tuple[GeminiOCRProvider, dict[str, Any]]:
     monkeypatch.setattr(settings, "gemini_api_key", "test-api-key")
-    monkeypatch.setattr(settings, "ai_ocr_model", "gemini-2.5-flash")
+    monkeypatch.setattr(settings, "ai_ocr_model", "gemini-3.6-flash")
     captured = _install_fake_sdk(monkeypatch, outcomes)
     return GeminiOCRProvider(), captured
 
@@ -241,7 +241,7 @@ async def test_extract_text_builds_gemini_request_and_normalizes_result(
     assert result.regions == []  # no regions invented
 
     call = captured["calls"][0]
-    assert call["model"] == "gemini-2.5-flash"  # configured default model
+    assert call["model"] == "gemini-3.6-flash"  # configured default model
 
     expected_part = types.Part.from_bytes(
         data=_MINIMAL_PDF_BYTES, mime_type="application/pdf"
@@ -257,7 +257,7 @@ async def test_extract_text_builds_gemini_request_and_normalizes_result(
     assert "do not summarize" in prompt.lower()
     assert "return only the extracted text" in prompt.lower()
 
-    assert result.metadata["model"] == "gemini-2.5-flash"
+    assert result.metadata["model"] == "gemini-3.6-flash"
     assert result.metadata["finish_reason"] == "STOP"
 
 
@@ -274,7 +274,7 @@ async def test_extract_text_honors_explicit_model_override(
     await provider.extract_text(str(pdf))
     await override.extract_text(str(pdf))
 
-    assert captured["calls"][0]["model"] == "gemini-2.5-flash"
+    assert captured["calls"][0]["model"] == "gemini-3.6-flash"
     assert captured["calls"][1]["model"] == "gemini-2.5-pro"
 
 
@@ -312,6 +312,32 @@ async def test_auth_failure_maps_to_configuration_error_not_rate_limit(
     assert f"HTTP {code}" in str(excinfo.value)
     assert excinfo.value.__cause__ is sdk_error
     assert not isinstance(excinfo.value, ProviderRateLimitError)
+
+
+@pytest.mark.asyncio
+async def test_model_rejection_404_maps_to_invalid_input_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # B8 staging incident (run b8v1791396817): an obsolete OCR model id is
+    # rejected by Gemini with HTTP 404 NOT_FOUND. This must keep mapping to
+    # a non-retryable InvalidInputError — never a rate-limit, auth, or
+    # server-error classification — so deployment/config defects stay
+    # distinguishable from external provider incidents.
+    sdk_error = _client_error(
+        404,
+        "This model models/gemini-2.5-flash is no longer available to new "
+        "users. Please update your code to use models/gemini-3.8-flash.",
+    )
+    provider, _ = _configured_provider(monkeypatch, [sdk_error])
+    pdf = _pdf_file(tmp_path, "page.pdf")
+
+    with pytest.raises(InvalidInputError, match="rejected the request") as excinfo:
+        await provider.extract_text(str(pdf))
+
+    assert "HTTP 404" in str(excinfo.value)
+    assert excinfo.value.__cause__ is sdk_error
+    assert not isinstance(excinfo.value, ProviderRateLimitError)
+    assert not isinstance(excinfo.value, ConfigurationError)
 
 
 @pytest.mark.asyncio
