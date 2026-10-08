@@ -413,6 +413,23 @@ Backend quality checks (not tests), plus the eval-harness job CI runs:
 The coverage command relies on `pytest-cov`, which is pinned in
 `requirements-dev.txt`; CI does not enforce coverage.
 
+### Regenerating `docs/openapi.json`
+
+The tracked OpenAPI document at `docs/openapi.json` is generated from the live
+FastAPI application — never hand-edited — and is formatted deterministically
+(2-space indent, sorted keys, trailing newline) so it produces no spurious
+diffs. Regenerate it after any change to a route, `response_model`, or the
+application version. The command **must be run from `backend/`** so that the
+`app` package is importable:
+
+```bash
+cd backend
+python -m app.openapi_export
+```
+
+`backend/tests/test_openapi_contract.py` fails when the tracked file no longer
+matches the application, printing the same command.
+
 ### Frontend tests
 
 All frontend commands run from `frontend/` with dependencies installed
