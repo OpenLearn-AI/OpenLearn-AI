@@ -56,7 +56,9 @@ jobs:
         run: python -m alembic upgrade head
 
       - name: Run core pytest
-        run: python -m pytest tests --ignore=tests/pal --ignore=tests/documents
+        run: |
+          python -m pytest tests --ignore=tests/pal --ignore=tests/documents \
+            --cov=app --cov-report=term --cov-report=xml
 
   ai-tests:
     name: AI tests (PAL + documents)

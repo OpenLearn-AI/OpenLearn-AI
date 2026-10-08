@@ -25,7 +25,14 @@ class Settings(BaseSettings):
     # PAL / AI Settings
     ai_ocr_provider: str = "mock"
     ai_ocr_fallbacks: str = ""
-    ai_ocr_model: str = "gemini-2.5-flash"
+    # Direct Gemini OCR model (google-genai generate_content; the LiteLLM
+    # gateway is not in the OCR path). gemini-2.5-flash is rejected with
+    # HTTP 404 "no longer available to new users" on this Google account
+    # (B6 reasoning runtime attempt; B8 OCR staging run b8v1791396817).
+    # gemini-3.6-flash is the model runtime-proven available to this account
+    # (B6-CLOSEOUT / B7 RSN_CALL evidence) — see
+    # docs/tasks/ai-week7-8/progress.md before changing this value.
+    ai_ocr_model: str = "gemini-3.6-flash"
     gemini_api_key: str = ""
     ai_embedding_provider: str = "mock"
     ai_embedding_fallbacks: str = ""
@@ -36,15 +43,22 @@ class Settings(BaseSettings):
     ai_embedding_device: str = "auto"
     ai_reasoning_provider: str = "mock"
     ai_reasoning_fallbacks: str = ""
+    # Must equal the gateway's model_list alias (infra/litellm-config.yaml);
+    # the worker sends it as the chat-completion model name.
+    ai_reasoning_model: str = "gemini-3.6-flash"
+
+    # LiteLLM gateway (ADR-0005) — OpenAI-compatible reasoning surface.
+    # The key is a LiteLLM virtual/master key; staging env wiring is a
+    # DevOps task (H1), not an application concern.
+    litellm_api_base: str = "http://litellm:4000"
+    litellm_api_key: str = ""
     ai_vector_db_provider: str = "mock"
 
     # Chunking
     chunk_size: int = 1200
     chunk_overlap: int = 150
 
-    # OmniRoute / External AI Gateway
-    omniroute_api_base: str = "https://api.omniroute.ai/v1"
-    omniroute_api_key: str = ""
+    # OCR text-length gate (targeted-OCR eligibility; services/ocr.py)
     ocr_min_text_chars: int = 50
 
     # S3-compatible object storage (MinIO) for course materials

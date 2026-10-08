@@ -15,6 +15,7 @@ services:
       - KEYCLOAK_JWKS_URL=https://keycloak-staging.duckdns.org/realms/openlearn/protocol/openid-connect/certs
       - KEYCLOAK_AUDIENCE=openlearn-api
       - KEYCLOAK_CLIENT_ID=openlearn-frontend
+      - CORS_ORIGINS=https://openlearn-web-staging.duckdns.org,http://localhost:3000
       - S3_ENDPOINT_URL=https://openlearn-storage-staging.duckdns.org
       - S3_ACCESS_KEY_ID=${MINIO_ROOT_USER}
       - S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
@@ -66,6 +67,11 @@ services:
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+      # Upstream provider key referenced by litellm-config.yaml
+      # (api_key: os.environ/GEMINI_API_KEY) for gemini/gemini-3.6-flash.
+      # Also the same key the worker uses for direct Gemini OCR — one Google
+      # AI Studio key serves both roles; no separate OpenAI key is required.
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     command: ["--config", "/app/config.yaml", "--port", "4000"]
 
   db:
@@ -128,6 +134,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
 
   redis:
     image: redis@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7
@@ -171,6 +178,10 @@ services:
   minio-init:
     # One-shot: creates the bucket using boto3 already present in our backend image.
     # No extra image dependency, idempotent on every deploy.
+    # W8 fix: gated behind the "init" compose profile so `up --wait` never
+    # waits on this one-shot container (which exits before --wait starts
+    # listening, making fully-successful deploys report exit 1).
+    profiles: ["init"]
     image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: "no"
     depends_on:
@@ -207,7 +218,10 @@ services:
     image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     user: "1000:1000"
     restart: unless-stopped
-    command: celery -A app.workers.celery_app worker --loglevel=info -E
+    # W8: listen on both queues — default (celery) + the dedicated
+    # ingestion_queue where material processing tasks are routed.
+    # Routing without a listener = silently lost tasks.
+    command: celery -A app.workers.celery_app worker --loglevel=info -E -Q celery,ingestion_queue
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       DATABASE_URL: ${DATABASE_URL}
@@ -218,6 +232,31 @@ services:
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       S3_REGION_NAME: ${S3_REGION_NAME}
+      # ── Week 7-8 AI providers (roadmap F16/H1) ──
+      # Without these the config defaults silently select the mock providers.
+      # Values must match the PAL factory names (app/pal/factory.py).
+      LITELLM_API_BASE: http://litellm:4000
+      LITELLM_API_KEY: ${LITELLM_API_KEY}
+      AI_REASONING_PROVIDER: litellm
+      # Must equal the gateway's model_list alias (infra/litellm-config.yaml).
+      AI_REASONING_MODEL: gemini-3.6-flash
+      AI_EMBEDDING_PROVIDER: bge-m3
+      AI_EMBEDDING_MODEL: BAAI/bge-m3
+      AI_EMBEDDING_DIMENSION: "1024"
+      AI_EMBEDDING_DEVICE: cpu
+      AI_VECTOR_DB_PROVIDER: postgres
+      AI_OCR_PROVIDER: gemini
+      # Must equal the application's ai_ocr_model default (backend/app/config.py).
+      # gemini-2.5-flash is rejected with HTTP 404 ("no longer available to new
+      # users") on this Google account — B8 staging run b8v1791396817.
+      AI_OCR_MODEL: gemini-3.6-flash
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    volumes:
+      # Persistent model cache (BGE-M3 via HuggingFace, Docling artifacts):
+      # survives worker recreation so the 2 GB+ models are downloaded once,
+      # not on every deploy. Requires the cache dir to pre-exist in the image
+      # (backend/Dockerfile) so the volume inherits appuser ownership.
+      - worker_cache_staging_data:/home/appuser/.cache
     depends_on:
       redis:
         condition: service_healthy
@@ -282,3 +321,4 @@ volumes:
   minio_staging_data:
   keycloak_staging_data:
   alloy_data:
+  worker_cache_staging_data:

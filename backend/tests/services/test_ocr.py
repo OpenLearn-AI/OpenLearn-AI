@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
+from structlog.testing import capture_logs
+
 import pytest
 
 from app.config import settings
@@ -254,3 +256,90 @@ async def test_document_without_pages_does_not_invoke_resolver_or_provider(
     assert resolver.calls == []
     assert provider.calls == []
     assert result.pages == []
+
+
+# ---------------------------------------------------------------------------
+# B7 acceptance observability: structured gate/enrichment log events
+# (roadmap B7: "OCR loop fires only on pages below ocr_min_text_chars
+# (log/metadata evidence)"). The events must carry the per-page decision
+# evidence without changing any page text, metadata, or call behavior.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_gate_decision_logged_once_per_document_before_provider_calls(
+    ocr_threshold: Callable[[int], None],
+) -> None:
+    ocr_threshold(10)
+    provider = FakeOCRProvider()
+    resolver = FakePageSourceResolver()
+    pages = [
+        Page(page_number=1, text="a" * 20),  # above threshold -> no OCR
+        Page(page_number=2, text="tiny"),    # below threshold -> OCR
+        Page(page_number=3, text="b" * 30),  # above threshold -> no OCR
+    ]
+    document = CanonicalDocument(document_id="doc", source="/docs/doc.pdf", pages=pages)
+
+    with capture_logs() as cap:
+        await enrich_document_with_ocr(document, provider, resolver)
+
+    gate_events = [e for e in cap if e.get("event") == "ocr_gate_evaluated"]
+    assert len(gate_events) == 1
+    event = gate_events[0]
+    assert event["document_id"] == "doc"
+    assert event["threshold"] == 10
+    assert event["pages"] == [
+        {"page": 1, "chars": 20, "needs_ocr": False},
+        {"page": 2, "chars": 4, "needs_ocr": True},
+        {"page": 3, "chars": 30, "needs_ocr": False},
+    ]
+    # The gate event precedes every provider call in the captured stream.
+    applied_events = [e for e in cap if e.get("event") == "ocr_enrichment_applied"]
+    assert cap.index(gate_events[0]) < cap.index(applied_events[0])
+
+
+@pytest.mark.asyncio
+async def test_enrichment_applied_event_reports_char_counts_and_provider(
+    ocr_threshold: Callable[[int], None],
+) -> None:
+    ocr_threshold(5)
+    provider = FakeOCRProvider()
+    resolver = FakePageSourceResolver()
+    pages = [Page(page_number=1, text="ok"), Page(page_number=2, text="rich enough")]
+    document = CanonicalDocument(document_id="doc", source="/docs/doc.pdf", pages=pages)
+
+    with capture_logs() as cap:
+        await enrich_document_with_ocr(document, provider, resolver)
+
+    applied_events = [e for e in cap if e.get("event") == "ocr_enrichment_applied"]
+    assert len(applied_events) == 1
+    assert applied_events[0]["document_id"] == "doc"
+    assert applied_events[0]["applied"] == [
+        {
+            "page": 1,
+            "chars_before": 2,
+            "chars_after": len("[ocr] doc://doc/page/1"),
+            "provider": "fake-ocr",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_no_enrichment_applied_event_when_gate_skips_every_page(
+    ocr_threshold: Callable[[int], None],
+) -> None:
+    ocr_threshold(10)
+    provider = FakeOCRProvider()
+    resolver = FakePageSourceResolver()
+    document = CanonicalDocument(
+        document_id="doc",
+        source="/docs/doc.pdf",
+        pages=[Page(page_number=1, text="a" * 30)],
+    )
+
+    with capture_logs() as cap:
+        await enrich_document_with_ocr(document, provider, resolver)
+
+    assert [e.get("event") for e in cap] == ["ocr_gate_evaluated"]
+    assert provider.calls == []
+    assert resolver.calls == []

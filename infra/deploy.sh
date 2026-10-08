@@ -334,7 +334,27 @@ else
     run --rm --no-deps backend alembic upgrade head
 fi
 
-# 6. Start services
+# 6. Start one-shot jobs
+# minio-init is gated behind the "init" compose profile, so it is invisible
+# to the main `up --wait` entirely. We start it explicitly here (with
+# --profile init) and wait for its real exit code. Rationale: a one-shot
+# container that exits — even with code 0 — made `up --wait` report overall
+# failure, marking two fully-successful deploys as failed (W7/W8 incidents).
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  --profile init \
+  up -d minio-init
+
+echo "==> Waiting for one-shot jobs to complete..."
+
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  --profile init \
+  wait minio-init
+
+# 7. Start services
 echo "==> Starting services..."
 
 docker compose \
@@ -342,7 +362,7 @@ docker compose \
   -f "$COMPOSE_FILE" \
   up -d --remove-orphans --wait --wait-timeout 180
 
-# 7. Health checks
+# 8. Health checks
 echo "==> Checking backend..."
 
 curl --fail --silent --show-error \
@@ -357,11 +377,11 @@ curl --fail --silent --show-error \
 
 echo "==> Frontend health check passed."
 
-# 8. Post-health cleanup
+# 9. Post-health cleanup
 echo "==> Post-health cleanup..."
 cleanup_openlearn_old_images
 
-# 9. Final telemetry
+# 10. Final telemetry
 read -r FINAL_TOTAL FINAL_USED FINAL_AVAILABLE FINAL_PERCENT <<< "$(get_disk_stats)"
 
 echo

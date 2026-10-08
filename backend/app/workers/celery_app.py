@@ -54,6 +54,23 @@ celery_app.conf.update(
         "app.workers.tasks.ocr_tasks.*": {
             "queue": "ocr_queue",
         },
+        # W8: material processing → dedicated ingestion queue. Heavy work
+        # (OCR + embeddings) stays isolated from lightweight tasks.
+        "app.workers.tasks.material_tasks.process_material": {
+            "queue": "ingestion_queue",
+        },
+    },
+
+    # Retry policy (W8): the atomic pending→processing claim
+    # (claim_pending_material) makes re-delivery idempotent — a retried
+    # task whose material is no longer pending returns the current status
+    # without reprocessing. Backoff respects transient upstream failures.
+    task_annotations={
+        "app.workers.tasks.material_tasks.process_material": {
+            "max_retries": 3,
+            "default_retry_delay": 60,
+            "retry_backoff": True,
+        },
     },
 
     # Celery Beat
@@ -72,4 +89,3 @@ def _initialize_worker_process_sentry(**kwargs) -> None:
     from app.observability import setup_worker_sentry
 
     setup_worker_sentry()
-
