@@ -1323,3 +1323,114 @@ def test_material_status_literal_rejects_unknown_status():
             uploaded_by=uuid.uuid4(),
             created_at=datetime.now(timezone.utc),
         )
+
+
+@pytest.mark.asyncio
+async def test_api_full_flow_pending_then_ready_via_worker(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_boto3,
+    fake_publisher,
+    monkeypatch,
+):
+    """Authenticated API flow through the real ``_handle_material`` lifecycle.
+
+    Covers: identity (``/auth/me``) -> course creation -> upload URL ->
+    material registration (202 + job id) -> ``pending`` row -> real
+    ``_handle_material(...)`` execution -> real database status transition to
+    ``ready``.
+
+    Not exercised: ``_process_material_content`` is monkeypatched, and the
+    Celery publisher/broker is faked, so no worker or broker runs. No external
+    storage download, ingestion, chunking, embedding, or vector upsert happens.
+    """
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-flow-subject",
+        "material-flow@example.com",
+    )
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        me = await client.get("/auth/me", headers=headers)
+        assert me.status_code == 200
+        assert me.json()["id"] == str(instructor.id)
+        assert me.json()["keycloak"]["subject"] == instructor.keycloak_subject
+
+        course_response = await client.post(
+            "/v1/courses",
+            json={"title": "Flow Course", "description": "End to end"},
+            headers=headers,
+        )
+        assert course_response.status_code == 201
+        course_id = course_response.json()["id"]
+
+        upload = await client.post(
+            f"/v1/courses/{course_id}/materials/upload-url",
+            json=_upload_url_payload(),
+            headers=headers,
+        )
+        assert upload.status_code == 200
+        s3_key = upload.json()["s3_key"]
+
+        registered = await client.post(
+            f"/v1/courses/{course_id}/materials",
+            json={"title": "Lecture 1", "s3_key": s3_key},
+            headers=headers,
+        )
+        assert registered.status_code == 202
+        assert registered.json()["job_id"] == "test-job-id"
+        material_id = uuid.UUID(registered.json()["material_id"])
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == material_id)
+    )
+    assert result.scalar_one().status == PENDING_STATUS
+
+    # ``app.workers.tasks.material_tasks`` imports ``app.workers.celery_app``,
+    # which requires ``REDIS_PASSWORD`` at import time. No broker is contacted.
+    monkeypatch.setenv("REDIS_PASSWORD", "test-redis-password")
+    from app.workers.tasks import material_tasks
+
+    async def fake_process_content(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(
+        material_tasks,
+        "_process_material_content",
+        fake_process_content,
+    )
+
+    engine = create_async_engine(settings.database_url)
+    factory = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    try:
+        status = await material_tasks._handle_material(
+            str(material_id),
+            s3_key,
+            course_id,
+            str(instructor.id),
+            session_factory=factory,
+        )
+        assert status == READY_STATUS
+
+        # Fresh session/connection: ``AsyncSession.expire_all()`` is synchronous
+        # and the worker commits on its own session.
+        async with factory() as worker_db:
+            final = await worker_db.execute(
+                select(Material).where(Material.id == material_id)
+            )
+            assert final.scalar_one().status == READY_STATUS
+    finally:
+        # Cleanup must run even if an assertion above failed; the engine is
+        # disposed even if cleanup itself fails.
+        try:
+            await db_session.delete(instructor)
+            await db_session.commit()
+        finally:
+            await engine.dispose()

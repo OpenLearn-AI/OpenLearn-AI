@@ -25,7 +25,7 @@ configuration, provider construction, and ordered fallback.
 |---|---|
 | Interfaces: OCR, Embeddings, Reasoning, VectorDB | Document ingestion (Docling) |
 | Normalized result models | OCR triggering decision |
-| Provider adapters (mock, local, OmniRoute) | Canonical Document, chunking (Chonkie) |
+| Provider adapters (mock, local, OmniRoute) | Canonical Document, structure-aware chunking |
 | Exception hierarchy, factory, router | Retrieval + context construction (RAG service) |
 | Provider configuration | WebSocket protocol, background jobs, auth, business logic |
 
@@ -51,7 +51,7 @@ PDF
  → Docling                  (primary parser)
  → targeted OCR             (only pages with insufficient text)
  → Canonical Document
- → Chonkie chunks           (structure-aware; simple fallback if it blocks)
+ → Structure-aware chunks   (deterministic chunker; §3.2)
  → Embeddings (batch)
  → PostgreSQL + pgvector
  → Retrieval (top_k, filters)
@@ -84,12 +84,48 @@ Application-level Pydantic models (not PAL models):
 - `CanonicalDocument`: `document_id`, `source`, `title`, `language` (from metadata
   or a simple deterministic heuristic), `pages` (`page_number`, `text`,
   structure/metadata, optional OCR metadata).
-- `Chunk`: `chunk_id = "{document_id}:{sequence}"` (deterministic → idempotent
-  re-ingestion), `document_id`, `pages: list[int]` (chunks may span pages),
-  `text`, source metadata.
+- `Chunk`: `chunk_id = "{document_id}:{sequence}"` (deterministic, so
+  re-ingesting the same document reproduces the same chunk identity),
+  `document_id`, `pages: list[int]` (chunks may span pages), `text`,
+  source metadata.
+
+Chunk identity is **document-scoped**: `chunk_id` is unique only within one
+document, because `document_id` is the source file's stem and two different
+materials can share it. `chunk_id` is therefore not a storage identity — the
+material-scoped vector-record id is what storage upserts on (§3.3).
 
 RAG never reduces retrieved content to bare strings; `chunk_id`, `document_id`,
 and page references must survive into the answer's sources.
+
+**Chunking as implemented.** Structure-aware chunking is a deterministic,
+dependency-free application module (`app/documents/chunking.py`), not a
+third-party chunking library. Chonkie's chunkers operate on a single plain string
+and expose only text/offsets/token_count, so page boundaries, section metadata,
+ID assignment, and overlap bookkeeping would have stayed in this codebase
+anyway; the fallback this decision already authorized — simple structure-aware
+chunking — is what ships. The algorithm is deterministic (no randomness, clocks,
+or locale dependence):
+
+1. Each page's text is split into paragraphs on blank lines; every paragraph
+   keeps its page number and the page's `section` metadata when present.
+   Paragraphs longer than `chunk_size` are split at sentence boundaries, and a
+   sentence still longer than `chunk_size` is hard-split at whitespace, so every
+   atomic piece satisfies `len <= chunk_size`.
+2. Pieces are packed greedily into chunks of at most `chunk_size` characters,
+   deliberately crossing page boundaries so obvious structure stays intact; up to
+   `chunk_overlap` characters worth of the previous chunk's trailing pieces are
+   carried into the next chunk when they fit.
+3. Each chunk records `chunk_id` (`{document_id}:{seq}`, zero-based),
+   `document_id`, `text`, sorted unique `pages`, `section` (from the first
+   contributing piece that has one), the document `language` (never invented per
+   chunk), and `char_count`/`page_count` metadata.
+
+Sizing is configuration, not code: `chunk_document()` accepts `chunk_size` and
+`chunk_overlap` explicitly, or falls back to the application settings —
+**`chunk_size = 1200`, `chunk_overlap = 150`** (characters) — and requires
+`1 <= chunk_size` and `0 <= chunk_overlap < chunk_size` (`ValueError`
+otherwise). Empty or whitespace-only pages produce no chunks, and a document with
+no usable text yields an empty list rather than meaningless empty chunks.
 
 ### 3.3 Storage and retrieval
 
@@ -102,6 +138,56 @@ v1 storage is **PostgreSQL + pgvector**. No other vector database.
 - The pgvector implementation may live as an application store rather than a PAL
   adapter if simpler this week; the contract stays the same.
 - `top_k` is configurable (default ~5); no fixed range is frozen into the architecture.
+
+#### Provenance and vector identity
+
+Five identities exist in this pipeline and are not interchangeable:
+
+| Identity | Value | Scope |
+|---|---|---|
+| Source document | `document_id = source_path.stem` (`app/services/ingestion.py`) | The ingested source file's identity — **not** the Material id |
+| Chunk | `chunk_id = "{document_id}:{sequence}"`, sequence zero-based (`app/documents/chunking.py`) | Within one document only |
+| Material | `material_id` (`materials.id`) | The uploaded object whose content is being processed |
+| Vector storage | `id = "{material_id}:{chunk_id}"` (`app/services/document_pipeline.py`) | Primary key of `vector_records` |
+| Provenance | `metadata` JSONB payload on the vector record | Queryable record of the above |
+
+```text
+source file
+  -> document_id = source_path.stem
+  -> chunk_id = {document_id}:{sequence}
+  -> vector record
+       -> id = {material_id}:{chunk_id}
+       -> metadata = provenance fields
+```
+
+The `metadata` payload carries `material_id`, `document_id`, `chunk_id`,
+`pages`, `section`, `language`, `char_count`, and `page_count`. It is stored in
+`vector_records.metadata_` (the attribute name; the column is `metadata`,
+`app/models/vector_record.py`). `CanonicalDocument` and `Chunk` are
+application-level Pydantic domain models, not database entities, so this table
+intentionally has no foreign key to either — document and chunk provenance
+travels as JSONB only.
+
+Vector-record ids are **material-scoped** by design. `document_id` is a
+filename stem, so two different materials can produce the same `document_id`
+and therefore the same `chunk_id`; using `document_id:chunk_id` as the storage
+id would collide across those materials. Prefixing `material_id` keeps
+materials independent and gives same-material re-ingestion a deterministic
+identity: re-processing one material recomputes the same ids, so the pgvector
+provider's upsert (`ON CONFLICT (id) DO UPDATE`) overwrites rows whose ids are
+identical instead of duplicating them. Retrieval by material therefore filters
+on `metadata` (`metadata @> filters`), not on a foreign key.
+
+**Known limitations (not implemented; deferred future work).**
+
+- *Stale chunks on re-ingestion.* Upsert only overwrites identical ids. If a
+  later run of the same material produces fewer chunks, the obsolete
+  higher-sequence vector rows are **not** currently deleted.
+- *No lifecycle tie to deletion.* Because `vector_records` has no foreign key
+  (the domain models are Pydantic, not entities), vector cleanup is not
+  automatically tied to material, course, or user deletion. Vector rows for
+  deleted materials or courses are not currently cleaned up; cleanup (for
+  example, delete by `material_id` metadata) is future work.
 
 The RAG service owns query embedding → search → context construction → reasoning
 call → source preservation.

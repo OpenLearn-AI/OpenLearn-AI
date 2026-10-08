@@ -20,6 +20,7 @@ from app.services.auth.user_service import (
 
 app = FastAPI(
     title=settings.app_name,
+    version="0.2.0",
 )
 
 setup_observability()
