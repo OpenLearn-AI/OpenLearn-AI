@@ -4,7 +4,9 @@
 
 This file records the actual execution of:
 
-`OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1`
+`OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1.docx`
+
+located at `docs/tasks/Frontend UI redesign/` (the canonical execution-context directory since the documentation relocation; older references to `frontend/docs/…` are stale). The roadmap was re-baselined in place by batch FR-REB-00 (in-document revision v1.2, 2026-10-08); the file name keeps v1.1 for path stability.
 
 (v1.1 supersedes v1.0 — it folds in the verification corrections below.)
 
@@ -15,13 +17,13 @@ This file records what we actually did.
 
 ## Current State
 
-- Current phase: 0 — Current-State Lock (not started)
-- Current batch: 0.1 — Baseline verification run (next up)
+- Current phase: 0 — Current-State Lock (not started; execution context re-baselined first)
+- Current batch: FR-REB-00 — Frontend Execution Context Re-baselining (documentation-only) — COMPLETE
 - Current gate: none passed yet (Gate A is the first)
-- Repository HEAD: `c51f3f10aa3c1cc716088e5468bb4f9dfc60839a`
-- Branch: `staging` (clean working tree, in sync with `origin/staging`)
-- Last completed batch: none (roadmap verified, execution not begun)
-- Overall status: ROADMAP VERIFIED AND ISSUED AS v1.1 — awaiting approval to start Batch 0.1
+- Repository HEAD: `4c55ecda77ed23378b274b5e4172ee0c93f5c315` (branch `frontend-redesign`; contains `origin/staging` @ `d3d58879cfb1952392bb49ee955ec6b16c576432` via merge `e788772`)
+- Branch: `frontend-redesign` (clean working tree, in sync with `origin/frontend-redesign`)
+- Last completed batch: FR-REB-00 (documentation re-baselining only — NO frontend implementation was performed)
+- Overall status: EXECUTION CONTEXT RE-BASELINED — roadmap reconciled against the current repository (in-document revision v1.2); awaiting approval to start Batch 0.1 on the new baseline
 
 ---
 
@@ -37,8 +39,42 @@ This file records what we actually did.
 - Preserve protected application logic.
 - No speculative features.
 - No fake AI.
+- The lifecycle rules (`docs/tasks/Frontend UI redesign/GLM-batch-n-patch-lifecycle-rules.md`) govern batch mechanics; the roadmap is a DOCX in this directory, read/edited with DOCX-aware tooling.
 
 ---
+
+# Re-Baseline FR-REB-00 — Frontend Execution Context Re-baselining (2026-10-08)
+
+This section is the **current baseline record**. It was written by batch FR-REB-00, which was **documentation-only**: no frontend implementation, no backend change, no configuration change. Everything below the next horizontal rule is the **historical record** (the 2026-10-01 roadmap verification pass against the then-current staging branch) and is preserved unmodified. Nothing in it was erased; where reality has since moved on, the correction is recorded here and in the re-baselined roadmap, not by editing history.
+
+## Why the previous execution context became stale
+
+The v1.1 roadmap and this ledger were authored against branch `staging` at HEAD `c51f3f10aa3c1cc716088e5468bb4f9dfc60839a` on 2026-10-01. Since then the repository advanced substantially on non-frontend tracks, and the `frontend-redesign` branch was synchronized with the current `origin/staging` (`d3d5887`, the AI Week 7–8 merge PR #77) via merge commit `e788772`, then carried two documentation commits (`7ded23a` docs relocate, `4c55ecd` archved unwanted docs) that moved the execution context from `frontend/docs/` to `docs/tasks/Frontend UI redesign/` and archived the internal three-engineer allocation document. The old context therefore described a repository that no longer exists: its materials-pipeline premise (a `NotImplementedError` seam), its staging CORS finding, and its execution-context file paths were all outdated.
+
+## What was inspected and verified (all at HEAD `4c55ecd`, clean tree, 2026-10-08)
+
+- **Repository state:** branch `frontend-redesign`; local HEAD `4c55ecd` equals `origin/frontend-redesign`; `origin/staging` @ `d3d5887` is an ancestor of HEAD (verified with `git merge-base --is-ancestor`); working tree clean before any edit. Expected published HEAD after the archive cleanup confirmed.
+- **Frontend (`frontend/`):** `git diff --stat c51f3f1..HEAD -- frontend` shows **zero source changes** — only the deletion of the two relocated modernization documents. `package.json` (Next.js 16.3.1 App Router, React 19.2.8, TypeScript 5 strict, Tailwind 4, keycloak-js 26.2.4, TanStack Query 5, Zod 4, Sentry 10.74, shadcn-on-Base-UI), the nine-route/eight-page tree, three feature slices, the `apiFetch` boundary, `AuthGuard`, the async-state kit, 22 unit tests / 42 stories / 3 Playwright specs, and the six CI scripts are all exactly as the v1.1 roadmap recorded. Spot checks re-confirmed the investigation findings still hold in code: F3 (edit page still lacks `key={course.id}`), F5 (`created_at: z.string().datetime({ offset: true })` still demands offsets), S1 (five "Coming soon" strings in the dashboard), S2 (landing still markets RAG chat/quizzes/flashcards/knowledge graph).
+- **Backend integration surface (`backend/app/`):** the HTTP API surface is unchanged in shape — still exactly the five route modules (auth, users, courses, materials incl. the status router); **zero AI-consumer endpoints exist**. The materials flow changed fundamentally: `register_material_handler` now enqueues real processing (commit-before-publish contract, 202 with `material_id` + `job_id`), and `process_material` is a full Celery task — atomic `pending`→`processing` claim, storage fetch from MinIO, Stage 1 (Docling ingest + PDF-only targeted OCR, Gemini `gemini-3.6-flash` behind the 50-char text gate), Stage 2 (chunking 1200/150 → BGE-M3 1024-dim L2-normalized embeddings → pgvector upsert committed atomically with the `ready` transition), retry policy (3 retries, 60 s backoff) and 10 m/11 m task limits, failure path marking `failed`. Upload-url/register require instructor role + course ownership; the status read requires course ownership. Course listing remains not owner-scoped (upstream defect unchanged).
+- **AI capabilities (`backend/app/pal/`, `backend/app/services/document_pipeline.py`, workers, `docs/tasks/ai-week7-8/`, `docs/research/EMBEDDING.md`):** AI Week 7–8 (batches B0–B11) is closed and merged. The pipeline is **staging-proven**: the B7 final staging run observed a seeded PDF travel pending → processing → ready in ~54 s with vector rows persisted; the LiteLLM reasoning adapter is proven against the real gateway (`gemini-3.6-flash`, budget guard confirmed from the running gateway's configuration). Recorded limitations: scanned-PDF OCR is **not** fully validated (Gemini free-tier quota blocked the scanned fixtures), Langfuse tracing is disabled, Celery routes/retry finalization remains DevOps-owned. H4 ("a material actually reaches ready on staging") was delivered to the frontend pod on 2026-10-08 with provider-side evidence; the HTTP status endpoint and browser flows were never exercised by the AI pod's evidence.
+- **Infrastructure / DevOps (`infra/`, `.github/workflows/`, `scripts/`):** the staging compose now passes `CORS_ORIGINS=https://openlearn-web-staging.duckdns.org,http://localhost:3000` to the backend container — **the v1.1 CORS finding is resolved at the configuration level** (the old claim that no passthrough exists is obsolete). The compose additionally runs the full AI runtime (Gemini OCR, BGE-M3, pgvector, LiteLLM with pinned digests), celery worker on `celery,ingestion_queue` + beat + Flower, Prometheus/Loki/Alloy/Grafana (api-latency-p95 dashboard), and a profile-gated `minio-init` job handled explicitly by `infra/deploy.sh`. `deploy-staging.yml` wires the AI runtime secrets with a fail-loud guard; `ci.yml` adds backend coverage reporting. The frontend deploy path still passes only `SENTRY_DSN` (compose) and declares only `NEXT_PUBLIC_SENTRY_DSN` (Dockerfile) — **the F1 Sentry environment-labeling deployment gap remains open**, as do the Node `engines` declaration (W8) and the six floating `latest` devDependencies + unpinned Chromatic action (W6/W7). `e2e.yml` is unchanged: workflow_dispatch-only, promotion still 0/3.
+
+## Decisions recorded by this re-baseline
+
+- **All 18 batches, their buckets, gates, and the stability contract remain valid and unchanged** — the frontend code they target is bit-for-bit the code they were written against. No batch is marked complete; none was implemented.
+- **The materials stretch-flow trigger has FIRED.** The v1.1 roadmap's own mechanism ("if the seam lands, a minimal upload + status view becomes a stretch flow — Gate C decision") now applies with its premise satisfied and staging-proven. The minimal materials upload + status view is the eligible Gate C stretch decision (requires an instructor test user on staging); it is still **not** scheduled work and remains excluded until that decision adopts it.
+- **Batch 0.1's CORS check becomes a confirmation, not an investigation.** The compose-level evidence resolves Open Question 3's escalation path; only the live preflight remains.
+- **Open Question 1 (Week 8 mapping) is superseded:** the AI pod closed Weeks 7–8 and staging merged the work, so the dead-seam mapping delta no longer blocks anything; the historical delta stays recorded below for the record.
+- **The roadmap is re-baselined in place** (in-document revision v1.2 inside the v1.1-named file for path stability): cover evidence line, Section 1 (purpose + revision record), Section 2 (baseline), Tables 5/6/7/11/12 rows affected by the new reality, Section 6 (AI and backend dependency strategy), Phase 0 intro, and Batch 0.1 validation were reconciled; the batch structure was deliberately not renumbered.
+- **No fake AI stands.** Zero AI-consumer HTTP endpoints remain the verified fact; the new pipeline is worker-internal and adds no user-facing surface. Landing-copy honesty (S2) and the dashboard metric decision (S1) are unchanged in substance.
+
+## What remains to be implemented
+
+Everything. The execution log below still reads NOT STARTED for Batches 0.1–5.3, and that remains true. The next authorized step is **Batch 0.1 — Baseline verification run** on the new baseline (`4c55ecd`), followed by the existing phase order through Gate F. The only new decision point the re-baseline adds is the Gate C stretch decision on the minimal materials upload + status view.
+
+---
+
+# Historical Record (pre-re-baseline, 2026-10-01 — preserved as written)
 
 ## Roadmap Verification
 
@@ -157,6 +193,76 @@ staging CORS is unresolved (below).
 ---
 
 # Execution Log
+
+## Batch FR-REB-00 — Frontend Execution Context Re-baselining (documentation-only)
+
+Status: COMPLETE (2026-10-08)
+
+#### Planned
+Re-baseline the three execution-context files against the current repository
+(`frontend-redesign` @ `4c55ecd`, containing `origin/staging` @ `d3d5887`):
+update the lifecycle rules (canonical paths, DOCX handling, binary-patch
+method), reconcile the roadmap DOCX where the synchronized staging baseline
+(AI Week 7–8, documentation relocation) had made it stale, and record the new
+baseline in this ledger. **No frontend implementation.**
+
+#### Actual
+Executed exactly as planned. Repository state verified first (branch, HEAD,
+remote heads, staging containment, clean tree). Full inspection pass over
+frontend, backend, AI, and infra (see the re-baseline section above for the
+complete evidence). The lifecycle rules were corrected in place: stale
+`frontend/docs/…` paths replaced with the canonical
+`docs/tasks/Frontend UI redesign/` paths, staging-containment check added to
+the verification commands, DOCX read/edit/verify guidance added, the isolated-
+clone `--binary` patch method adopted from the `ai-week7-8` rules, and a
+documentation-only-batch verification clause added. The roadmap DOCX was
+edited in place with `python-docx` (21 targeted paragraph/cell edits, styles
+and TOC preserved) and re-verified by re-extraction and zip-integrity check:
+cover evidence line, Section 1 purpose/revision record (now v1.2), Section 2
+baseline, Table 5 (staging CORS, materials, RAG rows), Table 6 (materials and
+AI rows), Section 6 intro + Table 7 + defects paragraph, Phase 0 intro, Batch
+0.1 validation, Table 11 (materials/AI exclusions), Table 12 (Q1/Q3/Q6). The
+batch structure (6 phases / 18 batches / Gates A–F) was deliberately kept.
+No implementation batch was started, advanced, or marked complete.
+
+#### Files changed
+Exactly the three authorized files:
+- `docs/tasks/Frontend UI redesign/GLM-batch-n-patch-lifecycle-rules.md`
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md`
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1.docx`
+
+#### Verification
+- Git scope check: `git status --short`, `git diff --name-only`,
+  `git diff --cached --name-only`, `git ls-files --others --exclude-standard`
+  — only the three authorized files modified; nothing else touched.
+- Roadmap DOCX: re-opened with `python-docx`; zip integrity test passed;
+  text re-extracted (63,949 chars) and reviewed; zero stale `frontend/docs`
+  references remain; remaining `c51f3f1` mentions are correctly framed
+  historical references; no obsolete "NotImplementedError" claims remain as
+  current-state statements.
+- Lifecycle rules: full re-read after edit; canonical paths verified.
+- This ledger: re-read for internal consistency (Current State vs re-baseline
+  section vs historical record).
+- NOT run (correctly, per the documentation-only scope): lint, typecheck,
+  unit tests, Storybook, build, E2E — no application code was touched, and
+  claiming such runs would violate the honesty rules.
+
+#### Issues / deviations
+None. No pre-existing Git changes existed at batch start (tree was clean), so
+no preservation handling was needed. One authoring note: the roadmap's
+in-document revision is v1.2 while the file name keeps v1.1 — recorded
+deliberately in both the roadmap revision record and this ledger for path
+stability, not treated as an inconsistency.
+
+#### Commit
+N/A (executor does not commit; Seyam applies the patch).
+
+#### Gate impact
+None — no gate passed. Gate A remains the next gate and now runs against the
+re-baselined context. Produces the corrected execution context that Batch 0.1
+cites.
+
+---
 
 ## Phase 0 — Current-State Lock
 

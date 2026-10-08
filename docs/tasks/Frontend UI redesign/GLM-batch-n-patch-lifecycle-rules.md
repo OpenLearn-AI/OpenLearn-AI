@@ -1,6 +1,25 @@
 # GLM Batch & Patch Lifecycle Rules
 
-These rules apply to every implementation batch.
+These rules apply to every batch executed on branch `frontend-redesign` under the frontend execution context that lives in:
+
+```text
+docs/tasks/Frontend UI redesign/
+```
+
+They were re-baselined by batch FR-REB-00 (2026-10-08) after the branch was synchronized with `origin/staging` (AI Week 7–8 and the documentation relocation). The safeguards are unchanged: repository verification, preservation of existing Git state, reading the roadmap and ledger before each batch, one authorized batch per prompt, honest verification, complete patch generation, and stopping after reporting.
+
+The active execution-context files — the only planning documents a batch needs to read — are exactly these three:
+
+```text
+docs/tasks/Frontend UI redesign/GLM-batch-n-patch-lifecycle-rules.md
+                                             (this file — read first, always)
+docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md
+                                             (the living execution ledger)
+docs/tasks/Frontend UI redesign/OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1.docx
+                                             (the primary execution roadmap — a DOCX)
+```
+
+The old internal three-engineer allocation document has been archived to `docs/tasks/Frontend UI redesign/archive/` and is **not** an active execution-context file. Do not treat it as current scope, and do not restore or modify it.
 
 ## 1. Start by verifying repository state
 
@@ -14,6 +33,8 @@ git branch --show-current
 git rev-parse HEAD
 git fetch origin
 git rev-parse origin/frontend-redesign
+git rev-parse origin/staging
+git merge-base --is-ancestor origin/staging HEAD && echo "staging contained"
 ```
 
 Confirm that:
@@ -22,6 +43,7 @@ Confirm that:
 * the branch is `frontend-redesign`
 * the local HEAD is the expected latest HEAD
 * the remote branch state is understood
+* the branch still contains the current `origin/staging` baseline (or that any divergence is explicitly explained by the batch prompt)
 
 **Do not reset, clean, rebase, pull, or otherwise modify Git history automatically.**
 
@@ -52,9 +74,11 @@ Your patch must distinguish **changes introduced by this batch** from **pre-exis
 Before every batch, read:
 
 ```text
-frontend/docs/OpenLearn-AI_Frontend_Execution_Progress.md
-frontend/docs/OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1.docx
+docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md
+docs/tasks/Frontend UI redesign/OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1.docx
 ```
+
+These are the canonical, current paths. Older references to `frontend/docs/…` are stale — the execution context was relocated to `docs/tasks/Frontend UI redesign/` and the old location no longer exists.
 
 ### `progress.md`
 
@@ -72,9 +96,9 @@ Read it to determine:
 
 At the end of every batch, update it with **exactly what actually happened**.
 
-### `Integrated_Frontend_Execution_Roadmap_v1.1.docx`
+### `OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1.docx` — the roadmap is a DOCX
 
-This is the **primary execution roadmap**.
+This is the **primary execution roadmap**. It is a binary Word document, not Markdown.
 
 Use it to determine:
 
@@ -83,6 +107,8 @@ Use it to determine:
 * dependencies
 * verification requirements
 * gates and sequencing
+
+When you need to read it, extract its text with a DOCX-aware tool (for example `python-docx`) instead of assuming its contents. When a batch authorizes modifying it, edit it in place with a DOCX-aware library, preserving the document's styles, tables, and TOC field codes, and verify the result by re-extracting the text and opening/validating the file before generating the patch.
 
 Do not silently change the roadmap.
 
@@ -124,7 +150,7 @@ Never claim a check passed if it was not actually executed.
 Before generating the patch, update:
 
 ```text
-frontend/docs/OpenLearn-AI_Frontend_Execution_Progress.md
+docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md
 ```
 
 Record the actual batch result, including:
@@ -168,6 +194,20 @@ git diff
 is not sufficient if the batch created untracked files.
 
 The final patch must include those files as well.
+
+The patch must also be generated with `--binary`: the roadmap is a DOCX, so any batch that touches it produces a binary change that a plain text diff cannot represent. The proven method (established on the `ai-week7-8` task and adopted here) is an isolated working clone at the batch's starting commit:
+
+1. Complete the batch in the working clone (no commits, no pushes); keep an explicit list of every file the batch created, modified, or deleted.
+2. `git clone --no-hardlinks . /tmp/olai-frontend-patch-build` (any path outside the repository) and `git -C <clone> checkout --detach <start-commit>`.
+3. Reproduce only the batch-owned files inside the isolated clone; `git -C <clone> status --porcelain` must show exactly the batch-owned change list.
+4. `git -C <clone> add -A` and generate the patch with `git -C <clone> diff --cached --binary --no-color > <patch-file>`.
+5. Validate the patch against a pristine clone of the starting commit (`git apply --check`, then apply and compare `status --porcelain` against the change list) before delivering it.
+
+Never stage or unstage the user's pre-existing changes in the real working clone merely to construct a patch.
+
+### Documentation-only batches
+
+Some batches (for example the FR-REB-00 re-baselining) authorize changes only to the execution-context documents themselves. For such batches, "verification" means: the modified documents are readable and internally consistent, no document claims work that did not happen, no out-of-scope file was touched, and (when the DOCX was edited) the DOCX is still a valid, openable Word document. Running application tests is not required and must not be claimed.
 
 ---
 
@@ -231,19 +271,19 @@ Do not begin the next batch until Seyam explicitly gives the next instruction.
 ### Lifecycle
 
 ```text
-VERIFY REPO
+VERIFY REPO (branch, HEAD, staging containment)
     ↓
-READ ROADMAP + PROGRESS
+READ LIFECYCLE RULES + ROADMAP (DOCX) + PROGRESS  [docs/tasks/Frontend UI redesign/]
     ↓
 RECORD STARTING STATE
     ↓
-IMPLEMENT ONE BATCH
+IMPLEMENT ONE BATCH (documentation-only or implementation — as authorized)
     ↓
-VERIFY
+VERIFY (tests for code batches; readability/consistency for doc batches)
     ↓
 UPDATE progress.md
     ↓
-GENERATE COMPLETE PATCH
+GENERATE COMPLETE --binary PATCH (isolated-clone method)
     ↓
 VERIFY PATCH ACCESS
     ↓
