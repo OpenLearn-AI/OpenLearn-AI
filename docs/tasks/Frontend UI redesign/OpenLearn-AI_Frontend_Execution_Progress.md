@@ -6,7 +6,7 @@ This file records the actual execution of:
 
 `OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1.docx`
 
-located at `docs/tasks/Frontend UI redesign/` (the canonical execution-context directory since the documentation relocation; older references to `frontend/docs/…` are stale). The roadmap was re-baselined in place by batch FR-REB-00 (in-document revision v1.2, 2026-10-08); the file name keeps v1.1 for path stability.
+located at `docs/tasks/Frontend UI redesign/` (the canonical execution-context directory since the documentation relocation; older references to `frontend/docs/…` are stale). The roadmap was re-baselined in place by batch FR-REB-00 (in-document revision v1.2, 2026-10-08) and amended in place by batch FR-REB-01 (in-document revision v1.3, 2026-10-08, the product/UX roadmap amendments A–D); the file name keeps v1.1 for path stability.
 
 (v1.1 supersedes v1.0 — it folds in the verification corrections below.)
 
@@ -17,13 +17,13 @@ This file records what we actually did.
 
 ## Current State
 
-- Current phase: 0 — Current-State Lock (not started; execution context re-baselined first)
-- Current batch: FR-REB-00 — Frontend Execution Context Re-baselining (documentation-only) — COMPLETE
+- Current phase: 0 — Current-State Lock (not started; execution context re-baselined and amended first)
+- Current batch: FR-REB-01 — Product/UX Roadmap Amendments (documentation-only) — COMPLETE
 - Current gate: none passed yet (Gate A is the first)
-- Repository HEAD: `4c55ecda77ed23378b274b5e4172ee0c93f5c315` (branch `frontend-redesign`; contains `origin/staging` @ `d3d58879cfb1952392bb49ee955ec6b16c576432` via merge `e788772`)
-- Branch: `frontend-redesign` (clean working tree, in sync with `origin/frontend-redesign`)
-- Last completed batch: FR-REB-00 (documentation re-baselining only — NO frontend implementation was performed)
-- Overall status: EXECUTION CONTEXT RE-BASELINED — roadmap reconciled against the current repository (in-document revision v1.2); awaiting approval to start Batch 0.1 on the new baseline
+- Repository HEAD: `c45aa7f4e24252590c3d1ad2fb2b4629fcdd9161` (branch `frontend-redesign`; the FR-REB-00 commit `c45aa7f` on top of `4c55ecd`, which contains `origin/staging` @ `d3d58879cfb1952392bb49ee955ec6b16c576432` via merge `e788772`; local HEAD equals `origin/frontend-redesign`)
+- Branch: `frontend-redesign` (HEAD in sync with `origin/frontend-redesign`; this batch's documentation changes are deliberately left uncommitted in the working tree because the batch emits a patch instead of a commit, exactly as FR-REB-00's rules require)
+- Last completed batch: FR-REB-01 (product/UX roadmap amendments only — NO frontend implementation; preceded by FR-REB-00, documentation re-baselining only)
+- Overall status: EXECUTION CONTEXT RE-BASELINED AND AMENDED — roadmap in-document revision v1.3 carries amendments A–D (materials surface scheduled, role-aware IA, near-term IA reservation, Sentry env chain written out); awaiting approval to start Batch 0.1 on baseline `c45aa7f4`
 
 ---
 
@@ -43,9 +43,54 @@ This file records what we actually did.
 
 ---
 
+# Product/UX Amendment Pass FR-REB-01 — Targeted Roadmap Amendments (2026-10-08)
+
+This section is the **current planning-scope record**. FR-REB-01 was **documentation-only**: no frontend implementation, no backend change, no configuration change. It amends the roadmap in place (in-document revision v1.2 → **v1.3**); it does not re-baseline, does not renumber the batch structure (still six phases, eighteen batches, Gates A–F), and does not invalidate any technical fact FR-REB-00 verified. Files touched: exactly the three execution-context files (this ledger, the lifecycle rules note, the roadmap DOCX).
+
+## Why
+
+A read-only Product/UX/Frontend-Architecture audit of the roadmap against the repository (baseline `c45aa7f4`, clean tree) and the 44-week plan (`planning/Roadmap/44-WEEK-EXECUTION-PLAN .md`) found the roadmap factually accurate but materially conservative in four places, plus two counting slips:
+
+- the only AI capability with a real, staging-proven, user-visible payoff — the materials upload → status flow — was scoped as an optional Gate C stretch rather than scheduled work;
+- the frontend is persona-blind (zero role-conditional UI) although the backend enforces role and ownership rules;
+- the shell and hub are designed as if course CRUD were terminal while the 44-week plan assigns the frontend pod near-term surfaces (W9–W17);
+- the F1 Sentry environment-label chain was described but not fully written out against the deployment files;
+- accuracy: the roadmap said "Eight page files" / "9 paths / 8 pages" (there are **nine** `page.tsx` files) and called the backend's **eleven operations across five mounted routers** (plus unversioned `GET /health`) "eleven routes".
+
+## The four amendments (roadmap in-document revision v1.3)
+
+- **A — Materials Upload + Processing Status promoted to scoped work.** The surface is now scheduled Phase 4 work inside **Batch 4.3** against the **existing contract only**: presigned PUT upload via `POST /v1/courses/{id}/materials/upload-url`, registration via `POST /v1/courses/{id}/materials` (202 with `material_id` + `job_id`, log-correlation only), material list, and status polling across the four-value literal `pending → processing → ready | failed`. Honest failed-state messaging including OCR/quota-related failures; **no retry/reprocess control** (no retry API exists); no fake progress percentages or phases; no fake AI reasoning UI; no new backend functionality. Demo-walk prerequisite recorded in Batch 2.1: an instructor-role course-owner test user on staging. Roadmap touchpoints: Sections 3.3 (Bucket C inventory), 5 (journey + demo data), 12 (Phase 4 intro), 16 (Table 11 narrowed), 17 (Open Question 6), 18 (Gate F conditions), 19 (ten questions), Tables 5/6/7/8/9/10, Gates C/E, and Batch 4.3 itself.
+- **B — Role-aware information architecture (new roadmap Section 3.5).** RBAC documented as both a functional-correctness requirement (never present an action the API will refuse) and an information-architecture/design requirement (navigation, headings, page composition say who the surface is for). Personas documented from evidence: instructor = upload gated by role + course ownership; student = honest current scope (any authed user can list all courses — the backend defect, Open Question 7; no enrollment API until plan W17; no learning content), no upload affordance shown; admin = realm role with **zero** backend enforcement (`require_admin` has no call sites), so no admin UI is designed or implied. Consumes the roles `/auth/me` already returns (`meResponseSchema.roles`); adds no authorization framework, duplicates no Keycloak/backend logic, never treats client-side gating as security. Folded into Batches 2.2, 3.3, 4.2, 4.3, and 5.1 (affordance-visibility assertions only, never as authorization tests).
+- **C — Near-term IA reservation (new roadmap Section 3.6).** Three-tier classification: *consumable today* (auth, profile, course CRUD, materials contract — built in 4.3), *near-term API-dependent* (W9–W17: extracted text, search, chunks/source panel, ranked citations, citation chips, chat/streaming, enrollment — **IA reservation only**), *later/future* (knowledge graph, quizzes, exams, mastery, analytics, recommendations — honest copy only). The redesigned course detail is designated the primary content/learning hub; Batch 4.3 records the attachment slots in the batch note and the design ADR. Explicitly: no placeholder screens, no empty coming-soon panels, no fake data, no fake search box, no chat composer, no citation chips, no speculative API clients — the reservation is documentation, never rendered UI. Verified premise: `backend/app/api/` still exposes only auth/users/courses/materials and zero AI-consumer endpoints.
+- **D — Sentry environment chain written out (Batch 1.3).** The full verified path is now explicit: `frontend/Dockerfile` build ARG (today only the DSN is one) → `.github/workflows/deploy-staging.yml` build-argument (absent today) **and** its `.env.runtime` heredoc → `infra/docker-compose.staging.yml` frontend `SENTRY_ENVIRONMENT` (both sides today pass only `SENTRY_DSN`) → `infra/.env.staging.example` keys (`NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_SENTRY_DSN`) — plus the `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` build-time secrets `next.config.ts`'s `withSentryConfig` needs. Gate F's observability condition and Table 5's Sentry row now depend on that wired chain.
+
+## Accuracy fixes (directly verified in this pass)
+
+- **Page count:** nine `page.tsx` files for nine route paths. Corrected in roadmap §2 ("Nine page files…"), Table 1 ("9 paths / 9 pages"), and — with attribution — in the FR-REB-00 inspection bullet below ("nine-route/eight-page tree" → nine-page tree, FR-REB-01).
+- **Operation-count terminology:** the backend's application API exposes **eleven operations across five mounted routers** (courses 5, materials 4 including the status router, auth 1, users 2) plus unversioned `GET /health`; the frontend consumes **eight**; nine `page.tsx` files. The old wording ("eleven routes") conflated routers/operations; the numbers were verified, not invented. Roadmap §2 now states this exactly.
+- **Traceability:** roadmap Batch 1.3 and this ledger's Batch 1.3 record now describe the same chain, the same files, the same `.github/workflows/` path.
+
+## What this batch does NOT claim
+
+- Materials UI is **not implemented** — it is now scheduled scope (Batch 4.3), status NOT STARTED.
+- Role-aware UI is **not implemented** — Section 3.5 is a recorded decision, not code; the dashboard heading and Navbar labels are unchanged in the repository.
+- No W9–W17 capability is implemented or faked; no retrieval/chat/citation/chunk HTTP API exists; zero AI-consumer endpoints remain the verified fact.
+- No new batch was created, no batch was renumbered, no gate passed, no batch 0.1–5.3 started, no application file of any kind was touched.
+
+## Status classification after FR-REB-01
+
+| Category | Items |
+|---|---|
+| Completed facts (unchanged) | FR-REB-00 technical re-baseline; AI Week 7–8 pipeline staging-proven; CORS resolved at compose level; E2E promotion still 0/3; Sentry env gap still open until Batch 1.3 runs |
+| Newly scoped planning work (NOT STARTED) | Materials surface (4.3); role-aware IA application (2.2, 3.3, 4.2, 4.3, 5.1); hub reservation notes (4.3 + design ADR); precise F1 chain (1.3); materials-walk decision (2.1) |
+| Blocked on future backend/API availability | Extracted text (W9), retrieval search (W10), chunk inspection (W11), citations (W13–14), chat/streaming (W15–16), enrollment (W17) — IA reservation only, per Section 3.6 |
+| Unchanged exclusions | Retry/reprocess UI, fake progress/phases, pagination, i18n framework, analytics, server-side auth, coverage thresholds, spec §22.4 endpoints, fake AI |
+
+---
+
 # Re-Baseline FR-REB-00 — Frontend Execution Context Re-baselining (2026-10-08)
 
-This section is the **current baseline record**. It was written by batch FR-REB-00, which was **documentation-only**: no frontend implementation, no backend change, no configuration change. Everything below the next horizontal rule is the **historical record** (the 2026-10-01 roadmap verification pass against the then-current staging branch) and is preserved unmodified. Nothing in it was erased; where reality has since moved on, the correction is recorded here and in the re-baselined roadmap, not by editing history.
+This section is the **technical baseline record** (the product/UX planning-scope amendments recorded by FR-REB-01 sit above it). It was written by batch FR-REB-00, which was **documentation-only**: no frontend implementation, no backend change, no configuration change. Everything below the next horizontal rule is the **historical record** (the 2026-10-01 roadmap verification pass against the then-current staging branch) and is preserved unmodified. Nothing in it was erased; where reality has since moved on, the correction is recorded here and in the re-baselined roadmap, not by editing history.
 
 ## Why the previous execution context became stale
 
@@ -54,7 +99,7 @@ The v1.1 roadmap and this ledger were authored against branch `staging` at HEAD 
 ## What was inspected and verified (all at HEAD `4c55ecd`, clean tree, 2026-10-08)
 
 - **Repository state:** branch `frontend-redesign`; local HEAD `4c55ecd` equals `origin/frontend-redesign`; `origin/staging` @ `d3d5887` is an ancestor of HEAD (verified with `git merge-base --is-ancestor`); working tree clean before any edit. Expected published HEAD after the archive cleanup confirmed.
-- **Frontend (`frontend/`):** `git diff --stat c51f3f1..HEAD -- frontend` shows **zero source changes** — only the deletion of the two relocated modernization documents. `package.json` (Next.js 16.3.1 App Router, React 19.2.8, TypeScript 5 strict, Tailwind 4, keycloak-js 26.2.4, TanStack Query 5, Zod 4, Sentry 10.74, shadcn-on-Base-UI), the nine-route/eight-page tree, three feature slices, the `apiFetch` boundary, `AuthGuard`, the async-state kit, 22 unit tests / 42 stories / 3 Playwright specs, and the six CI scripts are all exactly as the v1.1 roadmap recorded. Spot checks re-confirmed the investigation findings still hold in code: F3 (edit page still lacks `key={course.id}`), F5 (`created_at: z.string().datetime({ offset: true })` still demands offsets), S1 (five "Coming soon" strings in the dashboard), S2 (landing still markets RAG chat/quizzes/flashcards/knowledge graph).
+- **Frontend (`frontend/`):** `git diff --stat c51f3f1..HEAD -- frontend` shows **zero source changes** — only the deletion of the two relocated modernization documents. `package.json` (Next.js 16.3.1 App Router, React 19.2.8, TypeScript 5 strict, Tailwind 4, keycloak-js 26.2.4, TanStack Query 5, Zod 4, Sentry 10.74, shadcn-on-Base-UI), the nine-route/nine-page tree (page-file count corrected by FR-REB-01 — nine `page.tsx` files, not eight), three feature slices, the `apiFetch` boundary, `AuthGuard`, the async-state kit, 22 unit tests / 42 stories / 3 Playwright specs, and the six CI scripts are all exactly as the v1.1 roadmap recorded. Spot checks re-confirmed the investigation findings still hold in code: F3 (edit page still lacks `key={course.id}`), F5 (`created_at: z.string().datetime({ offset: true })` still demands offsets), S1 (five "Coming soon" strings in the dashboard), S2 (landing still markets RAG chat/quizzes/flashcards/knowledge graph).
 - **Backend integration surface (`backend/app/`):** the HTTP API surface is unchanged in shape — still exactly the five route modules (auth, users, courses, materials incl. the status router); **zero AI-consumer endpoints exist**. The materials flow changed fundamentally: `register_material_handler` now enqueues real processing (commit-before-publish contract, 202 with `material_id` + `job_id`), and `process_material` is a full Celery task — atomic `pending`→`processing` claim, storage fetch from MinIO, Stage 1 (Docling ingest + PDF-only targeted OCR, Gemini `gemini-3.6-flash` behind the 50-char text gate), Stage 2 (chunking 1200/150 → BGE-M3 1024-dim L2-normalized embeddings → pgvector upsert committed atomically with the `ready` transition), retry policy (3 retries, 60 s backoff) and 10 m/11 m task limits, failure path marking `failed`. Upload-url/register require instructor role + course ownership; the status read requires course ownership. Course listing remains not owner-scoped (upstream defect unchanged).
 - **AI capabilities (`backend/app/pal/`, `backend/app/services/document_pipeline.py`, workers, `docs/tasks/ai-week7-8/`, `docs/research/EMBEDDING.md`):** AI Week 7–8 (batches B0–B11) is closed and merged. The pipeline is **staging-proven**: the B7 final staging run observed a seeded PDF travel pending → processing → ready in ~54 s with vector rows persisted; the LiteLLM reasoning adapter is proven against the real gateway (`gemini-3.6-flash`, budget guard confirmed from the running gateway's configuration). Recorded limitations: scanned-PDF OCR is **not** fully validated (Gemini free-tier quota blocked the scanned fixtures), Langfuse tracing is disabled, Celery routes/retry finalization remains DevOps-owned. H4 ("a material actually reaches ready on staging") was delivered to the frontend pod on 2026-10-08 with provider-side evidence; the HTTP status endpoint and browser flows were never exercised by the AI pod's evidence.
 - **Infrastructure / DevOps (`infra/`, `.github/workflows/`, `scripts/`):** the staging compose now passes `CORS_ORIGINS=https://openlearn-web-staging.duckdns.org,http://localhost:3000` to the backend container — **the v1.1 CORS finding is resolved at the configuration level** (the old claim that no passthrough exists is obsolete). The compose additionally runs the full AI runtime (Gemini OCR, BGE-M3, pgvector, LiteLLM with pinned digests), celery worker on `celery,ingestion_queue` + beat + Flower, Prometheus/Loki/Alloy/Grafana (api-latency-p95 dashboard), and a profile-gated `minio-init` job handled explicitly by `infra/deploy.sh`. `deploy-staging.yml` wires the AI runtime secrets with a fail-loud guard; `ci.yml` adds backend coverage reporting. The frontend deploy path still passes only `SENTRY_DSN` (compose) and declares only `NEXT_PUBLIC_SENTRY_DSN` (Dockerfile) — **the F1 Sentry environment-labeling deployment gap remains open**, as do the Node `engines` declaration (W8) and the six floating `latest` devDependencies + unpinned Chromatic action (W6/W7). `e2e.yml` is unchanged: workflow_dispatch-only, promotion still 0/3.
@@ -62,7 +107,7 @@ The v1.1 roadmap and this ledger were authored against branch `staging` at HEAD 
 ## Decisions recorded by this re-baseline
 
 - **All 18 batches, their buckets, gates, and the stability contract remain valid and unchanged** — the frontend code they target is bit-for-bit the code they were written against. No batch is marked complete; none was implemented.
-- **The materials stretch-flow trigger has FIRED.** The v1.1 roadmap's own mechanism ("if the seam lands, a minimal upload + status view becomes a stretch flow — Gate C decision") now applies with its premise satisfied and staging-proven. The minimal materials upload + status view is the eligible Gate C stretch decision (requires an instructor test user on staging); it is still **not** scheduled work and remains excluded until that decision adopts it.
+- **The materials stretch-flow trigger has FIRED.** The v1.1 roadmap's own mechanism ("if the seam lands, a minimal upload + status view becomes a stretch flow — Gate C decision") now applies with its premise satisfied and staging-proven. The minimal materials upload + status view is the eligible Gate C stretch decision (requires an instructor test user on staging); it is still **not** scheduled work and remains excluded until that decision adopts it. **UPDATE (FR-REB-01): superseded in planning scope — the decision has been taken. The minimal upload + status view is now scheduled scope in Batch 4.3 (roadmap revision v1.3); what remains at Gate C is only whether the materials walk joins the demo journey, and the instructor-role course-owner test user is now a Batch 2.1 prerequisite. The technical premise recorded here is unchanged.**
 - **Batch 0.1's CORS check becomes a confirmation, not an investigation.** The compose-level evidence resolves Open Question 3's escalation path; only the live preflight remains.
 - **Open Question 1 (Week 8 mapping) is superseded:** the AI pod closed Weeks 7–8 and staging merged the work, so the dead-seam mapping delta no longer blocks anything; the historical delta stays recorded below for the record.
 - **The roadmap is re-baselined in place** (in-document revision v1.2 inside the v1.1-named file for path stability): cover evidence line, Section 1 (purpose + revision record), Section 2 (baseline), Tables 5/6/7/11/12 rows affected by the new reality, Section 6 (AI and backend dependency strategy), Phase 0 intro, and Batch 0.1 validation were reconciled; the batch structure was deliberately not renumbered.
@@ -70,7 +115,7 @@ The v1.1 roadmap and this ledger were authored against branch `staging` at HEAD 
 
 ## What remains to be implemented
 
-Everything. The execution log below still reads NOT STARTED for Batches 0.1–5.3, and that remains true. The next authorized step is **Batch 0.1 — Baseline verification run** on the new baseline (`4c55ecd`), followed by the existing phase order through Gate F. The only new decision point the re-baseline adds is the Gate C stretch decision on the minimal materials upload + status view.
+Everything. The execution log below still reads NOT STARTED for Batches 0.1–5.3, and that remains true. The next authorized step is **Batch 0.1 — Baseline verification run** on the new baseline (`c45aa7f4` — the FR-REB-00 commit, which is where FR-REB-01 also verified the repository), followed by the existing phase order through Gate F. The only new decision point the re-baseline adds is the Gate C stretch decision on the minimal materials upload + status view. **UPDATE (FR-REB-01): that decision is resolved — the surface is scheduled scope (Batch 4.3); Gate C now only decides whether its walk joins the demo journey. Roadmap Sections 3.5/3.6 and Tables 1, 5, 6, 7, 8, 9, 10, 11, 12, 13 plus Batches 1.3/2.1/2.2/3.3/4.2/4.3/5.1 carry the amendments; batch structure, buckets, gates, and stability contract are unchanged.**
 
 ---
 
@@ -264,6 +309,117 @@ cites.
 
 ---
 
+## Batch FR-REB-01 — Product/UX Roadmap Amendments (documentation-only)
+
+Status: COMPLETE (2026-10-08)
+
+#### Planned
+Apply the read-only Product/UX audit's four amendments (A — materials
+upload + status surface promoted to scheduled Phase 4 scope against the
+existing contract; B — role-aware information architecture; C — near-term IA
+reservation for the 44-week plan's W9–W17 surfaces; D — the Sentry
+environment chain written out end to end) plus the verified accuracy fixes
+(nine page files; eleven backend operations across five mounted routers), to
+the three execution-context files only: amend the roadmap DOCX in place
+(in-document revision v1.2 → v1.3, file name unchanged), record the
+amendment in this ledger, and note the amendment pass in the lifecycle
+rules. **No frontend implementation.**
+
+#### Actual
+Executed as planned. Repository state verified first (branch
+`frontend-redesign`, local HEAD = `origin/frontend-redesign` =
+`c45aa7f4` — the FR-REB-00 commit on top of `4c55ecd`; `origin/staging` @
+`d3d5887` contained; working tree clean except the pre-existing
+`frontend-redesign-FR-REB-00-rebaseline.patch`, which was left untouched).
+Evidence for every amendment was re-verified against the repository before
+writing: materials endpoints, dependencies (instructor role + course
+ownership on upload/register; ownership-only on list/status), the 202
+response shape, the four-value status literal, absence of any retry
+endpoint, the realm roles (`student`/`instructor`/`admin`), `require_admin`
+with zero call sites, `meResponseSchema.roles` rendered as text only, the
+nine `page.tsx` files, eleven API operations across five routers + unversioned
+`GET /health`, eight consumed operations, the Sentry chain gaps in
+`frontend/Dockerfile`, `.github/workflows/deploy-staging.yml`,
+`infra/docker-compose.staging.yml`, `infra/.env.staging.example`, and the
+44-week plan's W9–W17 frontend assignments.
+
+The roadmap DOCX was edited in place with `python-docx` (57 asserted edit
+groups: run-preserving paragraph spans, single-paragraph cell rebuilds with
+original run formatting, one cloned validation-matrix row, and 14 inserted
+paragraphs for new Sections 3.5 and 3.6 placed before Section 4) and
+re-verified by re-extraction and zip-integrity check. Touchpoints: cover
+evidence line; Section 1 (purpose + revision record, now v1.3); Section 2
+(baseline note, page/operation/material-routes sentences); Table 1 routes
+row; Section 3 intro; Bucket C inventory; new Sections 3.5 + 3.6; Tables 5,
+6, 7, 8; Sections 5 (journey + demo data) and 12 (Phase 4 intro); Batches
+1.3 (D), 2.1, 2.2, 3.3, 4.2, 4.3 (A + B + C), 5.1; Gates C/E evidence;
+validation matrix (new materials-walk row); exclusions (Table 11 narrowed);
+Open Question 6; Gate F conditions; the ten questions. Core properties
+bumped (revision 2, modified 2026-10-08). The batch structure (6 phases /
+18 batches / Gates A–F) was deliberately kept — no new batch number was
+invented; the materials surface folded into Batch 4.3 per "amend; do not
+rewrite". Ledger updates: Purpose note, Current State, the new FR-REB-01
+section above, UPDATE annotations on the three superseded FR-REB-00
+statements, the nine-page correction, and the NOT-STARTED planned text for
+Batches 1.3, 2.1, 2.2, 3.3, 4.2, 4.3, and 5.1. Lifecycle rules: one
+sentence noting the amendment pass.
+
+#### Files changed
+Exactly the three authorized files:
+- `docs/tasks/Frontend UI redesign/GLM-batch-n-patch-lifecycle-rules.md`
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md`
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Integrated_Frontend_Execution_Roadmap_v1.1.docx`
+
+#### Verification
+- Git scope check: `git status --short`, `git diff --stat`,
+  `git diff --name-only`, `git ls-files --others --exclude-standard` — only
+  the three authorized files modified; the pre-existing FR-REB-00 patch
+  untouched; nothing else changed; no staged or committed changes.
+- Roadmap DOCX: re-opened with `python-docx`; zip integrity test passed;
+  text re-extracted (76,227 chars vs 63,130 before) and the full diff
+  reviewed line by line; post-conditions asserted — corrected strings
+  present (nine page files, eleven operations, `9 paths / 9 pages`, the
+  v1.3 revision entry, Sections 3.5/3.6, the materials-walk row) and stale
+  strings absent ("Eight page files", "9 paths / 8 pages", "eleven routes",
+  "Deferred (stretch)", "eligible Gate C stretch decision"); heading styles
+  and TOC field untouched (TOC refresh is a reader action per the document's
+  own note).
+- Facts re-verified before writing (see Actual): RBAC deps/schemas, material
+  API contract and status literal, no retry endpoint, realm roles,
+  `require_admin` unused, page/route/operation counts, Sentry chain files,
+  W9–W17 plan assignments, zero AI-consumer endpoints.
+- Ledger: re-read end to end for internal consistency (Current State vs
+  FR-REB-01 section vs FR-REB-00 UPDATE annotations vs batch plans).
+- Lifecycle rules: re-read after edit; the one-sentence amendment note sits
+  in the existing revision sentence.
+- NOT run (correctly, per the documentation-only scope): lint, typecheck,
+  unit tests, Storybook, build, E2E — no application code was touched, and
+  claiming such runs would violate the honesty rules.
+
+#### Issues / deviations
+None blocking. Notes for the record: (1) the roadmap's in-document revision
+is now v1.3 while the file name keeps v1.1 — same deliberate path-stability
+decision FR-REB-00 recorded, extended rather than contradicted; (2) the
+document's Table of Contents is a field code and does not auto-refresh —
+new Sections 3.5/3.6 appear after a reader updates the field, as the
+document's own TOC note instructs; (3) the FR-REB-00 commit `c45aa7f`
+predates this batch, so Current State now records `c45aa7f4` as the verified
+HEAD; (4) Batch 4.3's planned "new course-detail-scoped materials component"
+is named generically on purpose — concrete file naming belongs to the batch
+that implements it.
+
+#### Commit
+N/A (executor does not commit; Seyam applies the patch
+`frontend-redesign-FR-REB-01-product-ux-roadmap-amendments.patch`).
+
+#### Gate impact
+None — no gate passed. Gate A remains next. The Gate C decision recorded by
+FR-REB-00 (adopt or defer the materials stretch flow) is resolved by
+amendment A: adopted as scheduled scope; Gate C now only locks whether the
+materials walk joins the demo journey (recorded in Batches 2.1 and 4.3).
+
+---
+
 ## Phase 0 — Current-State Lock
 
 ### Batch 0.1 — Baseline verification run
@@ -393,12 +549,19 @@ Contributes to Gate B.
 Status: NOT STARTED
 
 #### Planned
-F1: wire `NEXT_PUBLIC_SENTRY_ENVIRONMENT` through Dockerfile build ARG +
-`deploy-staging.yml` build-args + compose runtime `SENTRY_ENVIRONMENT` +
-`infra/.env.staging.example` keys; verify one labeled event with source maps.
+F1: wire the environment label end to end, per the roadmap's FR-REB-01
+write-out — `NEXT_PUBLIC_SENTRY_ENVIRONMENT` as a `frontend/Dockerfile`
+build ARG (today only the DSN is one) + the matching build-argument in
+`.github/workflows/deploy-staging.yml` (absent today) + `SENTRY_ENVIRONMENT`
+in that workflow's `.env.runtime` heredoc and on the frontend service in
+`infra/docker-compose.staging.yml` (both today pass only `SENTRY_DSN`) +
+`infra/.env.staging.example` keys (`NEXT_PUBLIC_SENTRY_ENVIRONMENT`,
+`SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_SENTRY_DSN`); source-map upload secrets
+(`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — Pod D) available at
+image build time because `next.config.ts` runs `withSentryConfig` at build;
+verify one labeled event with source maps.
 W8: declare `engines.node` (CI runs Node 20, Docker image runs Node 22).
-See Corrections table for the sharpened scope (code layer already done;
-SENTRY_AUTH_TOKEN build secret additionally required).
+See Corrections table for the sharpened scope (code layer already done).
 
 #### Actual
 Not executed yet.
@@ -458,8 +621,11 @@ Status: NOT STARTED
 
 #### Planned
 Lock journey, page inventory, environment (staging pending the CORS answer;
-local is the documented fallback), and the demo dataset runbook. No
-application code.
+local is the documented fallback), and the demo dataset runbook. Record the
+materials-walk decision — whether the upload → status surface now scheduled
+in Batch 4.3 joins the locked journey (roadmap FR-REB-01, Sections 3.5/5) —
+and, if it does, create the prerequisite instructor-role course-owner test
+user on staging. No application code.
 
 #### Actual
 Not executed yet.
@@ -489,7 +655,10 @@ Status: NOT STARTED
 #### Planned
 Settle dashboard + landing structure (S1/S2): remove or replace Coming-soon
 cards/sections, remove mislabeled Open Chat / View Graph buttons, rewrite
-landing copy to only claim real capabilities. Files:
+landing copy to only claim real capabilities. Settle the role-ambiguous copy
+in the role-aware direction of roadmap Section 3.5 (FR-REB-01): the
+hard-coded Student Dashboard heading becomes role-aware or neutral copy, and
+the Navbar label names its destination truthfully. Files:
 `(app)/dashboard/page.tsx`, `app/page.tsx`. Structural edits only.
 
 #### Actual
@@ -592,7 +761,10 @@ breakpoints); relocate `useUserName` to `features/auth` (W4). Files:
 `components/Navbar.tsx`, `components/UserName.tsx`,
 `components/auth/UserInfo.tsx`, `(app)/layout.tsx`, `app/layout.tsx`,
 `features/auth/`. Preserve `useMe` key, AuthGuard position, nav targets,
-logout sequence.
+logout sequence. Labels and visibility follow the role-aware IA (roadmap
+Section 3.5, FR-REB-01): destinations named truthfully for any signed-in
+role using the roles `/auth/me` already returns, and no link added for a
+capability that does not exist (Section 3.6); nav link targets unchanged.
 
 #### Actual
 Not executed yet.
@@ -652,7 +824,9 @@ Status: NOT STARTED
 #### Planned
 Dashboard pattern with the locked real-metric composition; courses list
 pattern with search, card grid, real empty state; extract the inline filter
-state. Preserve `useCourses` gating and filter semantics.
+state. Preserve `useCourses` gating and filter semantics. Dashboard heading
+and stat composition role-aware per roadmap Section 3.5 (FR-REB-01) — no
+hard-coded Student wording on a shared surface.
 
 #### Actual
 Not executed yet.
@@ -683,6 +857,23 @@ Detail layout, form pattern (validation + API-error presentation),
 delete-confirmation on the 3.2 dialog primitive with identical semantics;
 keep `notFound()`-on-404, schemas, mutations, cache invalidation,
 navigation, and the 1.1 key fixes.
+
+FR-REB-01 amendments carried here (roadmap v1.3): compose the detail as the
+content hub of Section 3.6 with its stable regions and add the scheduled
+materials surface — presigned upload via
+`POST /v1/courses/{id}/materials/upload-url`, register via
+`POST /v1/courses/{id}/materials` (202 with `material_id` + `job_id`, log
+correlation only), material list, and status polled across the four-value
+literal `pending/processing/ready|failed`, with honest failed-state
+messaging including OCR/quota-related failures; the upload affordance
+renders only for the signed-in course-owner instructor (Section 3.5; the
+API answers 403 otherwise); hub slots (extracted text, search, chunks,
+citations, chat, enrollment) documented in the batch note and the design
+ADR, never rendered. Must-not: no new backend functionality, no
+retry/reprocess control (no retry API exists), no fake progress
+percentages, processing phases, or AI reasoning UI. Validation adds the
+instructor-role upload → status walkthrough on staging (honest failure
+copy), the student no-affordance check, and the no-placeholder-slot check.
 
 #### Actual
 Not executed yet.
@@ -744,7 +935,10 @@ Status: NOT STARTED
 Update the 3 E2E specs to final copy/structure (role-based selectors); add
 the compact mobile-viewport check (second Playwright project or in-spec
 assertions). Preserve one-test-per-flow, real-Keycloak login,
-skip-without-credentials, worker/retry settings.
+skip-without-credentials, worker/retry settings. Role-aware affordance
+checks may assert visibility for the instructor test user (roadmap
+Section 3.5, FR-REB-01) — interface behavior only, never an authorization
+boundary.
 
 #### Actual
 Not executed yet.

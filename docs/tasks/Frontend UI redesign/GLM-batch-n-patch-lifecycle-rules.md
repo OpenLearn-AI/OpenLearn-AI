@@ -6,7 +6,7 @@ These rules apply to every batch executed on branch `frontend-redesign` under th
 docs/tasks/Frontend UI redesign/
 ```
 
-They were re-baselined by batch FR-REB-00 (2026-10-08) after the branch was synchronized with `origin/staging` (AI Week 7–8 and the documentation relocation). The safeguards are unchanged: repository verification, preservation of existing Git state, reading the roadmap and ledger before each batch, one authorized batch per prompt, honest verification, complete patch generation, and stopping after reporting.
+They were re-baselined by batch FR-REB-00 (2026-10-08) after the branch was synchronized with `origin/staging` (AI Week 7–8 and the documentation relocation) and amended in planning scope by batch FR-REB-01 (2026-10-08, product/UX roadmap amendments A–D — documentation-only; roadmap in-document revision v1.3). The safeguards are unchanged: repository verification, preservation of existing Git state, reading the roadmap and ledger before each batch, one authorized batch per prompt, honest verification, complete patch generation, and stopping after reporting.
 
 The active execution-context files — the only planning documents a batch needs to read — are exactly these three:
 
