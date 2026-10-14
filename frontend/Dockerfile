@@ -26,7 +26,23 @@ ENV NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=$NEXT_PUBLIC_KEYCLOAK_CLIENT_ID
 ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
-RUN npm run build
+ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT
+ENV NEXT_PUBLIC_SENTRY_ENVIRONMENT=$NEXT_PUBLIC_SENTRY_ENVIRONMENT
+
+# Build-time source-map upload secrets for @sentry/nextjs' withSentryConfig
+# (frontend/next.config.ts). They are mounted as BuildKit secrets for this
+# RUN only — never written to image layers, the runtime environment, or the
+# build log. The SDK reads them from the process environment; when absent
+# (local dev, forks) the upload is skipped and the build still succeeds.
+# SENTRY_ORG / SENTRY_PROJECT are non-secret slugs; SENTRY_AUTH_TOKEN is a
+# real secret. CI supplies them via docker/build-push-action's `secrets`.
+RUN --mount=type=secret,id=sentry_auth_token \
+    --mount=type=secret,id=sentry_org \
+    --mount=type=secret,id=sentry_project \
+    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
+    SENTRY_ORG="$(cat /run/secrets/sentry_org 2>/dev/null || true)" \
+    SENTRY_PROJECT="$(cat /run/secrets/sentry_project 2>/dev/null || true)" \
+    npm run build
 
 
 FROM node:22-alpine AS runner
