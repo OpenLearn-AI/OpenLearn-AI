@@ -12,14 +12,14 @@ Revision lineage of this context: authored 2026-10-01 against `staging @ c51f3f1
 
 ---
 
-## Current State (verified 2026-10-15, after Batch 1.1 implementation pass)
+## Current State (verified 2026-10-15, after Batch 1.1 close-out)
 
-- Repository HEAD: `18d8a69e9944ed86b769afe8f3024b14c16da5e5` — branch `frontend-redesign`, equal to `origin/frontend-redesign` (the commit on which Batch 1.1 was executed). Lineage since the 0.1 baseline: `699c496` (FR-REB-02 patch commit) → `bea19f3` (Batch 0.1 patch applied by Seyam) → `7ebe978` (`scripts/run-batch-0.1-local-verification.sh`, committed by Seyam) → `18d8a69` (0.1-completion + 0.2 scope-freeze patches applied by Seyam as one commit). Staging containment re-verified at `18d8a69`: `git merge-base --is-ancestor origin/staging HEAD` passes; `HEAD..origin/staging` empty
-- Working tree at batch start: clean (fresh clone of `origin/frontend-redesign` — the executor's previous working tree was stale at `7ebe978` and was left untouched per the lifecycle stale-clone rule)
-- Current phase: 1 — Minimal Functional Closure — 1.1 implemented (2026-10-15)
-- Current batch: **1.1 — Correctness fixes on core flows — PARTIALLY EXECUTED (2026-10-15)**: all four findings (F3, F4, S10, F6) fixed in code with focused F6 policy tests added; the full sandbox-runnable matrix is green (lint, typecheck, unit 37/37 incl. the 15 new F6 tests, storybook 42/42, build 9 routes). Two validation items remain and must be produced on the owner machine, where the prerequisites exist: the **E2E re-run** (`courses-crud` + `profile-roundtrip` — no Docker daemon, no `E2E_USERNAME`/`E2E_PASSWORD`, and no local stack in the execution environment; the suite correctly self-skipped 3/3, exit 0 — identical missing-prerequisite block as Batch 0.1) and the **manual light+dark check of the success message** (no running app in the environment). Nothing fabricated; no check claimed that was not run
-- Current gate: **Gate A — PASSED (2026-10-15)** — unchanged. **Gate B NOT claimed**: it requires the full closure set (1.1 complete + 1.2 + 1.3 + 1.4) and the local matrix green including E2E with credentials
-- Overall status: **Batch 1.1 implemented and sandbox-verified; E2E confirmation + manual S10 check pending on the owner machine; Batch 1.2 awaits Seyam's explicit authorization**
+- Repository HEAD: `7dc9f671ee91c3678fcb1bbdac4a563cf3ab3c27` — branch `frontend-redesign`, equal to `origin/frontend-redesign` (the Batch 1.1 patch applied upstream and pushed by Seyam as commit `frontend-redesign-1.1-correctness-fixes-core-flows`). Lineage since the 0.1 baseline: `699c496` (FR-REB-02 patch commit) → `bea19f3` (Batch 0.1 patch applied by Seyam) → `7ebe978` (`scripts/run-batch-0.1-local-verification.sh`, committed by Seyam) → `18d8a69` (0.1-completion + 0.2 scope-freeze patches applied by Seyam as one commit) → `7dc9f67` (Batch 1.1 patch applied by Seyam). Staging containment re-verified at `7dc9f67`: `git merge-base --is-ancestor origin/staging HEAD` passes; `HEAD..origin/staging` empty
+- Working tree at batch start: clean (fresh clone of `origin/frontend-redesign` @ `7dc9f67`)
+- Current phase: 1 — Minimal Functional Closure — 1.1 EXECUTED (2026-10-15)
+- Current batch: **1.1 — Correctness fixes on core flows — EXECUTED (2026-10-15)**: all four findings (F3, F4, S10, F6) fixed in code with the focused F6 policy tests (15) added; the full matrix is green — executor sandbox re-verification at `7dc9f67` (lint, typecheck, unit 37/37 incl. the 15 F6 tests) plus the owner-machine completion run (E2E trio 3/3 with real Keycloak credentials, Storybook 42/42 across 12 files, lint, typecheck, production build with all 9 application routes, and the manual light+dark success-message check). See the 1.1 completion entry below for the evidence table
+- Current gate: **Gate A — PASSED (2026-10-15)** — unchanged. **Gate B NOT claimed**: it requires the full closure set (1.1 complete ✓ + 1.2 + 1.3 + 1.4) and the local matrix green including E2E with credentials (1.1's E2E evidence is in; 1.2/1.3/1.4 remain)
+- Overall status: **Batch 1.1 EXECUTED (implementation + owner-machine verification); Batch 1.2 — Authentication surface completion (W1, S3, S8) — explicitly authorized by Seyam in the same prompt that supplied the owner evidence, and executed next per the one-batch lifecycle rule**
 
 ---
 
@@ -137,7 +137,8 @@ No frontend-relevant backend capability is silent.
 | **0.1** | **2026-10-14** | **`699c496`** (= FR-REB-02 patch commit; contains `2eccad0` + `staging @ d1ba348`) | **Baseline verification run (read-only)**: lint/typecheck/unit/storybook/build all PASS (22 unit tests, 42 stories, 9 routes); E2E trio NOT RUN (credentials absent, suite correctly skipped 3/3); F5 live probe BLOCKED; staging CORS preflight BLOCKED — no Docker daemon in the execution environment, no E2E credentials, staging hosts unreachable; all Bucket A findings re-verified present in code | **PARTIALLY EXECUTED at first pass → completed same day by the local verification run (next row); patch `frontend-redesign-0.1-baseline-verification-run.patch` (ledger + baseline record); applied upstream as `bea19f3`** |
 | **0.1-completion** | **2026-10-14** | **`bea19f3`** (local run against the applied 0.1 patch; the verification script was committed upstream as `7ebe978` immediately after the run) | **Local verification run on the owner machine** via `scripts/run-batch-0.1-local-verification.sh`: dev stack healthy (db + Keycloak containers, backend :8000, frontend :3000); E2E trio **3/3 PASS** (Chromium, serial, real Keycloak: courses-crud 1.3s, login 1.3s, profile-roundtrip 1.5s); F5 live probe **PASS** (HTTP 200, COUNT=5 WITH_OFFSET=5, sample `2026-10-14T15:52:48.551399Z`, token captured via the real browser login flow, redacted in all logs); local CORS preflight **PASS** (HTTP 200, `access-control-allow-origin: http://localhost:3000`, `authorization` header allowed, credentials true); staging preflight skipped (owner scoped the run to local) | **Complete — Batch 0.1 EXECUTED; evidence dir `../openlearn-batch-0.1-evidence/run-20261014-190840`; Open Question #1 CLOSED** |
 | **0.2** | **2026-10-15** | **`7ebe978`** | **Scope freeze (documentation-only)**: new decision note `OpenLearn-AI_Batch-0.2_Scope-Freeze_Decision-Note.md` ratifying roadmap v2.0 §6 (capability classification, tiers A–E), §22 (exclusion list), §19 (demo journey candidate); finding disposition register F1–F6/W1–W8/S1–S11 (20 findings → exactly one bucket each; F2/W2/W3/S6/S11 verified unassigned in both roadmap v1.3 and v2.0 and recorded as retired); F5 settlement decision (schema frozen as-is; 1.4 reduces to the dashboard metric inventory); environment posture recorded (Q1 closed; Q2 → 2.1). Ledger + decision note only; roadmap DOCX untouched | **Complete — Gate A PASSED (2026-10-15); patch `frontend-redesign-0.2-scope-freeze.patch`** |
-| **1.1** | **2026-10-15** | **`18d8a69`** (= 0.2 patch commit; Phase 0 complete, Gate A passed) | **Correctness fixes on core flows**: F3 `key={course.id}` on the edit-mode CourseForm; F4 `key={profile?.id ?? "new"}` on ProfileForm; S10 success token `text-success-foreground` → `text-success`; F6 `safeRedirectTarget` moved to `features/auth/redirect.ts` with its documentation aligned to the actual policy (open-redirect logic unchanged) + 15 focused policy tests. Sandbox matrix green (lint, typecheck, unit 37/37, storybook 42/42, build); E2E re-run + manual light/dark S10 check pending on the owner machine (no Docker/credentials in the execution environment; suite self-skipped 3/3, exit 0) | **PARTIALLY EXECUTED — implementation complete; E2E confirmation pending owner run; patch `frontend-redesign-1.1-correctness-fixes-core-flows.patch`** |
+| **1.1** | **2026-10-15** | **`18d8a69`** (= 0.2 patch commit; Phase 0 complete, Gate A passed) | **Correctness fixes on core flows**: F3 `key={course.id}` on the edit-mode CourseForm; F4 `key={profile?.id ?? "new"}` on ProfileForm; S10 success token `text-success-foreground` → `text-success`; F6 `safeRedirectTarget` moved to `features/auth/redirect.ts` with its documentation aligned to the actual policy (open-redirect logic unchanged) + 15 focused policy tests. Sandbox matrix green (lint, typecheck, unit 37/37, storybook 42/42, build); E2E re-run + manual light/dark S10 check completed on the owner machine (next row) | **EXECUTED — patch `frontend-redesign-1.1-correctness-fixes-core-flows.patch`; applied upstream by Seyam as `7dc9f67`** |
+| **1.1-completion** | **2026-10-15** | **`7dc9f67`** (the 1.1 patch applied upstream and pushed by Seyam) | **Owner-machine verification run** completing 1.1's two pending items, reported by Seyam after the original 1.1 report: E2E trio **3/3 PASS** (`npm run test:e2e`: courses CRUD, Keycloak login, profile round-trip — `E2E_USERNAME`/`E2E_PASSWORD` supplied locally, never recorded in repository files); Storybook **42/42 across 12 files**; lint PASS; typecheck PASS; production build PASS with all 9 application routes; manual light+dark check of the success message **successful (owner-verified manual testing)**. Storybook warnings recorded as warnings, not failures: Vite native config loader ESM/CJS notice, unmatched `stories/**/*.mdx` pattern, Base UI `nativeButton` semantics in some stories — explicitly not fixed (outside 1.1/1.2 authorized scope) | **Complete — Batch 1.1 EXECUTED (2026-10-15)** |
 
 Facts preserved from the earlier passes that remain verified and current: the AI Week 7–8 pipeline closeout (B0–B11, staging-proven, H4 delivered 2026-10-08); CORS resolution at compose level; the 2026-10-01 verification pass corrections (S10 both-themes scope, F1 deployment-only scope, Batch 3.1 re-scope to ratifying the existing token layer); the Week 8 mapping delta of the 44-week plan (superseded as a blocker when the AI pod closed Weeks 7–8; the plan's project-level Week 8 items — v0.2.0 tag, coverage baseline, OpenAPI publication, docs site — are now partially delivered upstream: **OpenAPI publication has landed**; tag/coverage/docs-site remain non-frontend items).
 
@@ -309,7 +310,7 @@ N/A (executor does not commit; Seyam applies the patch
 
 ### 1.1 — Correctness fixes on core flows
 
-Status: **PARTIALLY EXECUTED** (2026-10-15) — implementation complete and sandbox-verified; the E2E re-run and the manual light+dark success-message check remain and belong on the owner machine, where the prerequisites exist (same missing-prerequisite block as Batch 0.1; not failures, nothing fabricated)
+Status: **EXECUTED** (2026-10-15) — implementation complete and sandbox-verified at first pass; the two owner-machine validation items (E2E re-run, manual light+dark success-message check) were completed by Seyam and recorded in the 1.1 completion entry below
 
 #### Planned
 Per roadmap v2.0 §14 Batch 1.1 and the frozen finding register (decision note §3): fix the four pinned defects — F3 (edit-mode `CourseForm` lacks `key={course.id}` — wrong-record write), F4 (`ProfileForm` not re-keyed on profile identity; null→object never re-seeds state), S10 (success token `text-success-foreground` invisible in both themes → `text-success`), F6 (`safeRedirectTarget` comment/code drift) — without changing form state machines, safeParse paths, mutations, post-save navigation, or the open-redirect logic itself; keep `courses-crud` and `profile-roundtrip` E2E green; batch prompt additionally requires focused F6 policy tests (safe and unsafe redirect cases).
@@ -368,13 +369,54 @@ None claimed. Gate A remains passed; Gate B requires the full closure set (1.1 c
 
 ---
 
+### 1.1 — completion: owner-machine verification run (owner machine, 2026-10-15)
+
+Status: **COMPLETE** — Batch 1.1 is **EXECUTED** (2026-10-15)
+
+#### Planned
+Complete the two validation items blocked in the executor's sandbox at first pass (same missing-prerequisite block as Batch 0.1 — no Docker, no E2E credentials, no running app): the E2E re-run (`courses-crud`, `profile-roundtrip`, plus the `login` spec) with real Keycloak credentials, and the manual light+dark check of the S10 success message. Both belong to the owner machine, where the prerequisites exist.
+
+#### Actual
+Seyam ran the full matrix on the owner machine against the applied Batch 1.1 commit `7dc9f67` and reported the results (evidence supplied with the close-out authorization; the executor did not independently reproduce these runs — they are recorded as owner-reported):
+
+| # | Check | Owner-machine result |
+|---|---|---|
+| 1 | `npm run test:e2e` (Playwright) | **PASS — 3/3** (`courses-crud.spec.ts`, `login.spec.ts`, `profile-roundtrip.spec.ts`) with locally supplied `E2E_USERNAME`/`E2E_PASSWORD` (real Keycloak; the password value is never recorded in repository files, reports, or logs) |
+| 2 | `npm run test:storybook` | **PASS — 42/42 across 12 files** |
+| 3 | `npm run lint` | **PASS** |
+| 4 | `npm run typecheck` | **PASS** |
+| 5 | `npm run build` | **PASS** — production build with all 9 application routes |
+| 6 | Manual light+dark check of the success message (roadmap validation item for S10) | **Successful — owner-verified manual testing**; not independently reproduced by the executor |
+
+Warnings observed during the owner's Storybook run — recorded as warnings, not test failures, and explicitly not fixed (outside 1.1/1.2 authorized scope): (a) Vite's native config loader ESM-in-CJS notice on `vitest.config.ts`; (b) the unmatched `stories/**/*.mdx` story-pattern notice (only `.tsx` stories exist); (c) Base UI `nativeButton` semantics warnings from some stories rendering `Button` via a `render` prop inside non-button elements.
+
+Executor cross-check at `7dc9f67` (fresh clone of `origin/frontend-redesign`, clean tree, staging containment re-verified): the applied implementation was reviewed file-by-file against the ledger's 1.1 record — F3 `key={course.id}` present at `app/(app)/courses/[id]/edit/page.tsx:76`; F4 `key={profile?.id ?? "new"}` present at `app/(app)/profile/page.tsx:116`; S10 `text-success` present at `components/profile/ProfileForm.tsx:213` with zero `text-success-foreground` occurrences repo-wide; F6 `features/auth/redirect.ts` with the aligned documentation + `features/auth/redirect.test.ts` with 15 focused policy tests + `LoginForm.tsx` importing the extracted function. The sandbox re-ran lint (PASS), typecheck (PASS), and the unit project (37/37 across 4 files incl. the 15 F6 tests) — all matching the ledger's 1.1 verification table.
+
+#### Files changed
+This ledger only (the close-out record):
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md` (Current State, history row 1.1 + new 1.1-completion row, this completion log, status board, next-batch pointer)
+
+#### Verification
+Evidence is the owner-run result table above (supplied by Seyam with the close-out authorization) plus the executor's own cross-check runs at `7dc9f67`. All Batch 1.1 acceptance criteria now have evidence: edit A→B saves B's values (F3 + green courses-crud E2E); profile create-then-edit re-seeds (F4 + green profile-roundtrip E2E); success feedback readable in both themes (S10 + owner manual light/dark check).
+
+#### Issues / deviations
+None. The two previously blocked items are closed with owner evidence; the three Storybook warnings are recorded as warnings (outside authorized scope), not deviations.
+
+#### Commit
+N/A (executor does not commit; the underlying 1.1 implementation was already applied upstream by Seyam as `7dc9f67`; the close-out ledger update is delivered as `frontend-redesign-1.1-close-out.patch`).
+
+#### Gate impact
+Batch 1.1's completion criterion is met (all three roadmap completion bullets evidenced). **Gate B remains NOT claimed** — it requires the full closure set (1.1 ✓ + 1.2 + 1.3 + 1.4) and the local matrix green including E2E with credentials.
+
+---
+
 ## Batch Status Board (all details in roadmap v2.0 §13–§14; statuses here)
 
 | Phase | Batch | Title | Status |
 |---|---|---|---|
 | 0 | 0.1 | Baseline verification run | **EXECUTED** (2026-10-14) — baseline run 5/6 script checks PASS; local verification run completed the E2E trio (3/3), F5 live probe, and local CORS preflight; staging preflight carried to 2.1 (Open Question #2) |
 | 0 | 0.2 | Scope freeze | **EXECUTED** (2026-10-15) — decision note authored; classification/exclusions/demo candidate frozen; finding register closed (20 dispositions + 5 retired IDs); F5 settled |
-| 1 | 1.1 | Correctness fixes on core flows (F3, F4, S10, F6) | **PARTIALLY EXECUTED** (2026-10-15) — all four findings fixed, F6 policy tests added, sandbox matrix green (lint/typecheck/unit 37/storybook 42/build); E2E re-run + manual light/dark S10 check pending on the owner machine |
+| 1 | 1.1 | Correctness fixes on core flows (F3, F4, S10, F6) | **EXECUTED** (2026-10-15) — all four findings fixed, F6 policy tests added, sandbox matrix green; owner-machine completion run: E2E trio 3/3, Storybook 42/42, lint/typecheck/build PASS, manual light/dark S10 check successful; patch applied upstream as `7dc9f67` |
 | 1 | 1.2 | Authentication surface completion (W1, S3, S8) | NOT STARTED |
 | 1 | 1.3 | Observability and configuration closure (F1 chain, W8) | NOT STARTED |
 | 1 | 1.4 | Data contract settlement (F5, metric inventory) | NOT STARTED |
@@ -407,4 +449,4 @@ Gates: A (functional reality) → B (closure set done) → C (demo surface locke
 
 ## Next Authorized Batch
 
-**Batch 1.1 is implemented at `18d8a69` and sandbox-verified; it is NOT marked complete** — its E2E validation (`courses-crud`, `profile-roundtrip`) and the manual light+dark success-message check must be produced on the owner machine, where Docker and the E2E credentials exist (the execution environment has neither; the suite correctly self-skipped 3/3). After the patch is applied, the owner-side E2E run completes Batch 1.1 the same way the 0.1 local run completed it. The next batch in the sequence is **Batch 1.2 — Authentication surface completion (W1, S3, S8)**; per the lifecycle rules it does not start until Seyam explicitly authorizes it. Gate B requires the full closure set (1.1 complete + 1.2 + 1.3 + 1.4) and the local matrix green including E2E with credentials.
+**Batch 1.1 is EXECUTED (2026-10-15)**: implementation at `7dc9f67` (applied upstream by Seyam) + the owner-machine completion run (E2E trio 3/3, Storybook 42/42, lint/typecheck/build PASS, manual light+dark S10 check successful). The next batch in the sequence is **Batch 1.2 — Authentication surface completion (W1, S3, S8)**; Seyam explicitly authorized it in the same prompt that supplied the 1.1 owner evidence, and it is executed next per the one-batch lifecycle rule. Gate B requires the full closure set (1.1 complete ✓ + 1.2 + 1.3 + 1.4) and the local matrix green including E2E with credentials — 1.2/1.3/1.4 remain.
