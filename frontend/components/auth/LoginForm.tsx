@@ -12,21 +12,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { getKeycloak } from "@/lib/keycloak";
-
-/**
- * Validate that a `redirectedFrom` value is a same-origin, local, non-
- * API route. This prevents open-redirect attacks via crafted query
- * params while preserving the deep-link return-to flow.
- */
-function safeRedirectTarget(value: string | null): string | null {
-    if (!value) return null;
-    // Must start with a single slash and not target the API or auth routes.
-    if (!value.startsWith("/") || value.startsWith("//")) return null;
-    if (value.startsWith("/login") || value.startsWith("/register")) {
-        return null;
-    }
-    return value;
-}
+import { safeRedirectTarget } from "@/features/auth/redirect";
 
 export function LoginForm() {
     const [isLoading, setIsLoading] = React.useState(false);

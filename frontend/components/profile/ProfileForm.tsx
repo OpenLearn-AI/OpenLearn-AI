@@ -210,7 +210,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
             )}
 
             {successMessage && (
-                <p role="status" className="text-sm text-success-foreground">
+                <p role="status" className="text-sm text-success">
                     {successMessage}
                 </p>
             )}

@@ -106,7 +106,16 @@ export default function ProfilePage() {
                     )}
 
                     <div className="border-t border-border pt-6">
-                        <ProfileForm profile={profile ?? null} />
+                        {/* F4: key the form on the profile identity so the
+                            null→object transition (profile established)
+                            remounts it and re-seeds the fields from the
+                            actual profile instead of retaining the
+                            create-mode defaults. The id is stable across
+                            updates, so ordinary saves do not remount. */}
+                        <ProfileForm
+                            key={profile?.id ?? "new"}
+                            profile={profile ?? null}
+                        />
                     </div>
                 </div>
 

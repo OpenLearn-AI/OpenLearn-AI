@@ -67,7 +67,13 @@ export default function EditCoursePage() {
                     </p>
                 </div>
 
+                {/* F3: key the form on the course identity so navigating
+                    between two edit URLs remounts it and re-seeds the
+                    fields from the selected course — otherwise the cached
+                    course B data can render without a loading pass and the
+                    form keeps course A's state (wrong-record write). */}
                 <CourseForm
+                    key={course.id}
                     mode="edit"
                     courseId={course.id}
                     initialValues={{
