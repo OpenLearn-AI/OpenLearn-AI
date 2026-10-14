@@ -12,14 +12,14 @@ Revision lineage of this context: authored 2026-10-01 against `staging @ c51f3f1
 
 ---
 
-## Current State (verified 2026-10-08 at the start of FR-REB-02)
+## Current State (verified 2026-10-14 at the start of Batch 0.1)
 
-- Repository HEAD: `2eccad0cf13d9ce2ab2a2fa1a4c02daf1077a2e5` — branch `frontend-redesign`, equal to `origin/frontend-redesign`; a merge commit synchronizing the branch with `origin/staging` @ `d1ba348f0d904a60d7e185a95609c110e4dc0422` (staging merge PR #78, `feature/backend-week8`, plus the FR-REB-01 amendments commit `ad64e0c`)
-- Working tree at batch start: clean
-- Current phase: 0 — Current-State Lock (not started)
-- Current batch: **FR-REB-02 — Full execution-context rewrite + Week 9 integration (documentation-only) — COMPLETE**
+- Repository HEAD: `699c496db8896e3235d8f9585a1fb801f90d98b6` — branch `frontend-redesign`, equal to `origin/frontend-redesign`; this is the FR-REB-02 patch applied upstream on top of its baseline `2eccad0` (which contains `origin/staging` @ `d1ba348`, PR #78). Staging containment re-verified: `git merge-base --is-ancestor origin/staging HEAD` passes; `HEAD..origin/staging` empty
+- Working tree at batch start: clean (fresh clone of origin; no pre-existing changes)
+- Current phase: 0 — Current-State Lock (in progress)
+- Current batch: **0.1 — Baseline verification run — PARTIALLY EXECUTED (2026-10-14)**: 5 of the 6 script runs completed, all PASS; the E2E trio, the F5 live probe, and the staging CORS preflight are BLOCKED by execution-environment prerequisites (no Docker daemon, no E2E credentials, staging hosts unreachable from the execution environment); rerun of the blocked checks is required to complete the batch
 - Current gate: none passed yet (Gate A is the first)
-- Overall status: **EXECUTION CONTEXT REWRITTEN** — roadmap v2.0 carries the current repository truth, the backend→frontend coverage matrix, and the Week 9 integration; all 18 implementation batches remain NOT STARTED; next authorized batch is **0.1**
+- Overall status: **BASELINE PARTIALLY VERIFIED** — the five CI-chain script checks are green on Node 24; the three environment-dependent evidence streams (E2E results, the F5 live answer, the CORS preflight confirmation) remain outstanding; Gate A completion still requires 0.1 completion + 0.2 scope freeze
 
 ---
 
@@ -134,6 +134,7 @@ No frontend-relevant backend capability is silent.
 | FR-REB-01 | 2026-10-08 | `c45aa7f` | Documentation-only product/UX amendments A–D: materials surface promoted to scheduled Batch 4.3 scope; role-aware IA (§3.5); near-term IA reservation (§3.6); Sentry chain written out; counting slips fixed | Complete; patch `frontend-redesign-FR-REB-01-product-ux-roadmap-amendments.patch`; upstream commit `ad64e0c` |
 | Staging sync | 2026-10-08 | `2eccad0` = merge of `staging @ d1ba348` (PR #78, backend Week 8) | Backend contract deliverables landed: `docs/openapi.json` + regeneration tool + drift guard + material API tests + explicit auth schema; zero frontend changes | Applied upstream; the rewrite premise of FR-REB-02 |
 | **FR-REB-02** | **2026-10-08** | **`2eccad0`** | **Documentation-only full rewrite of all three execution-context files** — roadmap v2.0 authored fresh from repository evidence (no amendment layering), coverage matrix added, Week 9 integrated, ledger rewritten with current state + concise history, lifecycle rules rewritten for the current protocol | **Complete; patch `frontend-redesign-FR-REB-02-full-roadmap-rewrite-week9.patch`** |
+| **0.1** | **2026-10-14** | **`699c496`** (= FR-REB-02 patch commit; contains `2eccad0` + `staging @ d1ba348`) | **Baseline verification run (read-only)**: lint/typecheck/unit/storybook/build all PASS (22 unit tests, 42 stories, 9 routes); E2E trio NOT RUN (credentials absent, suite correctly skipped 3/3); F5 live probe BLOCKED; staging CORS preflight BLOCKED — no Docker daemon in the execution environment, no E2E credentials, staging hosts unreachable; all Bucket A findings re-verified present in code | **PARTIALLY EXECUTED — blocked checks require rerun in an environment with the local stack/credentials or staging access; patch `frontend-redesign-0.1-baseline-verification-run.patch` (ledger only)** |
 
 Facts preserved from the earlier passes that remain verified and current: the AI Week 7–8 pipeline closeout (B0–B11, staging-proven, H4 delivered 2026-10-08); CORS resolution at compose level; the 2026-10-01 verification pass corrections (S10 both-themes scope, F1 deployment-only scope, Batch 3.1 re-scope to ratifying the existing token layer); the Week 8 mapping delta of the 44-week plan (superseded as a blocker when the AI pod closed Weeks 7–8; the plan's project-level Week 8 items — v0.2.0 tag, coverage baseline, OpenAPI publication, docs site — are now partially delivered upstream: **OpenAPI publication has landed**; tag/coverage/docs-site remain non-frontend items).
 
@@ -178,11 +179,59 @@ None — no gate passed. Gate A remains next, now running against the rewritten 
 
 ---
 
+### 0.1 — Baseline verification run (read-only)
+
+Status: **PARTIALLY EXECUTED** (2026-10-14) — blocked checks require rerun; batch not complete
+
+#### Planned
+Read-only baseline verification per roadmap Phase 0: run lint, typecheck, unit, storybook, build; run the three E2E specs with real Keycloak credentials; perform the authenticated F5 live probe (`GET /v1/courses`) and inspect the emitted `created_at` representation; confirm the staging CORS preflight for the web origin; re-verify the Bucket A findings against the tree; record the baseline. No code, no configuration, no dependency changes.
+
+#### Actual
+Executed on a fresh clone of `origin/frontend-redesign` @ `699c496` (equal to remote HEAD; the FR-REB-02 patch commit on top of baseline `2eccad0`; staging containment re-verified; working tree clean at start). `npm ci` installed from the lockfile without touching it. Results of the six script runs:
+
+1. `npm run lint` — **PASS**, exit 0, no findings.
+2. `npm run typecheck` — **PASS**, exit 0 (`tsc --noEmit`, TS 5.9.3).
+3. `npm run test` (vitest unit project) — **PASS**, exit 0: 22/22 tests across 3 files (`lib/api.test.ts` 12, `features/courses/api/course-query-options.test.ts` 5, `features/courses/keys.test.ts` 5) — matches the counts recorded at `2eccad0`.
+4. `npm run test:storybook` — **PASS**, exit 0: 42/42 tests across 12 story files, axe fail-on-violation active, headless Chromium (playwright v1243 browser build) — matches the counts recorded at `2eccad0`.
+5. `npm run build` — **PASS**, exit 0, with the CI-documented fallback `NEXT_PUBLIC_*` values passed as environment variables (no repo file created): 9 app routes + `/_not-found` compiled and prerendered.
+6. `npm run test:e2e` — **NOT RUN as flows**: all three specs correctly self-skipped (`3 skipped`, exit 0) because `E2E_USERNAME`/`E2E_PASSWORD` are absent from the execution environment and no credentials may be fabricated. The documented local stack cannot run here (no Docker daemon: no `db`/`keycloak` containers, therefore no Keycloak and no backend on :8000), and the staging target is network-unreachable from the execution environment (see below). This is a missing-prerequisite block, not a test failure.
+
+Environment checks:
+
+7. **F5 live probe — BLOCKED.** The authenticated `GET /v1/courses` could not be performed: no credentials exist in the execution environment (none fabricated, per batch rules), no local stack is possible (Docker absent), and the documented staging API host does not answer from this environment. Contract facts re-confirmed from the tracked `docs/openapi.json` (v0.2.0): `CourseResponse.created_at` is declared `format: date-time`, `GET /v1/courses` requires `HTTPBearer`, and the spec declares no `servers` block — the target URL comes from environment documentation. **Live emission of offset-bearing datetimes remains UNVERIFIED; Open Question #1 stays open.** Probe spec for the rerun: authenticated `GET {API}/v1/courses` with `Authorization: Bearer <real token>`; inspect the raw `created_at` string for a timezone offset (`Z` or `±HH:MM`).
+8. **Staging CORS preflight — BLOCKED.** `OPTIONS https://openlearn-api-staging.duckdns.org/v1/courses` with `Origin: https://openlearn-web-staging.duckdns.org`, `Access-Control-Request-Method: GET`, `Access-Control-Request-Headers: authorization` — connection timed out after 15 s (no HTTP response). Diagnostics: DNS resolves the host (16.170.158.155); general egress from the execution environment works (control request to github.com returned 200); ports 443 and 80 to the staging host both time out. The compose-level CORS configuration (`CORS_ORIGINS=https://openlearn-web-staging.duckdns.org,http://localhost:3000`) is unchanged and remains verified at file level; the live preflight confirmation (Open Question #2) stays open and must be run from a host with network access to staging. No infrastructure was changed.
+
+Bucket A findings re-verified present in code at `699c496` (all unchanged from the `2eccad0` verification): F3 (`CourseForm` in `app/(app)/courses/[id]/edit/page.tsx` rendered without `key={course.id}`), F4 (`ProfileForm` in `app/(app)/profile/page.tsx` not re-keyed), F5 (`features/courses/schemas.ts:25` — `created_at: z.string().datetime({ offset: true })`), F6 (`safeRedirectTarget` comment/code drift in `components/auth/LoginForm.tsx`), S1 (exactly five "Coming soon" strings in `app/(app)/dashboard/page.tsx`), S2 (landing markets RAG chat/knowledge graph/quizzes/flashcards), S8 (`(auth)` has no error.tsx/loading.tsx; `(app)` has both), W5 (`shadcn` in runtime dependencies), W6 (six `"latest"` devDependencies), W7 (`chromaui/action@latest` unpinned in `storybook.yml`), W8 (no `engines` field), F1 chain open (Dockerfile has no `NEXT_PUBLIC_SENTRY_ENVIRONMENT` ARG; deploy workflow and compose carry DSN only; `.env.staging.example` DSN only).
+
+#### Files changed
+Exactly one file — this ledger:
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md`
+
+No application code, test, configuration, dependency, lockfile, CI, or infrastructure file was modified, created, or deleted. `frontend/test-results/` (empty Playwright output of the skipped run) was removed after the run; the final tracked tree is byte-identical to `699c496`.
+
+#### Verification
+- Git scope: `git status --porcelain` after all runs shows only this ledger modified; no staged changes; no untracked residue.
+- Patch: generated with the isolated-clone `--binary` method at start commit `699c496`; validated with `git apply --check` + apply on a pristine checkout, byte-identical re-check.
+
+#### Issues / deviations
+1. **Three checks blocked (missing prerequisites, not failures):** E2E trio (no credentials + no local stack possible), F5 live probe (no authenticated environment), staging CORS preflight (staging hosts unreachable from the execution environment — TLS timeouts while general egress works). Each is reproducible evidence for the rerun.
+2. **Node version deviation:** the execution environment runs Node 24.21.0 / npm 11.19.0; CI pins Node 20. All five script checks are green on Node 24. Not a repository change; recorded as an environment limitation for the baseline.
+3. **Completion criterion not met:** the roadmap requires "baseline record exists; every Bucket A item confirmed or reclassified with evidence". Bucket A items are all confirmed with evidence, but the F5 live answer and the CORS preflight confirmation are named Gate A evidence (roadmap §21) and could not be produced here. **Batch 0.1 therefore remains incomplete until the three blocked checks are rerun in an environment with Docker + E2E credentials (local stack) or staging access.** Gate A is NOT passed and must not be claimed.
+
+#### Commit
+N/A (executor does not commit; Seyam applies the patch
+`frontend-redesign-0.1-baseline-verification-run.patch`).
+
+#### Gate impact
+None — no gate passed. Gate A requires completed 0.1 evidence plus the 0.2 scope-freeze decision.
+
+---
+
 ## Batch Status Board (all details in roadmap v2.0 §13–§14; statuses here)
 
 | Phase | Batch | Title | Status |
 |---|---|---|---|
-| 0 | 0.1 | Baseline verification run | NOT STARTED |
+| 0 | 0.1 | Baseline verification run | PARTIALLY EXECUTED (2026-10-14) — 5/6 script runs PASS; E2E trio + F5 probe + CORS preflight BLOCKED by environment; rerun required |
 | 0 | 0.2 | Scope freeze | NOT STARTED |
 | 1 | 1.1 | Correctness fixes on core flows (F3, F4, S10, F6) | NOT STARTED |
 | 1 | 1.2 | Authentication surface completion (W1, S3, S8) | NOT STARTED |
@@ -217,4 +266,4 @@ Gates: A (functional reality) → B (closure set done) → C (demo surface locke
 
 ## Next Authorized Batch
 
-**Batch 0.1 — Baseline verification run** on baseline `2eccad0` (read-only): the six script runs, the F5 live probe, the staging CORS preflight confirmation, baseline notes for Gate A. It does not start until Seyam authorizes it.
+**Batch 0.1 — Baseline verification run** is the current batch, **partially executed on 2026-10-14** against baseline `699c496` (read-only). Remaining work, in the same batch scope: (1) the three E2E specs with real Keycloak credentials against a running stack (local via Docker, or staging per the e2e.yml configuration model), (2) the authenticated F5 live probe of `GET /v1/courses` (`created_at` offset inspection), (3) the live staging CORS preflight confirmation. These require an execution environment with Docker (or staging network access) and E2E credentials; they were blocked, not failed, on 2026-10-14. After the rerun records their results, Batch 0.2 (scope freeze) may be authorized by Seyam; it does not start until Seyam explicitly authorizes it.
