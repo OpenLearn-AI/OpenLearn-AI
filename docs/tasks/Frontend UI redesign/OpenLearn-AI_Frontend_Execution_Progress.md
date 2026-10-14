@@ -12,14 +12,14 @@ Revision lineage of this context: authored 2026-10-01 against `staging @ c51f3f1
 
 ---
 
-## Current State (verified 2026-10-14 at the start of Batch 0.1)
+## Current State (verified 2026-10-15, after Batch 0.2 — Phase 0 complete)
 
-- Repository HEAD: `699c496db8896e3235d8f9585a1fb801f90d98b6` — branch `frontend-redesign`, equal to `origin/frontend-redesign`; this is the FR-REB-02 patch applied upstream on top of its baseline `2eccad0` (which contains `origin/staging` @ `d1ba348`, PR #78). Staging containment re-verified: `git merge-base --is-ancestor origin/staging HEAD` passes; `HEAD..origin/staging` empty
-- Working tree at batch start: clean (fresh clone of origin; no pre-existing changes)
-- Current phase: 0 — Current-State Lock (in progress)
-- Current batch: **0.1 — Baseline verification run — PARTIALLY EXECUTED (2026-10-14)**: 5 of the 6 script runs completed, all PASS; the E2E trio, the F5 live probe, and the staging CORS preflight are BLOCKED by execution-environment prerequisites (no Docker daemon, no E2E credentials, staging hosts unreachable from the execution environment); rerun of the blocked checks is required to complete the batch
-- Current gate: none passed yet (Gate A is the first)
-- Overall status: **BASELINE PARTIALLY VERIFIED** — the five CI-chain script checks are green on Node 24; the three environment-dependent evidence streams (E2E results, the F5 live answer, the CORS preflight confirmation) remain outstanding; Gate A completion still requires 0.1 completion + 0.2 scope freeze
+- Repository HEAD: `7ebe97868b3800ebeaa7f9702ccc37408ba26169` — branch `frontend-redesign`, equal to `origin/frontend-redesign`. Lineage since the 0.1 baseline: `699c496` (FR-REB-02 patch commit) → `bea19f3` (Batch 0.1 patch applied by Seyam) → `7ebe978` (`scripts/run-batch-0.1-local-verification.sh`, committed by Seyam). Staging containment re-verified at `7ebe978`: `git merge-base --is-ancestor origin/staging HEAD` passes; `HEAD..origin/staging` empty
+- Working tree at batch start: clean
+- Current phase: 0 — Current-State Lock — **COMPLETE** (0.1 EXECUTED 2026-10-14; 0.2 EXECUTED 2026-10-15)
+- Current batch: **0.2 — Scope freeze — EXECUTED (2026-10-15)**: the scope-freeze decision note (`OpenLearn-AI_Batch-0.2_Scope-Freeze_Decision-Note.md`, new file in this directory) freezes the capability classification (roadmap v2.0 §6), the exclusion list (§22), the demo journey candidate (§19), and the finding disposition register (F1–F6, W1–W8, S1–S11 — 20 findings each in exactly one bucket, 5 IDs recorded as retired). Documentation-only; the roadmap DOCX and all application files untouched
+- Current gate: **Gate A — PASSED (2026-10-15)** — functional reality is known and agreed: baseline record complete (all eight 0.1 checks concluded), classification frozen. One evidence item carried by owner decision: the staging-host CORS preflight (Open Question #2 → Batch 2.1); the LOCAL preflight is confirmed and the owner explicitly scoped verification to the local project
+- Overall status: **SCOPE FROZEN — Phase 1 (Minimal Functional Closure) is next; Batch 1.1 awaits Seyam's explicit authorization**
 
 ---
 
@@ -67,7 +67,7 @@ The authoritative reference is now **`docs/openapi.json`** (tracked, regenerated
 | `GET /health` | unversioned liveness probe | none — infrastructure |
 | `GET /metrics` | Prometheus scrape endpoint | none — infrastructure |
 
-Contract facts: `created_at` fields are declared `format: date-time` in the tracked spec (the F5 live-emission check remains a Batch 0.1/1.4 task); the status vocabulary is the four-value literal `pending → processing → ready | failed`; there is **no retry/reprocess endpoint, no document-content endpoint, no search/chat/citation/enrollment endpoint** in the contract.
+Contract facts: `created_at` fields are declared `format: date-time` in the tracked spec, and the live API is now verified to emit offset-bearing datetimes (Batch 0.1 local probe, 2026-10-14: 5/5 values offset-bearing, sample `2026-10-14T15:52:48.551399Z`) — the frontend schema's `offset: true` is correct as-is; the status vocabulary is the four-value literal `pending → processing → ready | failed`; there is **no retry/reprocess endpoint, no document-content endpoint, no search/chat/citation/enrollment endpoint** in the contract.
 
 New since FR-REB-01 (the staging merge): the OpenAPI publication toolchain, the explicit `CurrentUserResponse`/`KeycloakIdentity` schemas, `backend/tests/test_material_api.py` (behavioral contract tests with fake boto3), and the drift-guard test. **No new endpoints, no frontend changes.**
 
@@ -134,7 +134,9 @@ No frontend-relevant backend capability is silent.
 | FR-REB-01 | 2026-10-08 | `c45aa7f` | Documentation-only product/UX amendments A–D: materials surface promoted to scheduled Batch 4.3 scope; role-aware IA (§3.5); near-term IA reservation (§3.6); Sentry chain written out; counting slips fixed | Complete; patch `frontend-redesign-FR-REB-01-product-ux-roadmap-amendments.patch`; upstream commit `ad64e0c` |
 | Staging sync | 2026-10-08 | `2eccad0` = merge of `staging @ d1ba348` (PR #78, backend Week 8) | Backend contract deliverables landed: `docs/openapi.json` + regeneration tool + drift guard + material API tests + explicit auth schema; zero frontend changes | Applied upstream; the rewrite premise of FR-REB-02 |
 | **FR-REB-02** | **2026-10-08** | **`2eccad0`** | **Documentation-only full rewrite of all three execution-context files** — roadmap v2.0 authored fresh from repository evidence (no amendment layering), coverage matrix added, Week 9 integrated, ledger rewritten with current state + concise history, lifecycle rules rewritten for the current protocol | **Complete; patch `frontend-redesign-FR-REB-02-full-roadmap-rewrite-week9.patch`** |
-| **0.1** | **2026-10-14** | **`699c496`** (= FR-REB-02 patch commit; contains `2eccad0` + `staging @ d1ba348`) | **Baseline verification run (read-only)**: lint/typecheck/unit/storybook/build all PASS (22 unit tests, 42 stories, 9 routes); E2E trio NOT RUN (credentials absent, suite correctly skipped 3/3); F5 live probe BLOCKED; staging CORS preflight BLOCKED — no Docker daemon in the execution environment, no E2E credentials, staging hosts unreachable; all Bucket A findings re-verified present in code | **PARTIALLY EXECUTED — blocked checks require rerun in an environment with the local stack/credentials or staging access; patch `frontend-redesign-0.1-baseline-verification-run.patch` (ledger only)** |
+| **0.1** | **2026-10-14** | **`699c496`** (= FR-REB-02 patch commit; contains `2eccad0` + `staging @ d1ba348`) | **Baseline verification run (read-only)**: lint/typecheck/unit/storybook/build all PASS (22 unit tests, 42 stories, 9 routes); E2E trio NOT RUN (credentials absent, suite correctly skipped 3/3); F5 live probe BLOCKED; staging CORS preflight BLOCKED — no Docker daemon in the execution environment, no E2E credentials, staging hosts unreachable; all Bucket A findings re-verified present in code | **PARTIALLY EXECUTED at first pass → completed same day by the local verification run (next row); patch `frontend-redesign-0.1-baseline-verification-run.patch` (ledger + baseline record); applied upstream as `bea19f3`** |
+| **0.1-completion** | **2026-10-14** | **`bea19f3`** (local run against the applied 0.1 patch; the verification script was committed upstream as `7ebe978` immediately after the run) | **Local verification run on the owner machine** via `scripts/run-batch-0.1-local-verification.sh`: dev stack healthy (db + Keycloak containers, backend :8000, frontend :3000); E2E trio **3/3 PASS** (Chromium, serial, real Keycloak: courses-crud 1.3s, login 1.3s, profile-roundtrip 1.5s); F5 live probe **PASS** (HTTP 200, COUNT=5 WITH_OFFSET=5, sample `2026-10-14T15:52:48.551399Z`, token captured via the real browser login flow, redacted in all logs); local CORS preflight **PASS** (HTTP 200, `access-control-allow-origin: http://localhost:3000`, `authorization` header allowed, credentials true); staging preflight skipped (owner scoped the run to local) | **Complete — Batch 0.1 EXECUTED; evidence dir `../openlearn-batch-0.1-evidence/run-20261014-190840`; Open Question #1 CLOSED** |
+| **0.2** | **2026-10-15** | **`7ebe978`** | **Scope freeze (documentation-only)**: new decision note `OpenLearn-AI_Batch-0.2_Scope-Freeze_Decision-Note.md` ratifying roadmap v2.0 §6 (capability classification, tiers A–E), §22 (exclusion list), §19 (demo journey candidate); finding disposition register F1–F6/W1–W8/S1–S11 (20 findings → exactly one bucket each; F2/W2/W3/S6/S11 verified unassigned in both roadmap v1.3 and v2.0 and recorded as retired); F5 settlement decision (schema frozen as-is; 1.4 reduces to the dashboard metric inventory); environment posture recorded (Q1 closed; Q2 → 2.1). Ledger + decision note only; roadmap DOCX untouched | **Complete — Gate A PASSED (2026-10-15); patch `frontend-redesign-0.2-scope-freeze.patch`** |
 
 Facts preserved from the earlier passes that remain verified and current: the AI Week 7–8 pipeline closeout (B0–B11, staging-proven, H4 delivered 2026-10-08); CORS resolution at compose level; the 2026-10-01 verification pass corrections (S10 both-themes scope, F1 deployment-only scope, Batch 3.1 re-scope to ratifying the existing token layer); the Week 8 mapping delta of the 44-week plan (superseded as a blocker when the AI pod closed Weeks 7–8; the plan's project-level Week 8 items — v0.2.0 tag, coverage baseline, OpenAPI publication, docs site — are now partially delivered upstream: **OpenAPI publication has landed**; tag/coverage/docs-site remain non-frontend items).
 
@@ -181,7 +183,7 @@ None — no gate passed. Gate A remains next, now running against the rewritten 
 
 ### 0.1 — Baseline verification run (read-only)
 
-Status: **PARTIALLY EXECUTED** (2026-10-14) — blocked checks require rerun; batch not complete
+Status: **PARTIALLY EXECUTED → EXECUTED** (completed 2026-10-14 by the local verification run — see the 0.1-completion entry below)
 
 #### Planned
 Read-only baseline verification per roadmap Phase 0: run lint, typecheck, unit, storybook, build; run the three E2E specs with real Keycloak credentials; perform the authenticated F5 live probe (`GET /v1/courses`) and inspect the emitted `created_at` representation; confirm the staging CORS preflight for the web origin; re-verify the Bucket A findings against the tree; record the baseline. No code, no configuration, no dependency changes.
@@ -223,7 +225,84 @@ N/A (executor does not commit; Seyam applies the patch
 `frontend-redesign-0.1-baseline-verification-run.patch`).
 
 #### Gate impact
-None — no gate passed. Gate A requires completed 0.1 evidence plus the 0.2 scope-freeze decision.
+None at first pass — the batch was completed the same day by the local verification run below.
+
+---
+
+### 0.1 — completion: local verification run (owner machine, 2026-10-14)
+
+Status: **COMPLETE** — Batch 0.1 is **EXECUTED** (2026-10-14)
+
+#### Planned
+Complete the three checks blocked in the executor's sandbox by rerunning them where the prerequisites exist: the owner's local project (explicitly NOT staging, per Seyam's instruction), using the purpose-built `scripts/run-batch-0.1-local-verification.sh` (delivered by the executor, committed by Seyam as `7ebe978`). The script orchestrates the documented local stack (docker compose `infra/docker-compose.dev.yml` db + Keycloak, backend :8000, frontend :3000), runs the E2E trio with real Keycloak credentials sourced from `.env.local` (never hardcoded), performs the F5 live probe with a REAL access token captured through the browser login flow (no auth weakening; token redacted from all logs), and runs the local CORS preflight. Staging preflight is opt-in (`--with-staging-preflight`) and was not requested.
+
+#### Actual
+Run `run-20261014-190840` (2026-10-14T19:08+03:00), executed by Seyam on the owner machine against `bea19f3` + the untracked script. Results:
+
+- **Local stack — PASS (3/3):** `infra-db-1` and `infra-keycloak-1` up (compose dev); Keycloak OIDC discovery answered; backend `GET /health` OK on :8000 (already running, reused); frontend `GET /` OK on :3000 (already running, reused).
+- **E2E trio — PASS 3/3** (Chromium, 1 worker, serial, 6.9s total): `courses-crud.spec.ts` create→read→update→delete through the UI (1.3s); `login.spec.ts` Keycloak authentication landing on /dashboard (1.3s); `profile-roundtrip.spec.ts` create→reload→update persistence (1.5s). `E2E_USERNAME`/`E2E_PASSWORD` supplied locally from `.env.local` (`OPENLEARN_TEST_USER_PASSWORD`); nothing fabricated; `frontend/test-results/` relocated into the evidence dir.
+- **F5 live probe — PASS:** a real access token was captured via the browser login flow (TOKEN_CAPTURED=yes; token redacted everywhere, file mode 0600, trap-cleaned). Authenticated `GET http://localhost:8000/v1/courses` → HTTP 200; `created_at` analysis: **COUNT=5, WITH_OFFSET=5** (100% offset-bearing), sample `2026-10-14T15:52:48.551399Z`. **The live API emits offset-bearing datetimes — the `z.string().datetime({ offset: true })` schema at `features/courses/schemas.ts:25` is correct as-is. Open Question #1 is CLOSED; Batch 1.4's F5 settlement reduces to keeping the schema and writing the dashboard real-metric inventory.**
+- **Local CORS preflight — PASS:** `OPTIONS http://localhost:8000/v1/courses` with `Origin: http://localhost:3000`, `Access-Control-Request-Method: GET`, `Access-Control-Request-Headers: authorization` → HTTP 200; `vary: Origin`; `access-control-allow-origin: http://localhost:3000` (origin echo); allow-methods `DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT`; `access-control-allow-headers: authorization`; `access-control-allow-credentials: true`; max-age 600. The compose-provided `CORS_ORIGINS` mechanism is confirmed working end to end for the local web origin.
+- **Staging preflight — SKIPPED by scope** (not requested; Seyam directed verification to the local project only). Open Question #2 remains open as a live confirmation and is routed to Batch 2.1's environment lock, where the staging-vs-local demo decision is made anyway (local dev is the documented fallback). It can be closed at any time with `bash scripts/run-batch-0.1-local-verification.sh --with-staging-preflight` from any host that can reach staging.
+- **Fast checks — SKIPPED by design** (`--with-fast-checks` not passed): lint/typecheck/unit/storybook/build already PASS conclusively from the 2026-10-14 baseline run; the script avoids redundant re-runs.
+- Post-run repository state: no tracked changes; the script was then committed and pushed by Seyam as `7ebe978`.
+
+#### Files changed
+None in this completion step beyond this ledger and the in-repo baseline record addendum (both documentation records of the run):
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md`
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Batch-0.1_Baseline-Record.md` (addendum §8 + final verdict §9)
+
+#### Verification
+Evidence is the run's own output (verbatim verdict block pasted by Seyam on 2026-10-14): `VERDICT: BATCH 0.1 LOCAL VERIFICATION PASSED (exit 0)` with the per-check PASS/SKIPPED table and the F5 analysis line. Combined with the five conclusive script runs from the baseline run, all eight Batch 0.1 checks are now concluded. The baseline record's addendum records the full evidence table.
+
+#### Issues / deviations
+1. **Staging CORS preflight not produced (owner scope decision, not a failure):** Seyam explicitly scoped verification to the local project. The roadmap lists the CORS preflight confirmation as Gate A evidence; the LOCAL preflight (same compose-provided mechanism, same origin model) is confirmed, and the staging-host confirmation is carried as Open Question #2 into Batch 2.1, where it is a named input to the environment decision. Recorded as a deviation rather than silently claimed.
+2. **Local run used already-running services** (backend :8000, frontend :3000 reused; containers up) — consistent with the script's idempotent design; no auth weakening was required anywhere (real Keycloak, real token capture).
+
+#### Commit
+N/A (executor does not commit; Seyam applies the patch
+`frontend-redesign-0.1-completion-local-verification.patch`).
+
+#### Gate impact
+Batch 0.1 completion criterion met: the baseline record exists and every Bucket A item is confirmed with evidence. Gate A now awaits only the 0.2 scope freeze.
+
+---
+
+### 0.2 — Scope freeze (documentation-only)
+
+Status: **COMPLETE** (2026-10-15) — **Gate A PASSED**
+
+#### Planned
+Per roadmap v2.0 §14: freeze the classification, defer list, exclusion list, and the demo journey candidate. Files affected: none in the application; the decision note in repo docs plus this ledger. §6 becomes the authoritative capability classification, §22 the authoritative exclusion list, §19 the demo candidate. Validation: every capability in exactly one tier; every finding F1–F6, W1–W8, S1–S11 in exactly one bucket, defer entry, or exclusion. The modernization accomplishments (§2) remain permanently out of scope.
+
+#### Actual
+- **Decision note authored:** `docs/tasks/Frontend UI redesign/OpenLearn-AI_Batch-0.2_Scope-Freeze_Decision-Note.md` (new file) with nine sections: purpose/authority, frozen capability classification (tier table A–E + §13 visibility snapshot), the finding disposition register (25 rows: 20 dispositions + 5 retired IDs), the F5 settlement decision, environment/CORS posture, the frozen demo journey candidate, exclusion-list ratification, the freeze validation table, and the decision record.
+- **Finding register reconstruction:** roadmap v2.0 names the ID ranges but carries no consolidated register, so every assignment was recovered and cross-checked: from v2.0's batch objectives and gate table (F3/F4/S10/F6→1.1; W1/S3/S8→1.2; F1/W8→1.3; F5→1.4; S1/S2→2.2; S4/S5/S7/S9→3.2; W4→3.3; W5→3.2; W6/W7→5.3) and from the v1.3 register (extracted from git history at `ad64e0c` — the superseded DOCX still in history) for the finding definitions. **F2, W2, W3, S6, S11 have zero occurrences in both v1.3 and v2.0 outside the range notation** — they carry no findings and are recorded as retired IDs so the validation ranges close cleanly and nobody hunts for ghosts.
+- **F5 settled from 0.1 evidence:** the live API emits offset-bearing datetimes (5/5, sample `2026-10-14T15:52:48.551399Z`); the `offset: true` schema is frozen as-is; Batch 1.4 reduces to the dashboard real-metric inventory. Open Question #1 closed.
+- **Gate A declared PASSED (2026-10-15):** functional reality known and agreed — baseline record complete (all eight 0.1 checks concluded), classification frozen. One evidence item carried by owner decision (staging-host CORS preflight → Open Question #2 → Batch 2.1; local preflight confirmed; owner explicitly scoped 0.1 verification to the local project). Recorded as a deviation with owner authorization, not silently claimed.
+- **No DOCX edit:** the batch ratifies §6/§19/§22 as authoritative — it does not modify them (lifecycle: never silently change the roadmap; §2 modernization accomplishments protected).
+
+#### Files changed
+Exactly two files:
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Batch-0.2_Scope-Freeze_Decision-Note.md` (new)
+- `docs/tasks/Frontend UI redesign/OpenLearn-AI_Frontend_Execution_Progress.md` (this ledger: Current State, history row, this log, status board, gates line, next-batch pointer)
+
+#### Verification
+- Documentation-only verification per the lifecycle rules: both documents readable and internally consistent; batch IDs, gate letters, finding IDs, and tier letters cross-checked against roadmap v2.0 §6/§13/§14/§19/§21/§22 and the ledger; no document claims work that did not happen.
+- Occurrence audit (mechanical): F2/W2/W3/S6/S11 — zero hits in roadmap v1.3 and v2.0 outside the range notation; every other finding ID's assignment verified in both the v2.0 batch objectives and the v1.3 register tables.
+- Git scope: `git status --porcelain` shows exactly the two authorized files; no application code, test, config, dependency, CI, or infrastructure file touched; the roadmap DOCX byte-identical.
+- NOT run (correctly): lint/typecheck/unit/storybook/build/E2E — no application file changed; claiming such runs would violate the honesty rules.
+
+#### Issues / deviations
+1. **Gate A's CORS evidence item:** the roadmap names "the CORS preflight confirmation" among Gate A evidence. The LOCAL preflight is confirmed; the staging-host preflight was scoped out by Seyam ("not staging env") and is carried as Open Question #2 into Batch 2.1, whose environment decision it feeds anyway (local dev is the documented fallback). Gate A is passed on the local confirmation + owner decision, with the carry-over recorded here, in the decision note (§5), and in the Open Questions table — not silently dropped.
+2. **Retired finding IDs:** the validation range "F1–F6, W1–W8, S1–S11" implies IDs that do not all exist. Rather than silently validating a subset, the five unassigned IDs are explicitly recorded as retired (verified against both roadmap versions) so the freeze is auditable.
+
+#### Commit
+N/A (executor does not commit; Seyam applies the patch
+`frontend-redesign-0.2-scope-freeze.patch`).
+
+#### Gate impact
+**Gate A — PASSED (2026-10-15).** Phase 0 is complete. The next batch in the sequence is 1.1 (Phase 1 — Minimal Functional Closure); it does not start until Seyam explicitly authorizes it.
 
 ---
 
@@ -231,8 +310,8 @@ None — no gate passed. Gate A requires completed 0.1 evidence plus the 0.2 sco
 
 | Phase | Batch | Title | Status |
 |---|---|---|---|
-| 0 | 0.1 | Baseline verification run | PARTIALLY EXECUTED (2026-10-14) — 5/6 script runs PASS; E2E trio + F5 probe + CORS preflight BLOCKED by environment; rerun required |
-| 0 | 0.2 | Scope freeze | NOT STARTED |
+| 0 | 0.1 | Baseline verification run | **EXECUTED** (2026-10-14) — baseline run 5/6 script checks PASS; local verification run completed the E2E trio (3/3), F5 live probe, and local CORS preflight; staging preflight carried to 2.1 (Open Question #2) |
+| 0 | 0.2 | Scope freeze | **EXECUTED** (2026-10-15) — decision note authored; classification/exclusions/demo candidate frozen; finding register closed (20 dispositions + 5 retired IDs); F5 settled |
 | 1 | 1.1 | Correctness fixes on core flows (F3, F4, S10, F6) | NOT STARTED |
 | 1 | 1.2 | Authentication surface completion (W1, S3, S8) | NOT STARTED |
 | 1 | 1.3 | Observability and configuration closure (F1 chain, W8) | NOT STARTED |
@@ -250,14 +329,14 @@ None — no gate passed. Gate A requires completed 0.1 evidence plus the 0.2 sco
 | 5 | 5.2 | Verification runs (E2E promotion 3/3, a11y, sweeps) | NOT STARTED |
 | 5 | 5.3 | Staging validation and demo dry run (+ pinning) | NOT STARTED |
 
-Gates: A (functional reality) → B (closure set done) → C (demo surface locked) → D (design direction locked) → E (redesign complete) → F (presentation ready). None passed.
+Gates: A (functional reality) → B (closure set done) → C (demo surface locked) → D (design direction locked) → E (redesign complete) → F (presentation ready). **Gate A PASSED (2026-10-15)** — with the staging-host CORS preflight recorded as a carried-over evidence item routed to Batch 2.1 (owner scope decision; local preflight confirmed). Gates B–F pending.
 
 ## Open Questions (current)
 
 | # | Question | Owner | Path |
 |---|---|---|---|
-| 1 | Does the live API emit offset-bearing datetimes (F5)? The tracked contract declares `format: date-time`; live emission still unverified. | Executing dev | Batch 0.1 probe; settled in 1.4 either way |
-| 2 | Staging CORS live preflight — compose-level configuration verified; the live preflight is a confirmation, not an investigation. | Executing dev | Batch 0.1 |
+| 1 | Does the live API emit offset-bearing datetimes (F5)? | Executing dev | **CLOSED (2026-10-14):** YES — 5/5 values offset-bearing (sample `2026-10-14T15:52:48.551399Z`); the `offset: true` schema is correct as-is; Batch 1.4 keeps it and reduces to the dashboard real-metric inventory |
+| 2 | Staging CORS live preflight — the LOCAL preflight is confirmed (2026-10-14: HTTP 200, origin echo, authorization allowed); the staging-host confirmation is outstanding. | Executing dev | Routed to Batch 2.1's environment lock (staging-vs-local decision; local dev is the documented fallback); closable anytime via `scripts/run-batch-0.1-local-verification.sh --with-staging-preflight` from a staging-reachable host |
 | 3 | E2E promotion re-sequenced to Gate F — team-lead sign-off. | Team lead | Recorded decision at Gate F |
 | 4 | Staging or local as the demo environment? | Executing dev | Batch 2.1, driven by Q2 |
 | 5 | Does the materials walk join the locked demo journey? | Executing dev | Batch 2.1 decision; requires the instructor-role course-owner test user either way |
@@ -266,4 +345,4 @@ Gates: A (functional reality) → B (closure set done) → C (demo surface locke
 
 ## Next Authorized Batch
 
-**Batch 0.1 — Baseline verification run** is the current batch, **partially executed on 2026-10-14** against baseline `699c496` (read-only). Remaining work, in the same batch scope: (1) the three E2E specs with real Keycloak credentials against a running stack (local via Docker, or staging per the e2e.yml configuration model), (2) the authenticated F5 live probe of `GET /v1/courses` (`created_at` offset inspection), (3) the live staging CORS preflight confirmation. These require an execution environment with Docker (or staging network access) and E2E credentials; they were blocked, not failed, on 2026-10-14. After the rerun records their results, Batch 0.2 (scope freeze) may be authorized by Seyam; it does not start until Seyam explicitly authorizes it.
+**Phase 0 is complete; Gate A is passed (2026-10-15).** The next batch in the sequence is **Batch 1.1 — Correctness fixes on core flows (F3, F4, S10, F6)** — the first Phase 1 batch, targeting `courses/[id]/edit/page.tsx`, `profile/page.tsx`, `components/profile/ProfileForm.tsx`, and `components/auth/LoginForm.tsx` with four pinned, mostly one-line fixes, validated by the courses-crud and profile-roundtrip E2E specs. Per the lifecycle rules it does not start until Seyam explicitly authorizes it.
