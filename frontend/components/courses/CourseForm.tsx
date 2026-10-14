@@ -109,7 +109,10 @@ export function CourseForm({
     const mutationErrorMessage =
         mutationError instanceof ApiError
             ? mutationError.status === 401
-                ? "Your session has expired. Please log in again."
+                ? // W1: the global 401 recovery clears the query cache
+                  // and routes to /login (lib/session-recovery.ts); this
+                  // line only sets the expectation until the redirect.
+                  "Your session has expired. Redirecting to sign in..."
                 : mutationError.status === 403
                   ? "You do not have permission to perform this action."
                   : mutationError.status === 404

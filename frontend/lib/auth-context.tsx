@@ -7,7 +7,7 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import { getKeycloak } from "./keycloak";
+import { getKeycloak, onKeycloakRefreshError } from "./keycloak";
 
 interface AuthContextValue {
     isAuthenticated: boolean;
@@ -25,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let cancelled = false;
+        let unsubscribeRefreshError: (() => void) | null = null;
 
         async function initializeAuth() {
             try {
@@ -37,6 +38,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setIsAuthenticated(
                     Boolean(keycloak?.authenticated),
                 );
+
+                // W1: when the Keycloak token refresh fails, reflect
+                // the expired session in React state so the existing
+                // AuthGuard redirect (unchanged) also reacts. The
+                // cache-clearing half of the recovery lives in
+                // lib/query-provider.tsx.
+                if (keycloak) {
+                    unsubscribeRefreshError = onKeycloakRefreshError(() => {
+                        if (!cancelled) {
+                            setIsAuthenticated(false);
+                        }
+                    });
+                }
             } catch (error) {
                 console.error(
                     "Failed to initialize authentication:",
@@ -57,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return () => {
             cancelled = true;
+            unsubscribeRefreshError?.();
         };
     }, []);
 

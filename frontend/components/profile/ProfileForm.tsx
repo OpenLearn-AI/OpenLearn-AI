@@ -91,7 +91,10 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     const mutationErrorMessage =
         mutationError instanceof ApiError
             ? mutationError.status === 401
-                ? "Your session has expired. Please log in again."
+                ? // W1: the global 401 recovery clears the query cache
+                  // and routes to /login (lib/session-recovery.ts); this
+                  // line only sets the expectation until the redirect.
+                  "Your session has expired. Redirecting to sign in..."
                 : mutationError.status === 404
                   ? "Unable to save the profile for this user."
                   : mutationError.status === 422

@@ -12,14 +12,14 @@ Revision lineage of this context: authored 2026-10-01 against `staging @ c51f3f1
 
 ---
 
-## Current State (verified 2026-10-15, after Batch 1.1 close-out)
+## Current State (verified 2026-10-15, after Batch 1.2 implementation pass)
 
 - Repository HEAD: `7dc9f671ee91c3678fcb1bbdac4a563cf3ab3c27` — branch `frontend-redesign`, equal to `origin/frontend-redesign` (the Batch 1.1 patch applied upstream and pushed by Seyam as commit `frontend-redesign-1.1-correctness-fixes-core-flows`). Lineage since the 0.1 baseline: `699c496` (FR-REB-02 patch commit) → `bea19f3` (Batch 0.1 patch applied by Seyam) → `7ebe978` (`scripts/run-batch-0.1-local-verification.sh`, committed by Seyam) → `18d8a69` (0.1-completion + 0.2 scope-freeze patches applied by Seyam as one commit) → `7dc9f67` (Batch 1.1 patch applied by Seyam). Staging containment re-verified at `7dc9f67`: `git merge-base --is-ancestor origin/staging HEAD` passes; `HEAD..origin/staging` empty
-- Working tree at batch start: clean (fresh clone of `origin/frontend-redesign` @ `7dc9f67`)
-- Current phase: 1 — Minimal Functional Closure — 1.1 EXECUTED (2026-10-15)
-- Current batch: **1.1 — Correctness fixes on core flows — EXECUTED (2026-10-15)**: all four findings (F3, F4, S10, F6) fixed in code with the focused F6 policy tests (15) added; the full matrix is green — executor sandbox re-verification at `7dc9f67` (lint, typecheck, unit 37/37 incl. the 15 F6 tests) plus the owner-machine completion run (E2E trio 3/3 with real Keycloak credentials, Storybook 42/42 across 12 files, lint, typecheck, production build with all 9 application routes, and the manual light+dark success-message check). See the 1.1 completion entry below for the evidence table
-- Current gate: **Gate A — PASSED (2026-10-15)** — unchanged. **Gate B NOT claimed**: it requires the full closure set (1.1 complete ✓ + 1.2 + 1.3 + 1.4) and the local matrix green including E2E with credentials (1.1's E2E evidence is in; 1.2/1.3/1.4 remain)
-- Overall status: **Batch 1.1 EXECUTED (implementation + owner-machine verification); Batch 1.2 — Authentication surface completion (W1, S3, S8) — explicitly authorized by Seyam in the same prompt that supplied the owner evidence, and executed next per the one-batch lifecycle rule**
+- Working tree at batch start: clean (fresh clone of `origin/frontend-redesign` @ `7dc9f67`); it now carries the Batch 1.1 close-out (ledger only) and the uncommitted Batch 1.2 changes — exactly the ten batch-owned files, nothing else
+- Current phase: 1 — Minimal Functional Closure — 1.1 EXECUTED (2026-10-15); 1.2 implemented (2026-10-15)
+- Current batch: **1.2 — Authentication surface completion — PARTIALLY EXECUTED (2026-10-15)**: W1 (global 401 session recovery: clear cache → route to `/login?redirectedFrom=…`, replacing the two forms' static expired-session dead ends), S3 (register error/loading/null-client states + theme toggle), and S8 (styled `(auth)` error/loading boundaries mirroring `(app)`) are implemented in code. The full sandbox-runnable matrix is green (lint, typecheck, unit 49/49 incl. 12 new session-recovery tests, storybook 42/42, build 9 routes). Owner-machine items remain: the **login E2E** (sandbox has no Docker/credentials — the suite correctly self-skipped 3/3, exit 0), the **forced token-refresh-failure manual check**, the **throwaway-user registration walk**, and the **forced render-error boundary check** (roadmap §24 marks all three manual). Nothing fabricated; no check claimed that was not run
+- Current gate: **Gate A — PASSED (2026-10-15)** — unchanged. **Gate B NOT claimed**: it requires the full closure set (1.1 ✓ + 1.2 ✓ pending owner confirmation + 1.3 + 1.4) and the local matrix green including E2E with credentials
+- Overall status: **Batch 1.2 implemented and sandbox-verified; login E2E + three manual auth validations pending on the owner machine; Batch 1.3 (F1 chain, W8) awaits Seyam's explicit authorization**
 
 ---
 
@@ -139,6 +139,7 @@ No frontend-relevant backend capability is silent.
 | **0.2** | **2026-10-15** | **`7ebe978`** | **Scope freeze (documentation-only)**: new decision note `OpenLearn-AI_Batch-0.2_Scope-Freeze_Decision-Note.md` ratifying roadmap v2.0 §6 (capability classification, tiers A–E), §22 (exclusion list), §19 (demo journey candidate); finding disposition register F1–F6/W1–W8/S1–S11 (20 findings → exactly one bucket each; F2/W2/W3/S6/S11 verified unassigned in both roadmap v1.3 and v2.0 and recorded as retired); F5 settlement decision (schema frozen as-is; 1.4 reduces to the dashboard metric inventory); environment posture recorded (Q1 closed; Q2 → 2.1). Ledger + decision note only; roadmap DOCX untouched | **Complete — Gate A PASSED (2026-10-15); patch `frontend-redesign-0.2-scope-freeze.patch`** |
 | **1.1** | **2026-10-15** | **`18d8a69`** (= 0.2 patch commit; Phase 0 complete, Gate A passed) | **Correctness fixes on core flows**: F3 `key={course.id}` on the edit-mode CourseForm; F4 `key={profile?.id ?? "new"}` on ProfileForm; S10 success token `text-success-foreground` → `text-success`; F6 `safeRedirectTarget` moved to `features/auth/redirect.ts` with its documentation aligned to the actual policy (open-redirect logic unchanged) + 15 focused policy tests. Sandbox matrix green (lint, typecheck, unit 37/37, storybook 42/42, build); E2E re-run + manual light/dark S10 check completed on the owner machine (next row) | **EXECUTED — patch `frontend-redesign-1.1-correctness-fixes-core-flows.patch`; applied upstream by Seyam as `7dc9f67`** |
 | **1.1-completion** | **2026-10-15** | **`7dc9f67`** (the 1.1 patch applied upstream and pushed by Seyam) | **Owner-machine verification run** completing 1.1's two pending items, reported by Seyam after the original 1.1 report: E2E trio **3/3 PASS** (`npm run test:e2e`: courses CRUD, Keycloak login, profile round-trip — `E2E_USERNAME`/`E2E_PASSWORD` supplied locally, never recorded in repository files); Storybook **42/42 across 12 files**; lint PASS; typecheck PASS; production build PASS with all 9 application routes; manual light+dark check of the success message **successful (owner-verified manual testing)**. Storybook warnings recorded as warnings, not failures: Vite native config loader ESM/CJS notice, unmatched `stories/**/*.mdx` pattern, Base UI `nativeButton` semantics in some stories — explicitly not fixed (outside 1.1/1.2 authorized scope) | **Complete — Batch 1.1 EXECUTED (2026-10-15)** |
+| **1.2** | **2026-10-15** | **`7dc9f67`** (+ the 1.1 close-out ledger update) | **Authentication surface completion**: W1 global 401 recovery — new `lib/session-recovery.ts` (clear-cache → `/login?redirectedFrom=…`, one-shot latch) + cache-level error observers in `lib/query-provider.tsx` + the missing token-expired event wired in `lib/keycloak.ts` (init options untouched) + React-state mirror in `lib/auth-context.tsx` feeding the unchanged AuthGuard + the two forms' static expired-session strings replaced by redirect-expectation copy; S3 register flow — error/loading/null-client states + theme toggle in `app/(auth)/register/page.tsx` (`keycloak.register` call site and redirect target unchanged); S8 — new styled `app/(auth)/error.tsx` + `loading.tsx` mirroring `(app)`. 12 focused unit tests added. Sandbox matrix green (lint, typecheck, unit 49/49, storybook 42/42, build); login E2E + three manual auth validations pending on the owner machine (no Docker/credentials in the execution environment; suite self-skipped 3/3, exit 0) | **PARTIALLY EXECUTED — implementation complete; owner validation pending; patch `frontend-redesign-1.2-authentication-surface-completion.patch`** |
 
 Facts preserved from the earlier passes that remain verified and current: the AI Week 7–8 pipeline closeout (B0–B11, staging-proven, H4 delivered 2026-10-08); CORS resolution at compose level; the 2026-10-01 verification pass corrections (S10 both-themes scope, F1 deployment-only scope, Batch 3.1 re-scope to ratifying the existing token layer); the Week 8 mapping delta of the 44-week plan (superseded as a blocker when the AI pod closed Weeks 7–8; the plan's project-level Week 8 items — v0.2.0 tag, coverage baseline, OpenAPI publication, docs site — are now partially delivered upstream: **OpenAPI publication has landed**; tag/coverage/docs-site remain non-frontend items).
 
@@ -410,6 +411,70 @@ Batch 1.1's completion criterion is met (all three roadmap completion bullets ev
 
 ---
 
+### 1.2 — Authentication surface completion
+
+Status: **PARTIALLY EXECUTED** (2026-10-15) — implementation complete and sandbox-verified; the login E2E and the three roadmap-manual validations (forced refresh failure, throwaway registration, forced render error) belong on the owner machine, where the prerequisites exist (same missing-prerequisite block as 0.1/1.1; not failures, nothing fabricated)
+
+#### Planned
+Per roadmap v2.0 §14 Batch 1.2 and the frozen finding register (decision note §3): W1 — global 401 session recovery: clear the query cache and route to `/login` carrying `redirectedFrom`, replacing the two forms' static expired-session strings; S3 — a real register flow: error, loading, and null-client states plus theme parity; S8 — styled `(auth)` error/loading boundaries mirroring `(app)`. Roadmap-named files: `lib/query-provider.tsx`, `lib/auth-context.tsx`, `lib/keycloak.ts`, `app/(auth)/register/page.tsx`, new `app/(auth)/error.tsx` + `loading.tsx`, `CourseForm.tsx`, `ProfileForm.tsx`. Must NOT change: Keycloak init options (check-sso, PKCE, iframe setting), guard consolidation, login redirect-target logic, logout sequence.
+
+#### Actual
+Executed on a fresh clone of `origin/frontend-redesign` @ `7dc9f67` (equal to remote HEAD; working tree clean at start; staging containment re-verified). Authorization chain verified first: the ledger records Batch 1.1 EXECUTED (2026-10-15) with owner evidence and names Batch 1.2 as the next batch in sequence — this batch's prompt is Seyam's explicit authorization. Roadmap v2.0 Batch 1.2 row re-read; the v1.3 register (git history `ad64e0c`) consulted for the per-finding mechanics (W1: "No global 401 handler, no token-expired event; only static expired text in two forms"; S3: "No error, loading, or null-client states; silent return; no theme toggle"; S8: "Only (app) has error.tsx / loading.tsx; auth errors hit the unstyled default"). Findings re-verified present in code at `7dc9f67` before editing (grep audit: zero `onAuth*` handlers anywhere; the 401 branches in both forms; `(auth)` without error/loading). Per-finding decisions:
+
+1. **W1 — global 401 session recovery.** New pure module `lib/session-recovery.ts`: `isSessionExpiredError` (ApiError with status 401 — the boundary throws exactly that both when no token can be obtained, which includes the forced-refresh failure path, and when the backend answers 401), `sessionRecoveryTarget` (`/login?redirectedFrom=<pathname><search>` — the same deep-link convention AuthGuard uses; `features/auth/redirect.ts` validates the value on the way back), and `triggerSessionRecovery` (one-shot latch per page lifetime: clear the query cache, then route via `window.location.assign` — the established end-of-session navigation in this app; logout does the same — so the login screen re-initializes Keycloak cleanly). Trigger sources wired in `lib/query-provider.tsx`: error observers on the QueryCache and MutationCache (non-401 errors unaffected; handlers run after the configured retries), plus a subscription to the Keycloak refresh-error event. `lib/keycloak.ts` gains the previously missing token-expired event: a listener registry fanned out from the adapter's `onAuthRefreshError`; the init options are byte-identical to before (protected). `lib/auth-context.tsx` mirrors the event into React state (`setIsAuthenticated(false)`) so the existing, unchanged AuthGuard redirect also reacts. The two forms' static dead-end strings (`"Your session has expired. Please log in again."`) become the expectation-setting `"Your session has expired. Redirecting to sign in..."` — the recovery itself is global, no longer a dead end. The logout sequence, AuthGuard consolidation, and LoginForm redirect-target logic are untouched.
+2. **S3 — real register flow.** `app/(auth)/register/page.tsx`: loading state (`isLoading` disables the button, label `"Connecting..."` — same copy as LoginForm), error state (`role="alert"` presentation), and the null-client state surfaced as an error instead of the silent `if (!keycloak) return;`; theme parity via the same `ThemeToggle` placement as the login page. The `keycloak.register` call site and its `/dashboard` redirect target are byte-identical (protected for 4.1).
+3. **S8 — styled `(auth)` boundaries.** New `app/(auth)/error.tsx` (Next error-boundary contract: `error` + `reset`; same copy as the `(app)` boundary; card container matching the auth screens' visual language, sized for the centered auth layout) and new `app/(auth)/loading.tsx` (shared `LoadingBlock`, no full-screen wrapper since the auth layout already centers its children).
+
+Focused tests added: `lib/session-recovery.test.ts` — 12 tests covering the 401 classifier (accepts ApiError 401; rejects other statuses, non-ApiError values), the recovery target builder (plain deep link, query-string deep link, root, empty), the no-window fallback, and the trigger semantics (clear-cache-before-redirect ordering, current-location default, no-window no-op, one-shot latch).
+
+#### Files changed
+Exactly the seven roadmap-named files, plus the two new files required by the recovery module and its focused tests (disclosed below), plus this ledger:
+- `frontend/lib/query-provider.tsx` — W1: cache error observers + event subscription (defaults unchanged)
+- `frontend/lib/auth-context.tsx` — W1: refresh-error → `setIsAuthenticated(false)` (cleanup added)
+- `frontend/lib/keycloak.ts` — W1: `onAuthRefreshError` fan-out registry (init options byte-identical)
+- `frontend/components/courses/CourseForm.tsx` — W1: 401 string replaced (one branch)
+- `frontend/components/profile/ProfileForm.tsx` — W1: 401 string replaced (one branch)
+- `frontend/app/(auth)/register/page.tsx` — S3: full states + theme toggle (call site unchanged)
+- `frontend/app/(auth)/error.tsx` — new (S8)
+- `frontend/app/(auth)/loading.tsx` — new (S8)
+- `frontend/lib/session-recovery.ts` — new (W1 recovery module)
+- `frontend/lib/session-recovery.test.ts` — new (W1: 12 focused tests)
+
+No changes to `AuthGuard.tsx`, `LoginForm.tsx`, `features/auth/redirect.ts`, E2E specs, Storybook stories, schemas, mutations, Keycloak init options, backend, CI, infrastructure, or the roadmap DOCX.
+
+#### Verification
+Run from `frontend/` on Node 24.21.0 / npm 11.19.0 (CI pins Node 20 — same recorded environment deviation as 0.1/1.1; not a repository change):
+
+| # | Command | Result | Exit |
+|---|---|---|---|
+| 1 | `npm run lint` | PASS — no findings | 0 |
+| 2 | `npm run typecheck` | PASS (`tsc --noEmit`, TS 5.9.3) | 0 |
+| 3 | `npm run test` (vitest unit project) | **PASS — 49/49** across 5 files (37 pre-existing + 12 new `lib/session-recovery.test.ts`) | 0 |
+| 4 | `npm run test:storybook` | PASS — 42/42 across 12 story files, axe fail-on-violation active | 0 |
+| 5 | `npm run build` (CI-documented fallback `NEXT_PUBLIC_*` env, no repo file created) | PASS — 9 routes + `/_not-found` | 0 |
+| 6 | `npx playwright test` | **NOT RUN as flows — 3 skipped** (exit 0): `E2E_USERNAME`/`E2E_PASSWORD` absent, no Docker daemon (`docker info` exit 127), nothing on :8000/:3000 — the specs' documented credential gate self-skips; identical missing-prerequisite block as 0.1/1.1. No credentials fabricated; no auth weakened; specs untouched | 0 (skip) |
+| 7 | Manual: forced token-refresh failure → login | **NOT PERFORMED** — owner machine (roadmap §24 marks this manual); left to the owner | — |
+| 8 | Manual: throwaway-user registration end to end | **NOT PERFORMED** — owner machine; left to the owner | — |
+| 9 | Manual: forced render error shows the styled boundary | **NOT PERFORMED** — owner machine; left to the owner | — |
+
+Environment checks after the run: working tree contains exactly the ten batch-owned files + this ledger; `frontend/test-results/` from the skipped E2E run removed.
+
+#### Issues / deviations
+1. **Two new files beyond the roadmap's named list (disclosed):** `lib/session-recovery.ts` + its test. The recovery logic needed to be callable from both `lib/query-provider.tsx` and the Keycloak event path without importing a `"use client"` JSX module into `lib/keycloak.ts`, and the focused-test requirement (this batch's verification instructions) made a pure module the minimal honest way — the same justification pattern as 1.1's `features/auth/redirect.ts`, and the unit project already includes `lib/**`.
+2. **Recovery navigation is a full-page redirect** (`window.location.assign`), not SPA navigation: an expired session is an end-of-session event in this app (logout navigates the same way), and a reload guarantees a clean Keycloak re-initialization on the login screen. The one-shot latch prevents concurrent-401 refetch storms from re-triggering. Recorded so the choice is auditable.
+3. **The forms' 401 copy is retained, reworded** ("Your session has expired. Redirecting to sign in..."): the roadmap replaces the static strings as the *recovery mechanism*; the line remains as honest transient feedback until the redirect lands. Recorded so the wording change is traceable.
+4. **Four validation items pending owner machine (missing prerequisites, not failures):** the login E2E and the three roadmap-manual checks (§24). Batch 1.2 is therefore NOT marked complete and Gate B is not claimed. Completion path: apply the patch, run `npm run test:e2e` with the documented stack up, and walk the three manual items (revoke/expire the session to force a refresh failure; register a throwaway user; force a render error in an `(auth)` route).
+5. **Node version deviation:** Node 24.21.0 / npm 11.19.0 vs CI's Node 20 — all five script checks green on Node 24, same as recorded at 0.1/1.1.
+
+#### Commit
+N/A (executor does not commit; Seyam applies the patch
+`frontend-redesign-1.2-authentication-surface-completion.patch`).
+
+#### Gate impact
+None claimed. Gate A remains passed; Gate B requires the full closure set (1.1 ✓ + 1.2 + 1.3 + 1.4) and the local matrix green including E2E with credentials — not satisfied yet.
+
+---
+
 ## Batch Status Board (all details in roadmap v2.0 §13–§14; statuses here)
 
 | Phase | Batch | Title | Status |
@@ -417,7 +482,7 @@ Batch 1.1's completion criterion is met (all three roadmap completion bullets ev
 | 0 | 0.1 | Baseline verification run | **EXECUTED** (2026-10-14) — baseline run 5/6 script checks PASS; local verification run completed the E2E trio (3/3), F5 live probe, and local CORS preflight; staging preflight carried to 2.1 (Open Question #2) |
 | 0 | 0.2 | Scope freeze | **EXECUTED** (2026-10-15) — decision note authored; classification/exclusions/demo candidate frozen; finding register closed (20 dispositions + 5 retired IDs); F5 settled |
 | 1 | 1.1 | Correctness fixes on core flows (F3, F4, S10, F6) | **EXECUTED** (2026-10-15) — all four findings fixed, F6 policy tests added, sandbox matrix green; owner-machine completion run: E2E trio 3/3, Storybook 42/42, lint/typecheck/build PASS, manual light/dark S10 check successful; patch applied upstream as `7dc9f67` |
-| 1 | 1.2 | Authentication surface completion (W1, S3, S8) | NOT STARTED |
+| 1 | 1.2 | Authentication surface completion (W1, S3, S8) | **PARTIALLY EXECUTED** (2026-10-15) — W1/S3/S8 implemented, 12 focused tests added, sandbox matrix green (lint/typecheck/unit 49/storybook 42/build); login E2E + three manual auth validations pending on the owner machine |
 | 1 | 1.3 | Observability and configuration closure (F1 chain, W8) | NOT STARTED |
 | 1 | 1.4 | Data contract settlement (F5, metric inventory) | NOT STARTED |
 | 2 | 2.1 | Demo journey and environment lock (+ instructor test user; materials-walk decision) | NOT STARTED |
@@ -449,4 +514,4 @@ Gates: A (functional reality) → B (closure set done) → C (demo surface locke
 
 ## Next Authorized Batch
 
-**Batch 1.1 is EXECUTED (2026-10-15)**: implementation at `7dc9f67` (applied upstream by Seyam) + the owner-machine completion run (E2E trio 3/3, Storybook 42/42, lint/typecheck/build PASS, manual light+dark S10 check successful). The next batch in the sequence is **Batch 1.2 — Authentication surface completion (W1, S3, S8)**; Seyam explicitly authorized it in the same prompt that supplied the 1.1 owner evidence, and it is executed next per the one-batch lifecycle rule. Gate B requires the full closure set (1.1 complete ✓ + 1.2 + 1.3 + 1.4) and the local matrix green including E2E with credentials — 1.2/1.3/1.4 remain.
+**Batch 1.2 is implemented at `7dc9f67` (+ the 1.1 close-out ledger update) and sandbox-verified (matrix green, 49 unit / 42 storybook / build 9 routes); it is NOT marked complete** — its login E2E run and the three roadmap-manual validations (forced token-refresh failure → login; throwaway-user registration; forced render error → styled boundary) must be produced on the owner machine, where Docker and the E2E credentials exist (the execution environment has neither; the suite correctly self-skipped 3/3). After the patch is applied, the owner-side run completes Batch 1.2 the same way the 0.1/1.1 local runs completed those batches. The next batch in the sequence is **Batch 1.3 — Observability and configuration closure (F1 chain, W8)**; per the lifecycle rules it does not start until Seyam explicitly authorizes it. Gate B requires the full closure set (1.1 complete ✓ + 1.2 complete + 1.3 + 1.4) and the local matrix green including E2E with credentials — 1.3/1.4 remain.
