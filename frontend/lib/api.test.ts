@@ -27,6 +27,7 @@ vi.mock("@/lib/keycloak", () => ({
 }));
 
 import { apiFetch, ApiError } from "@/lib/api";
+import { courseResponseSchema } from "@/features/courses/schemas";
 import { z } from "zod";
 
 const sampleCourse = {
@@ -238,6 +239,96 @@ describe("apiFetch — error mapping", () => {
         await expect(
             apiFetch("/v1/courses/123", { schema: courseSchema }),
         ).rejects.toMatchObject({
+            status: 0,
+            message: expect.stringContaining("schema validation failed"),
+        });
+    });
+});
+
+/**
+ * Focused datetime-contract coverage (Batch 1.4 — F5 settlement).
+ *
+ * The tracked contract (`docs/openapi.json`) declares
+ * `CourseResponse.created_at` as `format: date-time` (RFC 3339), so every
+ * contract-valid value carries a timezone offset. The live API probe
+ * (Batch 0.1 owner-machine run, 2026-10-14) observed exactly that: 5/5
+ * values offset-bearing (sample `2026-10-14T15:52:48.551399Z`).
+ * `courseResponseSchema` therefore keeps `z.string().datetime({
+ * offset: true })` unchanged, which accepts both offset-bearing shapes —
+ * the UTC `Z` form and an explicit `±HH:MM` offset — and rejects a naive
+ * datetime instead of silently treating it as UTC. These tests pin that
+ * settlement against the real response schema at the apiFetch boundary.
+ */
+const liveProbeCreatedAt = "2026-10-14T15:52:48.551399Z";
+
+const offsetCreatedAt = "2026-10-14T18:52:48.551399+03:00";
+
+const courseWithCreatedAt = (created_at: string) => ({
+    id: "550e8400-e29b-41d4-a716-446655440000",
+    owner_id: "550e8400-e29b-41d4-a716-446655440001",
+    title: "Intro to Testing",
+    description: "A course about tests.",
+    created_at,
+});
+
+describe("courseResponseSchema — created_at datetime contract (F5)", () => {
+    it("accepts the UTC Z shape observed from the live API", () => {
+        const result = courseResponseSchema.safeParse(
+            courseWithCreatedAt(liveProbeCreatedAt),
+        );
+
+        expect(result.success).toBe(true);
+    });
+
+    it("accepts an explicit ±HH:MM offset shape (date-time contract)", () => {
+        const result = courseResponseSchema.safeParse(
+            courseWithCreatedAt(offsetCreatedAt),
+        );
+
+        expect(result.success).toBe(true);
+    });
+
+    it("rejects a naive datetime without an offset (never coerced to UTC)", () => {
+        const result = courseResponseSchema.safeParse(
+            courseWithCreatedAt("2026-10-14T15:52:48"),
+        );
+
+        expect(result.success).toBe(false);
+    });
+
+    it("apiFetch validates a course list carrying both datetime shapes", async () => {
+        getAccessTokenMock.mockResolvedValue("fake-token");
+        const list = [
+            courseWithCreatedAt(liveProbeCreatedAt),
+            courseWithCreatedAt(offsetCreatedAt),
+        ];
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+            new Response(JSON.stringify(list), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            }),
+        );
+
+        const result = await apiFetch("/v1/courses", {
+            schema: courseResponseSchema.array(),
+        });
+
+        expect(result).toEqual(list);
+    });
+
+    it("apiFetch throws a validation ApiError when created_at is naive", async () => {
+        getAccessTokenMock.mockResolvedValue("fake-token");
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+            new Response(
+                JSON.stringify(courseWithCreatedAt("2026-10-14T15:52:48")),
+                { status: 200, headers: { "Content-Type": "application/json" } },
+            ),
+        );
+
+        await expect(
+            apiFetch("/v1/courses/123", { schema: courseResponseSchema }),
+        ).rejects.toMatchObject({
+            name: "ApiError",
             status: 0,
             message: expect.stringContaining("schema validation failed"),
         });
