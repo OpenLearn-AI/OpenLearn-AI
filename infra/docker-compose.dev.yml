@@ -37,6 +37,7 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       OPENLEARN_TEST_USER_PASSWORD: ${OPENLEARN_TEST_USER_PASSWORD:?Set OPENLEARN_TEST_USER_PASSWORD in .env.local}
+      OPENLEARN_INSTRUCTOR_USER_PASSWORD: ${OPENLEARN_INSTRUCTOR_USER_PASSWORD:?Set OPENLEARN_INSTRUCTOR_USER_PASSWORD in .env.local}
     entrypoint: ["/bin/bash", "/opt/bootstrap/bootstrap-keycloak.sh"]
     volumes:
       - ./dev/bootstrap-keycloak.sh:/opt/bootstrap/bootstrap-keycloak.sh:ro
