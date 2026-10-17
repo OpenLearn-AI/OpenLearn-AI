@@ -587,7 +587,7 @@
             "description": "Not authenticated (missing or invalid bearer token)"
           },
           "403": {
-            "description": "Insufficient permissions (owner-only PUT/DELETE; POST /v1/courses never rejects on role or ownership)"
+            "description": "Insufficient permissions (owner-only GET/PUT/DELETE by course id; POST /v1/courses never rejects on role or ownership)"
           },
           "404": {
             "description": "No local user for the authenticated identity, or course does not exist"
@@ -630,7 +630,7 @@
             "description": "Not authenticated (missing or invalid bearer token)"
           },
           "403": {
-            "description": "Insufficient permissions (owner-only PUT/DELETE; POST /v1/courses never rejects on role or ownership)"
+            "description": "Insufficient permissions (owner-only GET/PUT/DELETE by course id; POST /v1/courses never rejects on role or ownership)"
           },
           "404": {
             "description": "No local user for the authenticated identity, or course does not exist"
@@ -680,7 +680,7 @@
             "description": "Not authenticated (missing or invalid bearer token)"
           },
           "403": {
-            "description": "Insufficient permissions (owner-only PUT/DELETE; POST /v1/courses never rejects on role or ownership)"
+            "description": "Insufficient permissions (owner-only GET/PUT/DELETE by course id; POST /v1/courses never rejects on role or ownership)"
           },
           "404": {
             "description": "No local user for the authenticated identity, or course does not exist"
@@ -735,7 +735,7 @@
             "description": "Not authenticated (missing or invalid bearer token)"
           },
           "403": {
-            "description": "Insufficient permissions (owner-only PUT/DELETE; POST /v1/courses never rejects on role or ownership)"
+            "description": "Insufficient permissions (owner-only GET/PUT/DELETE by course id; POST /v1/courses never rejects on role or ownership)"
           },
           "404": {
             "description": "No local user for the authenticated identity, or course does not exist"
@@ -800,7 +800,7 @@
             "description": "Not authenticated (missing or invalid bearer token)"
           },
           "403": {
-            "description": "Insufficient permissions (owner-only PUT/DELETE; POST /v1/courses never rejects on role or ownership)"
+            "description": "Insufficient permissions (owner-only GET/PUT/DELETE by course id; POST /v1/courses never rejects on role or ownership)"
           },
           "404": {
             "description": "No local user for the authenticated identity, or course does not exist"
