@@ -13,9 +13,18 @@ from app.models.course import Course
 from app.schemas.course import CourseCreate, CourseUpdate
 
 
-async def list_courses(db: AsyncSession) -> list[Course]:
+async def list_courses(db: AsyncSession, owner_id: uuid.UUID) -> list[Course]:
+    """List the courses owned by the given local user.
+
+    Ownership scoping is part of the query itself against the indexed
+    ``courses.owner_id`` column, so the database only ever returns the
+    requesting user's rows; no post-fetch filtering and no caller-side
+    decision can observe another user's courses.
+    """
     result = await db.execute(
-        select(Course).order_by(Course.created_at.desc(), Course.id)
+        select(Course)
+        .where(Course.owner_id == owner_id)
+        .order_by(Course.created_at.desc(), Course.id)
     )
     return list(result.scalars().all())
 

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status as http_status
+from fastapi import APIRouter, Depends, Response, status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_owned_course
@@ -10,7 +10,6 @@ from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
 from app.services.course_service import (
     create_course,
     delete_course,
-    get_course_by_id,
     list_courses,
     replace_course,
 )
@@ -20,11 +19,12 @@ router = APIRouter(prefix="/v1/courses", tags=["courses"])
 # 422 is documented by FastAPI automatically (validation error schema); these
 # document the auth/rbac/resolution failures raised manually. The mapping is
 # shared by every course route, but 403 is only reachable on the
-# ownership-protected PUT/DELETE routes: POST /v1/courses is open to any
-# authenticated user and takes no ownership check.
+# ownership-protected by-id routes (GET/PUT/DELETE /v1/courses/{course_id}):
+# listing is scoped to the authenticated owner inside the query, and POST
+# /v1/courses is open to any authenticated user and takes no ownership check.
 _COURSE_ERROR_RESPONSES = {
     401: {"description": "Not authenticated (missing or invalid bearer token)"},
-    403: {"description": "Insufficient permissions (owner-only PUT/DELETE; POST /v1/courses never rejects on role or ownership)"},
+    403: {"description": "Insufficient permissions (owner-only GET/PUT/DELETE by course id; POST /v1/courses never rejects on role or ownership)"},
     404: {"description": "No local user for the authenticated identity, or course does not exist"},
 }
 
@@ -56,7 +56,10 @@ async def list_courses_handler(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    courses = await list_courses(db)
+    # Owner-scoped listing: only the authenticated user's own courses are
+    # selected, in the database query itself. The local ``user.id`` (not the
+    # Keycloak ``sub``) is the ownership reference.
+    courses = await list_courses(db, owner_id=user.id)
     return courses
 
 
@@ -70,12 +73,10 @@ async def get_course_handler(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    course = await get_course_by_id(db, course_id)
-    if course is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
-            detail="Course not found",
-        )
+    # Same owner-only check as PUT/DELETE: a missing course is a 404, a
+    # course owned by someone else is a 403, and no other user's course
+    # data (title, description, owner_id) is ever serialized.
+    course = await require_owned_course(db, course_id, user)
     return course
 
 
