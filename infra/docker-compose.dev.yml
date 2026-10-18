@@ -8,14 +8,22 @@ services:
       POSTGRES_USER: openlearn
       POSTGRES_PASSWORD: devpassword
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Mirrors the staging db healthcheck (infra/docker-compose.staging.yml):
+    # readiness means "accepting connections", not merely "container created".
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openlearn -d openlearn"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.3
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - KC_BOOTSTRAP_ADMIN_USERNAME=admin
       - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
@@ -29,7 +37,8 @@ services:
       - ./realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
       - keycloak_dev_data:/opt/keycloak/data
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   keycloak-bootstrap:
     image: quay.io/keycloak/keycloak:26.7.3
@@ -45,6 +54,92 @@ services:
       - keycloak
     restart: "no"
 
+  # ── Material-processing dependencies (local environment batch) ─────────────
+  # The ingestion pipeline (app/workers/celery_app.py + app/services/storage.py)
+  # requires a Redis broker and an S3-compatible object store. Both are added
+  # here mirroring the staging compose topology (infra/docker-compose.staging.yml),
+  # scaled down to what a developer laptop needs. The API and the Celery worker
+  # themselves keep running as host processes (backend/.venv) — see
+  # scripts/run-worker-dev.sh and docs/development/LOCAL_SETUP.md.
+
+  redis:
+    # Same digest-pinned image as staging (infra/docker-compose.staging.yml).
+    image: redis@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.local}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      # Loopback only: the broker is internal infrastructure; the host-run
+      # worker connects through this published port (REDIS_URL override).
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  minio:
+    # Same digest-pinned image as staging (the RELEASE-quoted MinIO server).
+    image: ghcr.io/hishamabdo0100/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2
+    command:
+      - server
+      - /data
+      - --console-address
+      - ":9001"
+    ports:
+      # Loopback only: S3 API on 9000 (backend + uploads), console on 9001.
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env.local}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env.local}
+    volumes:
+      - minio_dev_data:/data
+    healthcheck:
+      # Same check staging uses — proves the S3 API answers, not just the port.
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  minio-init:
+    # One-shot bucket creation, mirroring the staging service of the same name
+    # (infra/docker-compose.staging.yml) and the deploy.sh sequencing
+    # (`--profile init up -d minio-init` + `wait` for its real exit code):
+    #   * gated behind the "init" compose profile so `up --wait` never waits on
+    #     a container that exits by design (staging W8 fix, kept verbatim);
+    #   * idempotent on every run: `mc mb --ignore-existing` never fails on an
+    #     existing bucket and never touches existing objects;
+    #   * no extra image dependency: uses the `mc` client shipped inside the
+    #     same MinIO image (the healthcheck above already proves it exists).
+    profiles: ["init"]
+    image: ghcr.io/hishamabdo0100/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:?Set S3_BUCKET_NAME in .env.local}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        if mc stat "local/$$S3_BUCKET_NAME" >/dev/null 2>&1; then
+          echo "bucket '$$S3_BUCKET_NAME' already exists"
+        else
+          mc mb "local/$$S3_BUCKET_NAME"
+          echo "bucket '$$S3_BUCKET_NAME' created"
+        fi
+
 volumes:
   postgres_data:
   keycloak_dev_data:
+  redis_dev_data:
+  minio_dev_data:

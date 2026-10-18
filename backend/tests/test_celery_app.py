@@ -86,3 +86,52 @@ def test_worker_process_init_is_noop_when_sentry_dsn_empty(monkeypatch):
 
 def test_worker_process_init_handler_registered_on_celery_app_import():
     assert worker_process_init.has_listeners(sender=celery_app.celery_app) is True
+
+
+# ---------------------------------------------------------------------------
+# Redis URL resolution (local environment batch)
+#
+# ``REDIS_URL`` is module-level state computed at import time, so both tests
+# below re-import the module through importlib with a controlled environment.
+# The default (no REDIS_URL) must keep the container-network hostname the
+# staging compose network provides; the override must be honored verbatim so
+# the host-run local worker can point at 127.0.0.1:6379.
+# ---------------------------------------------------------------------------
+
+import importlib  # noqa: E402
+
+
+def _reimport_celery_app():
+    import app.workers.celery_app as module
+
+    reloaded = importlib.reload(module)
+
+    # The module registers its Sentry handler via the global
+    # ``worker_process_init`` signal at import time; a reload adds a second
+    # listener. Disconnect the reloaded handler so the signal registry is
+    # left exactly as the original import made it.
+    worker_process_init.disconnect(reloaded._initialize_worker_process_sentry)
+
+    return reloaded
+
+
+def test_redis_url_default_keeps_container_network_hostname(monkeypatch):
+    monkeypatch.setenv("REDIS_PASSWORD", "default-pw")
+    monkeypatch.delenv("REDIS_URL", raising=False)
+
+    module = _reimport_celery_app()
+
+    assert module.REDIS_URL == "redis://:default-pw@redis:6379"
+    assert module.CELERY_BROKER_URL == "redis://:default-pw@redis:6379/0"
+    assert module.CELERY_RESULT_BACKEND == "redis://:default-pw@redis:6379/1"
+
+
+def test_redis_url_override_is_honored(monkeypatch):
+    monkeypatch.setenv("REDIS_PASSWORD", "default-pw")
+    monkeypatch.setenv("REDIS_URL", "redis://:default-pw@127.0.0.1:6379")
+
+    module = _reimport_celery_app()
+
+    assert module.REDIS_URL == "redis://:default-pw@127.0.0.1:6379"
+    assert module.CELERY_BROKER_URL == "redis://:default-pw@127.0.0.1:6379/0"
+    assert module.CELERY_RESULT_BACKEND == "redis://:default-pw@127.0.0.1:6379/1"

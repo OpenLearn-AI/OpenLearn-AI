@@ -9,7 +9,10 @@ set -euo pipefail
 #   Phase 1  Preflight (required tools)
 #   Phase 2  Repository state (repository detection, no git mutations)
 #   Phase 3  Environment files (created only if missing; never overwritten)
-#   Phase 4  Docker infrastructure (db + keycloak + one-shot bootstrap)
+#            + material-processing credentials (Redis/MinIO) synced into
+#              backend/.env from the generated .env.local values
+#   Phase 4  Docker infrastructure (db + redis + minio + one-shot minio-init
+#            bucket creation + keycloak + one-shot bootstrap)
 #   Phase 5  Backend virtualenv + dependencies
 #   Phase 6  Frontend dependencies (npm ci, lockfile-based)
 #   Phase 7  Alembic migrations
@@ -311,17 +314,136 @@ if ! grep -qE '^OPENLEARN_INSTRUCTOR_USER_PASSWORD=.+' .env.local; then
     ok "Appended a generated OPENLEARN_INSTRUCTOR_USER_PASSWORD to .env.local (dev-only; the bootstrap now also provisions the instructor demo account)."
 fi
 
+# ---------------------------------------------------------------------------
+# Material-processing credentials (local environment batch).
+#
+# The dev compose now also runs Redis (Celery broker) and MinIO (S3-compatible
+# storage) — both require credentials that live ONLY in the git-ignored
+# .env.local (compose reads it via --env-file). The same MinIO credentials
+# must also reach the backend process (backend/.env -> app/config.py) so the
+# presigned-URL path and the worker's object fetch authenticate as the same
+# MinIO user. Generated once with the append-if-missing pattern above;
+# existing values are never overwritten and never printed.
+# ---------------------------------------------------------------------------
+env_var_value() {
+    sed -n "s/^${1}=//p" "$2" | head -1 | tr -d '\r'
+}
+
+ensure_env_var() {
+    local file="$1" name="$2" value="$3" comment="$4"
+
+    if grep -qE "^${name}=.+" "${file}"; then
+        ok "${file} already defines ${name} — left untouched"
+    else
+        {
+            echo "${comment}"
+            echo "${name}=${value}"
+        } >> "${file}"
+
+        ok "Appended a generated ${name} to ${file} (never printed)."
+    fi
+}
+
+if [ ! -f .env.local ]; then
+    die ".env.local should exist at this point — the block above must have created it."
+fi
+
+ensure_env_var .env.local REDIS_PASSWORD \
+    "Redis-$( "${PYTHON_CMD[@]}" -c 'import secrets; print(secrets.token_hex(12))' )" \
+    "# Dev-only Redis (Celery broker) password for the local material-processing stack."
+
+ensure_env_var .env.local MINIO_ROOT_USER \
+    "openlearn-local-$( "${PYTHON_CMD[@]}" -c 'import secrets; print(secrets.token_hex(4))' )" \
+    "# Dev-only MinIO root user (doubles as the backend's S3 access key id)."
+
+ensure_env_var .env.local MINIO_ROOT_PASSWORD \
+    "Minio-$( "${PYTHON_CMD[@]}" -c 'import secrets; print(secrets.token_hex(12))' )" \
+    "# Dev-only MinIO root password (doubles as the backend's S3 secret key)."
+
+ensure_env_var .env.local S3_BUCKET_NAME \
+    "openlearn-materials" \
+    "# Bucket used by the local material-processing pipeline (created idempotently by the minio-init one-shot service)."
+
+# Backend side: backend/.env must carry the SAME MinIO credentials plus the
+# AI-provider selection the worker will use. Missing variables are appended
+# (credentials synced from .env.local; AI defaults from backend/.env.example).
+# A variable you set yourself is never overwritten; a MISMATCH between
+# backend/.env and .env.local is warned about instead of silently "fixed".
+for VAR_NAME in S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+    case "${VAR_NAME}" in
+        S3_ACCESS_KEY_ID)    LOCAL_VALUE="$(env_var_value MINIO_ROOT_USER .env.local)" ;;
+        S3_SECRET_ACCESS_KEY) LOCAL_VALUE="$(env_var_value MINIO_ROOT_PASSWORD .env.local)" ;;
+    esac
+
+    if [ -f backend/.env ] && grep -qE "^${VAR_NAME}=.+" backend/.env; then
+        BACKEND_VALUE="$(env_var_value "${VAR_NAME}" backend/.env)"
+        if [ "${BACKEND_VALUE}" != "${LOCAL_VALUE}" ]; then
+            warn "backend/.env defines ${VAR_NAME} with a DIFFERENT value than .env.local's MinIO credential — left untouched (uploads will fail until they match)."
+        else
+            ok "backend/.env ${VAR_NAME} matches the MinIO credential in .env.local"
+        fi
+    else
+        {
+            echo "# Synced from .env.local by scripts/setup-dev.sh (must match the MinIO service credentials)."
+            echo "${VAR_NAME}=${LOCAL_VALUE}"
+        } >> backend/.env
+        ok "Appended ${VAR_NAME} to backend/.env (synced from .env.local; value never printed)."
+    fi
+done
+
+if [ -f backend/.env ] && grep -qE '^S3_BUCKET_NAME=.+' backend/.env; then
+    LOCAL_BUCKET="$(env_var_value S3_BUCKET_NAME .env.local)"
+    BACKEND_BUCKET="$(env_var_value S3_BUCKET_NAME backend/.env)"
+    if [ "${BACKEND_BUCKET}" != "${LOCAL_BUCKET}" ]; then
+        warn "backend/.env S3_BUCKET_NAME (${BACKEND_BUCKET}) differs from .env.local (${LOCAL_BUCKET}) — left untouched."
+    else
+        ok "backend/.env S3_BUCKET_NAME matches .env.local"
+    fi
+else
+    {
+        echo "# Bucket used by the material pipeline (created by the minio-init one-shot compose service)."
+        echo "S3_BUCKET_NAME=$(env_var_value S3_BUCKET_NAME .env.local)"
+    } >> backend/.env
+    ok "Appended S3_BUCKET_NAME to backend/.env"
+fi
+
+# AI-provider selection for the local worker: honest real-path defaults
+# (postgres vectors, bge-m3 embeddings, mock OCR — see backend/.env.example
+# for exactly what each default does and does not exercise). Appended only
+# when missing; your own choices are never replaced.
+AI_DEFAULTS_BLOCK_MARK="# === AI providers (local material-processing path) — managed block, appended by scripts/setup-dev.sh ==="
+if [ -f backend/.env ] && grep -qF "${AI_DEFAULTS_BLOCK_MARK}" backend/.env; then
+    ok "backend/.env already carries the AI-provider block — left untouched"
+else
+    {
+        echo "${AI_DEFAULTS_BLOCK_MARK}"
+        echo "AI_OCR_PROVIDER=mock"
+        echo "AI_EMBEDDING_PROVIDER=bge-m3"
+        echo "AI_EMBEDDING_MODEL=BAAI/bge-m3"
+        echo "AI_EMBEDDING_DIMENSION=1024"
+        echo "AI_EMBEDDING_DEVICE=cpu"
+        echo "AI_VECTOR_DB_PROVIDER=postgres"
+    } >> backend/.env
+    ok "Appended the AI-provider block to backend/.env (mock OCR / bge-m3 embeddings / postgres vectors — see backend/.env.example for what this exercises)."
+fi
+
 # ===========================================================================
 # Phase 4 — Docker infrastructure
 # ===========================================================================
 COMPOSE=(docker compose --env-file .env.local -f "${COMPOSE_FILE}")
 
-log "Phase 4/8 — Docker infrastructure (db, keycloak, keycloak-bootstrap)"
+log "Phase 4/8 — Docker infrastructure (db, redis, minio, keycloak, keycloak-bootstrap)"
 
 log "Starting database container..."
 "${COMPOSE[@]}" up -d db
 
 ok "'db' service requested (pgvector/pgvector:pg16, localhost:5432)"
+
+log "Starting Redis and MinIO (material-processing dependencies)..."
+"${COMPOSE[@]}" up -d redis minio
+
+ok "'redis' service requested (digest-pinned redis, localhost:6379, loopback only)"
+ok "'minio' service requested (digest-pinned MinIO, S3 API localhost:9000, console localhost:9001, loopback only)"
 
 log "Waiting for PostgreSQL to accept connections (bounded: ${PG_WAIT_SECONDS}s)..."
 
@@ -348,6 +470,92 @@ if [ "${PG_READY}" != "true" ]; then
 fi
 
 ok "PostgreSQL is ready"
+
+# ---------------------------------------------------------------------------
+# Redis readiness
+#
+# Readiness = the broker answers an authenticated PING (password from
+# .env.local, passed via the REDISCLI_AUTH environment variable — never as a
+# command-line argument, so the secret stays out of process listings).
+# ---------------------------------------------------------------------------
+log "Waiting for Redis to answer an authenticated PING (bounded: ${PG_WAIT_SECONDS}s)..."
+
+REDIS_PASSWORD_VALUE="$(env_var_value REDIS_PASSWORD .env.local)"
+
+REDIS_READY=false
+
+for _ in $(seq 1 $((PG_WAIT_SECONDS / 2))); do
+
+    if "${COMPOSE[@]}" exec -T -e REDISCLI_AUTH="${REDIS_PASSWORD_VALUE}" redis \
+        redis-cli --no-auth-warning ping 2>/dev/null | grep -q PONG; then
+        REDIS_READY=true
+        break
+    fi
+
+    sleep 2
+done
+
+if [ "${REDIS_READY}" != "true" ]; then
+
+    warn "Redis did not become ready within ${PG_WAIT_SECONDS}s. Last log lines:"
+    "${COMPOSE[@]}" logs --tail 20 redis >&2 || true
+
+    die "Redis is not ready. Check the logs above (common cause: port 6379 already in use)."
+fi
+
+ok "Redis is ready (broker for the local Celery worker)"
+
+# ---------------------------------------------------------------------------
+# MinIO readiness + one-shot bucket creation
+#
+# Readiness mirrors the compose healthcheck (`mc ready local`). The bucket is
+# created by the minio-init one-shot service — the SAME mechanism staging uses
+# (infra/deploy.sh runs it via `--profile init up -d minio-init` and waits for
+# its real exit code; the "init" profile keeps `up --wait` from blocking on a
+# container whose job is to exit). `mc mb` on an existing bucket is reported,
+# not an error — the whole step is idempotent.
+# ---------------------------------------------------------------------------
+log "Waiting for MinIO S3 API to become ready (bounded: ${PG_WAIT_SECONDS}s)..."
+
+MINIO_READY=false
+
+for _ in $(seq 1 $((PG_WAIT_SECONDS / 2))); do
+
+    if "${COMPOSE[@]}" exec -T minio mc ready local >/dev/null 2>&1; then
+        MINIO_READY=true
+        break
+    fi
+
+    sleep 2
+done
+
+if [ "${MINIO_READY}" != "true" ]; then
+
+    warn "MinIO did not become ready within ${PG_WAIT_SECONDS}s. Last log lines:"
+    "${COMPOSE[@]}" logs --tail 20 minio >&2 || true
+
+    die "MinIO is not ready. Check the logs above (common cause: ports 9000/9001 already in use)."
+fi
+
+ok "MinIO is ready"
+
+log "Running minio-init (creates the materials bucket if missing — idempotent)..."
+
+MINIO_INIT_EXIT_CODE=0
+
+"${COMPOSE[@]}" --profile init up -d minio-init &&
+    "${COMPOSE[@]}" --profile init wait minio-init ||
+    MINIO_INIT_EXIT_CODE=$?
+
+if [ "${MINIO_INIT_EXIT_CODE}" -ne 0 ]; then
+
+    warn "minio-init exited with code ${MINIO_INIT_EXIT_CODE}."
+    "${COMPOSE[@]}" logs --tail 40 minio-init >&2 || true
+
+    die "Bucket creation failed. Fix the error above and re-run."
+fi
+
+ok "Materials bucket present: $(env_var_value S3_BUCKET_NAME .env.local) (the bucket name is configuration, not a secret)"
 
 # ---------------------------------------------------------------------------
 # Database creation
@@ -677,7 +885,7 @@ RUNNING_SERVICES="$(
         true
 )"
 
-for SVC in db keycloak; do
+for SVC in db redis minio keycloak; do
 
     if printf '%s\n' "${RUNNING_SERVICES}" | grep -qx "${SVC}"; then
         ok "Docker service '${SVC}' is running"
@@ -697,6 +905,26 @@ else
     die "PostgreSQL is no longer reachable."
 fi
 
+if "${COMPOSE[@]}" exec -T -e REDISCLI_AUTH="${REDIS_PASSWORD_VALUE}" redis \
+    redis-cli --no-auth-warning ping 2>/dev/null | grep -q PONG; then
+
+    ok "Redis reachable on localhost:6379 (authenticated PING ok)"
+
+else
+
+    die "Redis is no longer reachable."
+fi
+
+if "${COMPOSE[@]}" exec -T minio mc ready local >/dev/null 2>&1 &&
+    "${COMPOSE[@]}" exec -T minio mc stat "local/$(env_var_value S3_BUCKET_NAME .env.local)" >/dev/null 2>&1; then
+
+    ok "MinIO reachable on localhost:9000; bucket '$(env_var_value S3_BUCKET_NAME .env.local)' present"
+
+else
+
+    die "MinIO is not ready or the materials bucket is missing."
+fi
+
 if kc_realm_probe; then
     ok "Keycloak realm 'openlearn' reachable on localhost:8080"
 else
@@ -711,11 +939,11 @@ echo
 printf '%b\n' "${C_GREEN}${C_BOLD}Local development environment is ready.${C_RESET}"
 echo
 
-echo "Start the two dev servers yourself (this script intentionally does not"
-echo "run them in the foreground):"
+echo "Start the two dev servers and the processing worker yourself (this"
+echo "script intentionally does not run them in the foreground):"
 echo
 
-echo "  1) Backend (new terminal):"
+echo "  1) Backend API (new terminal):"
 echo "       cd backend"
 
 if [ -f "${VENV_DIR}/Scripts/python.exe" ]; then
@@ -728,17 +956,28 @@ echo "       uvicorn app.main:app --reload --port 8000"
 echo "       # verify: curl http://localhost:8000/health"
 echo
 
-echo "  2) Frontend (new terminal):"
+echo "  2) Processing worker (new terminal — required for material ingestion):"
+echo "       bash scripts/run-worker-dev.sh"
+echo "       # first material processed downloads the BGE-M3 model (~2 GB, once)"
+echo
+
+echo "  3) Frontend (new terminal):"
 echo "       cd frontend"
 echo "       npm run dev"
 echo "       # open: http://localhost:3000"
 echo
 
-echo "  3) Log in at http://localhost:3000/login as user 'testuser' (role student)"
+echo "  4) Log in at http://localhost:3000/login as user 'testuser' (role student)"
 echo "     or 'instructor' (role instructor — the demo course-owner account, Batch 2.1)."
 echo "     The passwords are the OPENLEARN_TEST_USER_PASSWORD and"
 echo "     OPENLEARN_INSTRUCTOR_USER_PASSWORD values in .env.local"
 echo "     (generated by this script on first run, or your own if you set it)."
+echo
+
+echo "  5) Verify the whole environment in one command:"
+echo "       bash scripts/verify-local-environment.sh"
+echo "     End-to-end ingestion smoke test with the two locked demo PDFs:"
+echo "       bash scripts/run-material-smoke-test.sh"
 echo
 
 echo "Full guide: docs/development/LOCAL_SETUP.md"

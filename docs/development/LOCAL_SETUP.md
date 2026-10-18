@@ -157,16 +157,24 @@ Safety properties (by design, verified in the script):
 
 ## 5. What stays running (Docker infrastructure)
 
-After the script exits, two containers keep running:
+After the script exits, four containers keep running:
 
 | Service | Image | Port | Details |
 |---------|-------|------|---------|
 | `db` | `pgvector/pgvector:pg16` | `5432` | User `openlearn`, password `devpassword`. Databases: `openlearn` (Compose-created initial database), `openlearn_dev` (application DB used by the backend), `keycloak` (Keycloak's own storage). Data persists in the `postgres_data` named volume |
 | `keycloak` | `quay.io/keycloak/keycloak:26.7.3` | `8080` | Development mode, realm `openlearn` imported from `infra/realm-export.json` on first start (already-existing realms are left as-is). Bootstrap admin: `admin`/`admin` at `http://localhost:8080/admin`. Data persists in the `keycloak_dev_data` named volume |
+| `redis` | digest-pinned `redis` (same image as staging) | `6379` | Celery broker for the material-processing worker; password-protected (`REDIS_PASSWORD` from `.env.local`). Published on 127.0.0.1 only. Data persists in the `redis_dev_data` named volume |
+| `minio` | digest-pinned MinIO (same image as staging) | `9000` (S3 API), `9001` (console) | S3-compatible object store for course materials; credentials are `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env.local` (the same values the backend uses as its S3 keys). Published on 127.0.0.1 only. Data persists in the `minio_dev_data` named volume |
 
 The third compose service, `keycloak-bootstrap`, is a **one-shot** job: it
 runs the script in `infra/dev/bootstrap-keycloak.sh` against the running
 Keycloak and exits. A non-zero exit code means it actually failed.
+
+The `minio-init` service is likewise a **one-shot** job (gated behind the
+`init` Compose profile, exactly like its staging counterpart): it creates the
+materials bucket named by `S3_BUCKET_NAME` and exits. It is idempotent —
+running it against an existing bucket reports "already exists" and changes
+nothing. The setup script runs it for you and waits for its real exit code.
 
 On the database-name question: the compose file only creates `openlearn`,
 but the backend (`backend/.env.example`, `app/config.py`, and CI) uses
@@ -198,7 +206,9 @@ curl http://localhost:8000/health
 
 The health endpoint is `GET /health` (defined in `backend/app/main.py`).
 Interactive API docs are at `http://localhost:8000/docs` while the server is
-running. No AI API keys are needed — all PAL providers default to `mock`.
+running. The API process itself needs no AI API keys — no API endpoint calls
+a provider. The material-processing worker (below) is where provider settings
+apply; see `backend/.env.example` for what each default exercises.
 
 ---
 
@@ -215,6 +225,57 @@ Then open `http://localhost:3000`. The frontend talks to the backend through
 `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`) and to Keycloak
 through `NEXT_PUBLIC_KEYCLOAK_URL` / `NEXT_PUBLIC_KEYCLOAK_REALM` /
 `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID`.
+
+---
+
+## 7b. Material processing workflow (local AI environment)
+
+The document-ingestion pipeline is real and runs entirely locally:
+upload → object storage (MinIO) → Celery task (Redis broker) → worker
+(Docling parse → chunk → embed → pgvector persist) → status
+`pending → processing → ready | failed`.
+
+1. Start the processing worker (new terminal; the same command and queues the
+   staging worker uses):
+
+   ```bash
+   bash scripts/run-worker-dev.sh
+   ```
+
+   With the default provider block (`backend/.env.example`, appended to an
+   existing `backend/.env` by the setup script), embeddings are real BGE-M3
+   vectors and chunk vectors are persisted to PostgreSQL; OCR is mock, which
+   is immaterial for born-digital PDFs (the targeted-OCR gate only fires on
+   PDFs with fewer than 50 extracted characters). The FIRST processed
+   material downloads the BGE-M3 model (~2 GB) into your local HuggingFace
+   cache; later runs reuse it.
+
+2. Verify the whole environment in one command:
+
+   ```bash
+   bash scripts/verify-local-environment.sh
+   ```
+
+   Checks services and readiness (db/redis/minio/keycloak), configuration
+   consistency, backend API health, worker readiness and task discovery,
+   database prerequisites (pgvector extension, `vector_records`, migrations
+   at head), storage connectivity through the application's real client
+   code path, and the demo accounts. Exit code 0 = environment ready.
+   It never creates or deletes anything.
+
+3. Exercise the actual end-to-end ingestion with the two locked demo PDFs:
+
+   ```bash
+   bash scripts/run-material-smoke-test.sh
+   ```
+
+   Logs in as the instructor through the real UI (Playwright), creates a
+   labeled course, uploads and registers each PDF through the supported API
+   flow, polls the real status lifecycle to `ready`, verifies persistence
+   (status endpoint, materials list, vector rows), checks the student's
+   owner-scoped view, and deletes exactly what it created. First run: pass a
+   larger `SMOKE_TIMEOUT` (e.g. `SMOKE_TIMEOUT=1800`) if the BGE-M3 model
+   still has to download.
 
 ---
 
@@ -314,18 +375,20 @@ docker compose --env-file .env.local -f infra/docker-compose.dev.yml start
 ```
 
 `docker compose down` also stops the containers and removes them plus the
-network, but **keeps** the named volumes — your data survives. Use it when
+network, but **keeps** the named volumes — your data survives (including the
+Redis append-only data and the stored material objects in MinIO). Use it when
 you want a clean slate of containers without losing data.
 
 `docker compose down -v` additionally **deletes the volumes**, destroying
-the databases, the Keycloak realm, users, and the test user. Do not use it
-as a routine cleanup step; the setup script never runs it. If you do use it
-deliberately, re-run `bash scripts/setup-dev.sh` afterwards to rebuild
-everything.
+the databases, the Keycloak realm, users, the test user, the broker data, and
+every stored material object. Do not use it as a routine cleanup step; the
+setup script never runs it. If you do use it deliberately, re-run
+`bash scripts/setup-dev.sh` afterwards to rebuild everything (the bucket is
+recreated idempotently by the `minio-init` one-shot service).
 
-Remember: the setup script does not start the backend or frontend dev
-servers, so "stopping the environment" only concerns the two Docker
-containers (plus your own dev-server terminals).
+Remember: the setup script does not start the backend, frontend, or the
+processing worker, so "stopping the environment" only concerns the four
+Docker containers (plus your own dev-server/worker terminals).
 
 ---
 

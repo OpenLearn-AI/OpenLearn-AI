@@ -11,8 +11,14 @@ if not REDIS_PASSWORD:
         "REDIS_PASSWORD environment variable is not set"
     )
 
-
-REDIS_URL = f"redis://:{REDIS_PASSWORD}@redis:6379"
+# Broker/result Redis location. Default keeps the container-network hostname
+# used by staging and by any compose-hosted worker. The REDIS_URL override
+# exists for the local development topology, where the API and the Celery
+# worker run as host processes (backend/.venv) and Redis is published by
+# infra/docker-compose.dev.yml on 127.0.0.1:6379 — a hostname the host
+# cannot resolve as "redis". Nothing sets REDIS_URL in staging, so the
+# composed default below is byte-identical to the previous hardcode.
+REDIS_URL = os.getenv("REDIS_URL") or f"redis://:{REDIS_PASSWORD}@redis:6379"
 
 CELERY_BROKER_URL = f"{REDIS_URL}/0"
 CELERY_RESULT_BACKEND = f"{REDIS_URL}/1"
