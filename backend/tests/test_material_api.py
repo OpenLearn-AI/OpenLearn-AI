@@ -1390,8 +1390,8 @@ async def test_api_full_flow_pending_then_ready_via_worker(
     assert result.scalar_one().status == PENDING_STATUS
 
     # ``app.workers.tasks.material_tasks`` imports ``app.workers.celery_app``,
-    # which requires ``REDIS_PASSWORD`` at import time. No broker is contacted.
-    monkeypatch.setenv("REDIS_PASSWORD", "test-redis-password")
+    # whose Redis settings are guaranteed resolvable by tests/conftest.py.
+    # No broker is contacted.
     from app.workers.tasks import material_tasks
 
     async def fake_process_content(*args, **kwargs):

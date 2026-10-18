@@ -18,6 +18,21 @@ from app.models.material import PENDING_STATUS, Material
 from app.models.user import User
 from app.services.auth import oidc as oidc_module
 
+# Celery-app importability for the whole suite (Redis settings contract).
+#
+# ``app.workers.celery_app`` resolves its Redis URL through
+# ``app.config.Settings.redis_connection_url`` and raises at import time when
+# neither ``REDIS_URL`` nor ``REDIS_PASSWORD`` can be resolved from the
+# process environment, backend/.env, or the repository-root .env.local. Tests
+# must never depend on developer-local env files, so give the shared settings
+# instance a deterministic dummy password before any test module imports the
+# Celery app (this conftest is imported first, and the guard below also makes
+# single-file runs like ``pytest tests/test_material_tasks.py`` work in a
+# clean checkout). Individual tests override these fields with
+# ``monkeypatch.setattr(settings, ...)``, which monkeypatch restores.
+if not settings.redis_url and not settings.redis_password:
+    settings.redis_password = "test-redis-password"
+
 
 @pytest_asyncio.fixture
 async def db_session():

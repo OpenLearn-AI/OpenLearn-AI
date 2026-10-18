@@ -326,7 +326,11 @@ fi
 # existing values are never overwritten and never printed.
 # ---------------------------------------------------------------------------
 env_var_value() {
-    sed -n "s/^${1}=//p" "$2" | head -1 | tr -d '\r'
+    # Last occurrence wins — python-dotenv/pydantic-settings resolve a
+    # duplicated key to its LAST value, so the reading side must match
+    # (pre-existing files written by older setup versions may contain
+    # duplicates; a warning about them is emitted below).
+    sed -n "s/^${1}=//p" "$2" | tail -1 | tr -d '\r'
 }
 
 ensure_env_var() {
@@ -334,6 +338,19 @@ ensure_env_var() {
 
     if grep -qE "^${name}=.+" "${file}"; then
         ok "${file} already defines ${name} — left untouched"
+    elif grep -qE "^${name}=" "${file}"; then
+        # Present but EMPTY: not a user-set value. Replace the line in place
+        # instead of appending — appending would create a duplicate key, and
+        # python-dotenv resolves duplicates to the LAST occurrence anyway.
+        # In-place keeps the file layout stable and is idempotent.
+        # sed -i.bak + cleanup: portable across GNU sed and BSD/macOS sed
+        # (plain `sed -i` fails on macOS).
+        if sed -i.bak "s|^${name}=.*$|${name}=${value}|" "${file}" && rm -f "${file}.bak"; then
+            ok "Filled the empty ${name} in ${file} in place (never printed)."
+        else
+            rm -f "${file}.bak"
+            warn "Could not fill the empty ${name} in ${file} in place — fix it manually to: ${name}=<generated value>"
+        fi
     else
         {
             echo "${comment}"
@@ -351,6 +368,18 @@ fi
 ensure_env_var .env.local REDIS_PASSWORD \
     "Redis-$( "${PYTHON_CMD[@]}" -c 'import secrets; print(secrets.token_hex(12))' )" \
     "# Dev-only Redis (Celery broker) password for the local material-processing stack."
+
+# REDIS_URL: full-URL override composed from the generated REDIS_PASSWORD so
+# the credential lives in exactly one place. The API process started with the
+# documented command (uvicorn app.main:app --reload --port 8000) resolves it
+# through the pydantic settings contract (app/config.py reads the root
+# .env.local), and scripts/run-worker-dev.sh honors it too — host-run
+# processes must reach the loopback-published dev Redis, not the
+# container-network "redis" hostname. An existing REDIS_URL (your own
+# override) is never replaced.
+ensure_env_var .env.local REDIS_URL \
+    "redis://:$(env_var_value REDIS_PASSWORD .env.local)@127.0.0.1:6379" \
+    "# Full Redis URL override consumed by the API (app/config.py) and the local worker (Redis published on loopback by the dev compose)."
 
 ensure_env_var .env.local MINIO_ROOT_USER \
     "openlearn-local-$( "${PYTHON_CMD[@]}" -c 'import secrets; print(secrets.token_hex(4))' )" \
@@ -382,6 +411,16 @@ for VAR_NAME in S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
         else
             ok "backend/.env ${VAR_NAME} matches the MinIO credential in .env.local"
         fi
+    elif [ -f backend/.env ] && grep -qE "^${VAR_NAME}=" backend/.env; then
+        # Present but EMPTY (e.g. copied from .env.example): fill in place so
+        # no duplicate key is created (older versions appended here, which is
+        # how duplicate S3 blocks appeared in backend/.env files).
+        if sed -i.bak "s|^${VAR_NAME}=.*$|${VAR_NAME}=${LOCAL_VALUE}|" backend/.env && rm -f backend/.env.bak; then
+            ok "Filled the empty ${VAR_NAME} in backend/.env in place (synced from .env.local; value never printed)."
+        else
+            rm -f backend/.env.bak
+            warn "Could not fill the empty ${VAR_NAME} in backend/.env in place — set it manually to the .env.local MinIO credential."
+        fi
     else
         {
             echo "# Synced from .env.local by scripts/setup-dev.sh (must match the MinIO service credentials)."
@@ -399,6 +438,9 @@ if [ -f backend/.env ] && grep -qE '^S3_BUCKET_NAME=.+' backend/.env; then
     else
         ok "backend/.env S3_BUCKET_NAME matches .env.local"
     fi
+elif [ -f backend/.env ] && grep -qE '^S3_BUCKET_NAME=' backend/.env; then
+    sed -i.bak "s|^S3_BUCKET_NAME=.*$|S3_BUCKET_NAME=$(env_var_value S3_BUCKET_NAME .env.local)|" backend/.env && rm -f backend/.env.bak
+    ok "Filled the empty S3_BUCKET_NAME in backend/.env in place"
 else
     {
         echo "# Bucket used by the material pipeline (created by the minio-init one-shot compose service)."
@@ -409,11 +451,16 @@ fi
 
 # AI-provider selection for the local worker: honest real-path defaults
 # (postgres vectors, bge-m3 embeddings, mock OCR — see backend/.env.example
-# for exactly what each default does and does not exercise). Appended only
-# when missing; your own choices are never replaced.
+# for exactly what each default does and does not exercise). The block is
+# appended ONLY when neither the managed mark NOR the AI keys are already
+# present: a backend/.env created from .env.example already carries the same
+# defaults (without the mark), and older versions appended a second block in
+# that case — the duplicate-AI-block bug. Your own choices are never replaced.
 AI_DEFAULTS_BLOCK_MARK="# === AI providers (local material-processing path) — managed block, appended by scripts/setup-dev.sh ==="
 if [ -f backend/.env ] && grep -qF "${AI_DEFAULTS_BLOCK_MARK}" backend/.env; then
     ok "backend/.env already carries the AI-provider block — left untouched"
+elif [ -f backend/.env ] && grep -qE '^AI_VECTOR_DB_PROVIDER=.+' backend/.env; then
+    ok "backend/.env already defines the AI-provider keys (e.g. from .env.example) — managed block not appended"
 else
     {
         echo "${AI_DEFAULTS_BLOCK_MARK}"
@@ -426,6 +473,22 @@ else
     } >> backend/.env
     ok "Appended the AI-provider block to backend/.env (mock OCR / bge-m3 embeddings / postgres vectors — see backend/.env.example for what this exercises)."
 fi
+
+# Duplicate-key detection (report-only, no silent rewrite): older setup
+# versions could append duplicate keys (empty S3/AI lines from the
+# .env.example copy followed by appended real values). python-dotenv resolves
+# a duplicated key to its LAST occurrence, so the effective configuration is
+# well-defined — but duplicates are confusing and are reported here so they
+# can be removed manually (keep the LAST occurrence of each key).
+report_duplicate_keys() { # <file>
+    local file="$1" dups
+    dups="$(awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/{c[$1]++} END{for(k in c) if(c[k]>1) print k}' "${file}" | sort | tr '\n' ' ')"
+    if [ -n "${dups}" ]; then
+        warn "${file} defines the following keys MORE THAN ONCE: ${dups}— the LAST occurrence wins at runtime; consider removing the earlier duplicates (this is report-only; the script never rewrites your values)."
+    fi
+}
+report_duplicate_keys "${REPO_ROOT}/.env.local"
+report_duplicate_keys "${REPO_ROOT}/backend/.env"
 
 # ===========================================================================
 # Phase 4 — Docker infrastructure

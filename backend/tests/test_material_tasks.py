@@ -1,11 +1,12 @@
 """Week 7 Celery worker task tests.
 
 ``app.workers.tasks.material_tasks`` imports ``app.workers.celery_app``, which
-raises at import time unless ``REDIS_PASSWORD`` is set, so the environment
-variable is configured *before* the module import below. Importing the module
-only registers the task; no Redis broker is contacted. ``_handle_material`` is
-exercised directly to avoid ``asyncio.run`` (which cannot nest) and any broker
-dispatch.
+resolves Redis configuration through the shared pydantic settings contract
+(app.config.Settings) and raises at import time when it cannot be resolved;
+tests/conftest.py guarantees a usable settings instance before any test
+module imports it. Importing the module only registers the task; no Redis
+broker is contacted. ``_handle_material`` is exercised directly to avoid
+``asyncio.run`` (which cannot nest) and any broker dispatch.
 
 The worker owns no module-level session machinery. Each ``process_material``
 invocation builds a task-local async engine and session factory inside its own
@@ -38,12 +39,9 @@ vector/``ready`` commit and the rollback-discards-vectors failure path.
 """
 
 import asyncio
-import os
 import uuid
 from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
-
-os.environ.setdefault("REDIS_PASSWORD", "test-redis-password")
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402

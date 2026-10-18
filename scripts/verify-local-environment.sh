@@ -123,10 +123,12 @@ fail_soft() { # fatal preflight failure — cannot continue meaningfully
   printf 'FATAL: %s\n' "$*" >&2
   exit 2
 }
-# env file reader: prints the first VALUE of NAME in FILE (never secret names'
-# values into the log; callers must not echo secrets)
+# env file reader: prints the LAST VALUE of NAME in FILE — python-dotenv and
+# pydantic-settings resolve a duplicated key to its LAST occurrence, so the
+# reading side must match (never secret values into the log; callers must not
+# echo secrets)
 env_var_value() { # <name> <file>
-  sed -n "s/^${1}=//p" "$2" | head -1 | tr -d '\r'
+  sed -n "s/^${1}=//p" "$2" | tail -1 | tr -d '\r'
 }
 # mask credentials in a URL before any logging
 mask_url() { # <url-with-:user:pass@>
@@ -204,9 +206,6 @@ done
 
 REDIS_PASSWORD_VALUE="$(env_var_value REDIS_PASSWORD "$REPO_DIR/.env.local")"
 [ -n "$REDIS_PASSWORD_VALUE" ] || record "config.redis-password" "FAIL" "REDIS_PASSWORD missing/empty in .env.local — run scripts/setup-dev.sh (re-checked in section 3)"
-
-REDIS_HOST="127.0.0.1"
-REDIS_PORT="6379"
 if printf '%s\n' "$PS_OUT" | grep -qx "redis"; then
   if "${DC[@]}" exec -T -e REDISCLI_AUTH="${REDIS_PASSWORD_VALUE}" redis \
       redis-cli --no-auth-warning ping 2>/dev/null | grep -q PONG; then
@@ -306,9 +305,19 @@ else
 fi
 
 if [ -n "$REDIS_PASSWORD_VALUE" ]; then
-  record "config.redis-password" "PASS" "REDIS_PASSWORD present in .env.local (required by app/workers/celery_app.py)"
+  record "config.redis-password" "PASS" "REDIS_PASSWORD present in .env.local (resolved through app/config.py: process env > backend/.env > .env.local)"
 else
-  record "config.redis-password" "FAIL" "REDIS_PASSWORD missing in .env.local — the Celery app refuses to import without it"
+  record "config.redis-password" "FAIL" "REDIS_PASSWORD missing in .env.local — the Celery app refuses to import without it (or an explicit REDIS_URL)"
+fi
+
+# REDIS_URL must be resolvable for host-run processes: without it the API
+# composes redis://:<pw>@redis:6379, and the container-network hostname
+# "redis" is unresolvable from the host — the documented API start would fail
+# on the first material registration.
+if [ -n "$REDIS_URL_FILE_VALUE" ]; then
+  record "config.redis-url" "PASS" "REDIS_URL set in .env.local — host-run API/worker reach the loopback-published Redis ($(mask_url "$REDIS_URL_FILE_VALUE"))"
+else
+  record "config.redis-url" "FAIL" "REDIS_URL not set in .env.local — the API would target the unresolvable container hostname 'redis'; run scripts/setup-dev.sh (appends it from the generated REDIS_PASSWORD; never overwrites your own)"
 fi
 
 # ----------------------------- 4. backend API -------------------------------
@@ -316,7 +325,7 @@ section "4. Backend API (host uvicorn)"
 BE_STARTED_BY_VERIFIER=0
 BE_OK=0
 for i in 1 2 3 4; do
-  if curl -sf --max-time 5 "$API_URL/health" >/dev/null 2>&1; then BE_OK=1; break; fi
+  if curl --noproxy '*' -sf --max-time 5 "$API_URL/health" >/dev/null 2>&1; then BE_OK=1; break; fi
   sleep 2
 done
 if [ "$BE_OK" != "1" ] && [ "$START_BACKEND" = "1" ]; then
@@ -324,7 +333,7 @@ if [ "$BE_OK" != "1" ] && [ "$START_BACKEND" = "1" ]; then
   ( cd "$REPO_DIR/backend" && nohup .venv/bin/uvicorn app.main:app --port 8000 \
       > "$EVIDENCE_DIR/backend.log" 2>&1 & echo $! > "$EVIDENCE_DIR/backend.pid" )
   BE_STARTED_BY_VERIFIER=1
-  for i in $(seq 1 24); do curl -sf --max-time 5 "$API_URL/health" >/dev/null 2>&1 && BE_OK=1 && break; sleep 5; done
+  for i in $(seq 1 24); do curl --noproxy '*' -sf --max-time 5 "$API_URL/health" >/dev/null 2>&1 && BE_OK=1 && break; sleep 5; done
 fi
 if [ "$BE_OK" = "1" ]; then
   record "api.health" "PASS" "GET $API_URL/health OK"
@@ -348,7 +357,11 @@ echo "probe REDIS_URL: $(mask_url "${WORKER_ENV[${#WORKER_ENV[@]}-1]}")"
 
 BROKER_OUT="$( cd "$REPO_DIR/backend" && "${WORKER_ENV[@]}" "$VENV_BIN/python" - <<'PYEOF' 2>&1
 from kombu import Connection
-from app.workers.celery_app import CELERY_BROKER_URL
+try:
+    from app.workers.celery_app import CELERY_BROKER_URL
+except RuntimeError as e:
+    print(f"CONFIG_UNRESOLVABLE: {e}")
+    raise SystemExit(0)
 try:
     with Connection(CELERY_BROKER_URL) as conn:
         conn.ensure_connection(max_retries=2, timeout=5)
@@ -360,6 +373,8 @@ PYEOF
 echo "$BROKER_OUT" | tail -2 | tee "$EVIDENCE_DIR/broker-probe.txt" >/dev/null
 if printf '%s' "$BROKER_OUT" | grep -q "BROKER_REACHABLE"; then
   record "worker.broker" "PASS" "broker reachable through the app's own CELERY_BROKER_URL (kombu ensure_connection)"
+elif printf '%s' "$BROKER_OUT" | grep -q "CONFIG_UNRESOLVABLE"; then
+  record "worker.broker" "FAIL" "the Celery app failed to import: Redis configuration unresolvable (precedence: process env > backend/.env > .env.local) — run scripts/setup-dev.sh; full message in evidence/broker-probe.txt"
 else
   record "worker.broker" "FAIL" "broker NOT reachable from the app config — is the redis service up and REDIS_PASSWORD correct?"
 fi
@@ -513,7 +528,10 @@ else
   for U in testuser instructor; do
     ROW="$("${DC[@]}" exec -T keycloak /opt/keycloak/bin/kcadm.sh get users -r openlearn \
         -q "username=$U" --fields username --format csv --noquotes 2>/dev/null | tr -d '\r')"
-    if [ "$ROW" = "$U" ]; then
+    # Line-exact tolerant match: kcadm csv output may or may not carry a
+    # header row depending on version/flags; matching the username as a whole
+    # line is robust to both without weakening the existence assertion.
+    if printf '%s\n' "$ROW" | grep -qx "$U"; then
       echo "  account present: $U"
     else
       ACCT_MISSING="$ACCT_MISSING $U"

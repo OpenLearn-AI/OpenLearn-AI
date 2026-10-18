@@ -1,24 +1,29 @@
-import os
-
 from celery import Celery
 from celery.signals import worker_process_init
 
+from app.config import settings
 
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
-if not REDIS_PASSWORD:
-    raise RuntimeError(
-        "REDIS_PASSWORD environment variable is not set"
-    )
-
-# Broker/result Redis location. Default keeps the container-network hostname
-# used by staging and by any compose-hosted worker. The REDIS_URL override
-# exists for the local development topology, where the API and the Celery
-# worker run as host processes (backend/.venv) and Redis is published by
-# infra/docker-compose.dev.yml on 127.0.0.1:6379 — a hostname the host
-# cannot resolve as "redis". Nothing sets REDIS_URL in staging, so the
-# composed default below is byte-identical to the previous hardcode.
-REDIS_URL = os.getenv("REDIS_URL") or f"redis://:{REDIS_PASSWORD}@redis:6379"
+# Broker/result Redis location, resolved through the shared pydantic settings
+# contract (app.config.Settings.redis_connection_url) so that the API process
+# started with the documented command (uvicorn app.main:app --reload --port
+# 8000) and the worker started via scripts/run-worker-dev.sh receive
+# COMPATIBLE settings:
+#
+#   precedence: process environment (REDIS_URL / REDIS_PASSWORD)
+#             > backend/.env
+#             > repository-root .env.local (written by scripts/setup-dev.sh)
+#             > Settings defaults
+#
+# The default host stays "redis" — the container-network hostname used by
+# staging and by any compose-hosted worker. Local host processes point at the
+# loopback-published Redis via REDIS_URL, which scripts/setup-dev.sh writes
+# into .env.local and scripts/run-worker-dev.sh also exports. Nothing sets
+# these variables in staging, so the composed default below is byte-identical
+# to the previous hardcode. An unresolvable configuration raises immediately
+# with an actionable diagnostic (see app/config.py) — it must never fall back
+# to an unauthenticated default.
+REDIS_URL = settings.redis_connection_url
 
 CELERY_BROKER_URL = f"{REDIS_URL}/0"
 CELERY_RESULT_BACKEND = f"{REDIS_URL}/1"

@@ -1,8 +1,9 @@
 """Focused unit tests for the Week 7 Celery publisher.
 
 The publisher must dispatch by task name via ``send_task`` with JSON-safe
-string arguments, and must not import ``app.workers.celery_app`` (which raises
-unless ``REDIS_PASSWORD`` is set) at module import time.
+string arguments, and must not import ``app.workers.celery_app`` (which
+resolves Redis settings through app.config.Settings and raises when they
+cannot be resolved) at module import time.
 """
 
 import threading

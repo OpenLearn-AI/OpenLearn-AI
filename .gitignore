@@ -26,3 +26,11 @@ Thumbs.db
 # OCR benchmark datasets — stored locally, not committed
 experiments/OCR/ocr-benchmark/data/raw/misraj/
 experiments/OCR/ocr-benchmark/data/raw/bce-arabic-v1/
+
+# Environment-file backups and editor snapshots — REAL credentials were
+# committed this way once (backend/.env.before-expiration-fix,
+# backend/.env.pre-s3-dedupe-20261018-071203, removed in the reliability
+# batch). Never commit anything matching this class; legitimate templates are
+# the *.env.example files, which stay tracked.
+*.env.*
+!*.env.example

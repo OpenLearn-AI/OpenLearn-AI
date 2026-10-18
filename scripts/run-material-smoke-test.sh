@@ -72,13 +72,17 @@
 #
 # Usage:
 #   bash scripts/run-material-smoke-test.sh
+#   bash scripts/run-material-smoke-test.sh --keep-resources   # same as KEEP_RESOURCES=1
 #
 # Exit codes: 0 = every REQUIRED smoke criterion PASS; 1 = at least one
-# REQUIRED criterion FAIL/BLOCKED; 2 = preflight fatal.
+# REQUIRED criterion FAIL/BLOCKED (including an incomplete run — both fixtures
+# must record an explicit PASS); 2 = preflight fatal; 64 = unknown CLI option.
 #
 # Secret hygiene: tokens are written to 0600 files in the evidence directory
 # and deleted on exit; passwords and presigned URLs are NEVER printed; the
-# evidence log stores status codes and identifiers only.
+# evidence log stores status codes and identifiers only (response bodies
+# embedded in result notes are scrubbed of presigned-URL signatures; the raw
+# bodies stay in the 0700 evidence directory).
 # =============================================================================
 
 set -uo pipefail
@@ -89,8 +93,18 @@ REPO_DIR="${REPO_DIR:-$SCRIPT_DIR/..}"
 REPO_DIR="$(cd "${REPO_DIR}" && pwd)"
 if [ ! -f "$REPO_DIR/frontend/package.json" ] || [ ! -f "$REPO_DIR/scripts/setup-dev.sh" ]; then
   echo "ERROR: could not locate the OpenLearn-AI repository at $REPO_DIR." >&2
-  exit 66
+  echo "       Run from the repo, or set REPO_DIR=/path/to/OpenLearn-AI." >&2
+  exit 2
 fi
+
+# CLI flags (documented in the header). KEEP_RESOURCES is also honored as an
+# environment variable for backwards compatibility.
+for arg in "$@"; do
+  case "$arg" in
+    --keep-resources) KEEP_RESOURCES=1 ;;
+    *) echo "unknown option: $arg (supported: --keep-resources)" >&2; exit 64 ;;
+  esac
+done
 
 API_URL="${API_URL:-http://localhost:8000}"
 WEB_URL="${WEB_URL:-http://localhost:3000}"
@@ -119,20 +133,23 @@ CREATED_IDS="$EVIDENCE_DIR/created-ids.txt"              # per-run resource ids
 record() { printf 'SMOKERESULT|%s|%s|%s\n' "$1" "$2" "$3" | tee -a "$RESULTS"; }
 section() { printf '\n== %s ==\n' "$*"; }
 fail_soft() { printf 'FATAL: %s\n' "$*" >&2; exit 2; }
-env_var_value() { sed -n "s/^${1}=//p" "$2" | head -1 | tr -d '\r'; }
+env_var_value() { sed -n "s/^${1}=//p" "$2" | tail -1 | tr -d '\r'; } # last wins, matching dotenv
 mask_url() { sed -E 's#://[^@/]*@#://<credentials>@#' <<< "$1"; }
-json_field() { # <json-file> <python-expr over json.load(...)>
-  python3 -c "
+# scrub query-string signature parameters before a response body is embedded
+# in a result note (bodies can contain presigned URLs; the raw body remains
+# available as a 0600-dir evidence file)
+scrub_presigned() { sed -E 's/X-Amz-[A-Za-z-]+=[^&"]*/X-Amz-<masked>/g' <<< "$1"; }
+json_field() { # <json-file> <top-level-key> -> value ('' when missing/invalid)
+  python3 -c '
 import json, sys
 try:
     data = json.load(open(sys.argv[1]))
-    expr = sys.argv[2]
-    val = eval(expr, {'data': data})
-    print(val if val is not None else '')
+    val = data.get(sys.argv[2]) if isinstance(data, dict) else None
+    print(val if val is not None else "")
 except Exception as e:
-    print(f'__PARSE_ERROR__ {e}', file=sys.stderr)
-    print('')
-" "$1" "$2" 2>/dev/null
+    print(f"__PARSE_ERROR__ {e}", file=sys.stderr)
+    print("")
+' "$1" "$2" 2>/dev/null
 }
 
 exec > >(tee -a "$LOG") 2>&1
@@ -148,14 +165,43 @@ evidence: $EVIDENCE_DIR
 ==============================================================================
 EOF
 
-cleanup() {
+MAIN_CLEANUP_DONE=0
+RESOURCES_PROCESSED=0
+
+# Fallback resource cleanup for interrupted runs (kill/Ctrl-C/crash AFTER
+# resources were created but BEFORE the normal cleanup block ran). Best-effort
+# by nature: it records one BLOCKED line so the results file never lies about
+# an incomplete run, and never runs when the normal cleanup already did.
+trap_cleanup_exit() {
+  local rc=$?
   rm -f "$INSTRUCTOR_TOKEN_FILE" "$STUDENT_TOKEN_FILE"
-  # stop the frontend if THIS run started it
   if [ -f "$EVIDENCE_DIR/frontend.pid" ]; then
     kill "$(cat "$EVIDENCE_DIR/frontend.pid")" >/dev/null 2>&1 || true
   fi
+  if [ "$MAIN_CLEANUP_DONE" != "1" ] && [ "$KEEP_RESOURCES" != "1" ] \
+     && [ "$RESOURCES_PROCESSED" = "1" ] && [ -s "$CREATED_IDS" ]; then
+    echo "" | tee -a "$LOG"
+    echo "INTERRUPTED before the normal cleanup — best-effort fallback deletion follows" | tee -a "$LOG"
+    while read -r FID KIND RID; do
+      case "$KIND" in
+        material)
+          "${DC[@]}" exec -T db psql -U openlearn -d openlearn_dev -tAc \
+            "DELETE FROM vector_records WHERE id LIKE '${RID}:%';" >/dev/null 2>&1 || true ;;
+        course)
+          if [ -s "$INSTRUCTOR_TOKEN_FILE" ]; then
+            curl --noproxy '*' -sS -o /dev/null -X DELETE \
+              -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
+              "$API_URL/v1/courses/$RID" >/dev/null 2>&1 || true
+          fi ;;
+        s3_key)
+          "${DC[@]}" exec -T minio mc rm --force "local/$(env_var_value S3_BUCKET_NAME "$REPO_DIR/.env.local")/$RID" >/dev/null 2>&1 || true ;;
+      esac
+    done < "$CREATED_IDS"
+    record "cleanup.trap" "BLOCKED" "run interrupted before the normal cleanup; best-effort fallback deletion executed — verify remaining resources with the ids in created-ids.txt"
+  fi
+  exit "$rc"
 }
-trap cleanup EXIT
+trap trap_cleanup_exit EXIT
 
 # ----------------------------- 0. preflight ---------------------------------
 section "0. Preflight"
@@ -185,7 +231,7 @@ for SVC in db redis minio keycloak; do
 done
 echo "docker services: db redis minio keycloak all running"
 
-curl -sf --max-time 5 "$API_URL/health" >/dev/null 2>&1 \
+curl -sf --noproxy '*' --max-time 5 "$API_URL/health" >/dev/null 2>&1 \
   || fail_soft "backend not answering on $API_URL — start it: cd backend && source .venv/bin/activate && uvicorn app.main:app --reload --port 8000"
 echo "backend API: /health OK"
 
@@ -214,11 +260,11 @@ echo "Ensuring Playwright chromium is installed (idempotent) ..."
 ( cd "$REPO_DIR/frontend" && npx playwright install chromium >/dev/null 2>&1 ) \
   || echo "WARN: playwright install failed — token capture may fail"
 
-if ! curl -sf --max-time 5 -o /dev/null "$WEB_URL" 2>&1; then
+if ! curl -sf --noproxy '*' --max-time 5 -o /dev/null "$WEB_URL" 2>&1; then
   echo "Frontend not running on :3000 — starting (next dev) ..."
   ( cd "$REPO_DIR/frontend" && nohup npm run dev > "$EVIDENCE_DIR/frontend.log" 2>&1 & echo $! > "$EVIDENCE_DIR/frontend.pid" )
   FE_OK=0
-  for i in $(seq 1 36); do curl -sf --max-time 5 -o /dev/null "$WEB_URL" && FE_OK=1 && break; sleep 5; done
+  for i in $(seq 1 36); do curl -sf --noproxy '*' --max-time 5 -o /dev/null "$WEB_URL" && FE_OK=1 && break; sleep 5; done
   [ "$FE_OK" = "1" ] || fail_soft "frontend never answered on :3000 — see $EVIDENCE_DIR/frontend.log"
 else
   echo "Frontend already running on :3000 — reusing it."
@@ -264,11 +310,34 @@ const fs = require('fs');
 })().catch((e) => { console.error('CAPTURE_ERROR', e.message); process.exit(2); });
 CAPTURE_SCRIPT_START
 
-capture_token() { # <username> <password> <outfile> -> 0 on success
-  ( cd "$REPO_DIR/frontend" \
-    && NODE_PATH="$REPO_DIR/frontend/node_modules" \
-       WEB_URL="$WEB_URL" SMOKE_USERNAME="$1" SMOKE_PASSWORD="$2" TOKEN_FILE="$3" \
-       node "$EVIDENCE_DIR/capture-token.cjs" ) >/dev/null 2>&1
+capture_token() { # <username> <password> <token-file> -> 0 on success
+  local user="$1" pass="$2" tokenfile="$3" rc
+  local caplog="${tokenfile%.token}-capture.log"
+  # Node output (CAPTURE_ERROR / NO_TOKEN_CAPTURED / Playwright diagnostics —
+  # no tokens, which go only to the token file) is captured to the evidence
+  # dir so capture failures are diagnosable; the previously discarded output
+  # made student-capture failures impossible to triage.
+  # Wall-clock guard: `timeout` when available (GNU coreutils; optional on
+  # macOS) so a hung browser cannot wedge the whole run — Playwright's own
+  # 30 s wait bounds it otherwise.
+  if command -v timeout >/dev/null 2>&1; then
+    ( cd "$REPO_DIR/frontend" \
+      && NODE_PATH="$REPO_DIR/frontend/node_modules" \
+         WEB_URL="$WEB_URL" SMOKE_USERNAME="$user" SMOKE_PASSWORD="$pass" TOKEN_FILE="$tokenfile" \
+         timeout 90 node "$EVIDENCE_DIR/capture-token.cjs" ) > "$caplog" 2>&1
+    rc=$?
+  else
+    ( cd "$REPO_DIR/frontend" \
+      && NODE_PATH="$REPO_DIR/frontend/node_modules" \
+         WEB_URL="$WEB_URL" SMOKE_USERNAME="$user" SMOKE_PASSWORD="$pass" TOKEN_FILE="$tokenfile" \
+         node "$EVIDENCE_DIR/capture-token.cjs" ) > "$caplog" 2>&1
+    rc=$?
+  fi
+  if [ "$rc" != "0" ]; then
+    echo "capture diagnostics for '${user}' (exit $rc) -> ${caplog}:"
+    tail -5 "$caplog" | sed 's/^/    /'
+  fi
+  return "$rc"
 }
 
 echo "Capturing instructor token (user 'instructor') ..."
@@ -276,7 +345,7 @@ if capture_token instructor "$INSTRUCTOR_PASSWORD" "$INSTRUCTOR_TOKEN_FILE" \
    && [ -s "$INSTRUCTOR_TOKEN_FILE" ]; then
   echo "instructor token: captured (never printed)"
 else
-  record "auth.instructor-token" "BLOCKED" "instructor token capture failed — check the bootstrap (scripts/setup-dev.sh) and the login flow; see evidence log"
+  record "auth.instructor-token" "BLOCKED" "instructor token capture failed (exit code + diagnostics in evidence/instructor-capture.log) — check the bootstrap (scripts/setup-dev.sh) and the login flow"
 fi
 
 echo "Capturing student token (user 'testuser') ..."
@@ -284,7 +353,7 @@ if capture_token testuser "$STUDENT_PASSWORD" "$STUDENT_TOKEN_FILE" \
    && [ -s "$STUDENT_TOKEN_FILE" ]; then
   echo "student token: captured (never printed)"
 else
-  record "auth.student-token" "BLOCKED" "student token capture failed — check the bootstrap and the login flow"
+  record "auth.student-token" "BLOCKED" "student token capture failed (exit code + diagnostics in evidence/student-capture.log) — typical causes: testuser not bootstrapped, password drift vs OPENLEARN_TEST_USER_PASSWORD, a pending Keycloak required-action interstitial, or role-dependent post-login redirect; check evidence/student-capture.log"
 fi
 
 INSTRUCTOR_OK=0; STUDENT_OK=0
@@ -306,42 +375,47 @@ run_fixture() {
   echo "---- fixture: $id ($label) ----"
 
   # 3a. create the instructor-owned course (API-enforced ownership)
-  out="$(curl -sS -X POST "$API_URL/v1/courses" \
+  # Payload built with json.dumps — titles/labels are never shell-interpolated
+  # into JSON (quoting a label with a double-quote must not corrupt the body).
+  COURSE_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"title": sys.argv[1], "description": sys.argv[2]}))' "[local-smoke $TS] $id — $label" "Temporary smoke-test course created and deleted by scripts/run-material-smoke-test.sh")"
+  out="$(curl -sS --noproxy '*' -X POST "$API_URL/v1/courses" \
     -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
     -H "Content-Type: application/json" \
-    -d "{\"title\":\"[local-smoke $TS] $id — $label\",\"description\":\"Temporary smoke-test course created and deleted by scripts/run-material-smoke-test.sh\"}" \
+    -d "$COURSE_PAYLOAD" \
     -w "\n%{http_code}")"
   http_code="$(printf '%s' "$out" | tail -1)"
   body="$EVIDENCE_DIR/$id-course.json"
   printf '%s' "$out" | sed '$d' > "$body"
   echo "POST /v1/courses -> HTTP $http_code"
   if [ "$http_code" != "201" ] && [ "$http_code" != "200" ]; then
-    record "$id" "FAIL" "course create HTTP $http_code (instructor role/ownership?) — $body"
+    record "$id" "FAIL" "course create HTTP $http_code (instructor role/ownership?) — $(scrub_presigned "$(cat "$body")")"
     return 1
   fi
-  course_id="$(json_field "$body" "data['id']")"
+  course_id="$(json_field "$body" "id")"
   if [ -z "$course_id" ]; then
     record "$id" "FAIL" "course create returned no id"
     return 1
   fi
   echo "$id course $course_id" >> "$CREATED_IDS"
+  RESOURCES_PROCESSED=1
   echo "course_id: $course_id"
 
   # 3b. presigned upload URL
-  out="$(curl -sS -X POST "$API_URL/v1/courses/$course_id/materials/upload-url" \
+  UPLOAD_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"filename": sys.argv[1], "title": sys.argv[2]}))' "$(basename "$pdf")" "$label")"
+  out="$(curl -sS --noproxy '*' -X POST "$API_URL/v1/courses/$course_id/materials/upload-url" \
     -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
     -H "Content-Type: application/json" \
-    -d "{\"filename\":\"$(basename "$pdf")\",\"title\":\"$label\"}" \
+    -d "$UPLOAD_PAYLOAD" \
     -w "\n%{http_code}")"
   http_code="$(printf '%s' "$out" | tail -1)"
   body="$EVIDENCE_DIR/$id-uploadurl.json"
   printf '%s' "$out" | sed '$d' > "$body"
   echo "POST upload-url -> HTTP $http_code"
   if [ "$http_code" != "200" ]; then
-    record "$id" "FAIL" "upload-url HTTP $http_code (storage client? check backend logs) — $body"
+    record "$id" "FAIL" "upload-url HTTP $http_code (storage client? check backend logs) — $(scrub_presigned "$(cat "$body")")"
     return 1
   fi
-  s3_key="$(json_field "$body" "data['s3_key']")"
+  s3_key="$(json_field "$body" "s3_key")"
   if [ -z "$s3_key" ]; then
     record "$id" "FAIL" "upload-url returned no s3_key"
     return 1
@@ -349,8 +423,9 @@ run_fixture() {
   echo "$id s3_key $s3_key" >> "$CREATED_IDS"
   echo "s3_key: $s3_key (presigned URL captured to evidence, never printed)"
 
-  # 3c. upload the bytes to the presigned URL (PUT; the URL is not logged)
-  http_code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 120 -X PUT \
+  # 3c. upload the bytes to the presigned URL (PUT; the URL is not logged;
+  # --noproxy: the presigned URL targets the loopback-published MinIO)
+  http_code="$(curl -sS --noproxy '*' -o /dev/null -w "%{http_code}" --max-time 120 -X PUT \
     --upload-file "$pdf" "$(python3 -c "import json;print(json.load(open('$body'))['upload_url'])")" 2>/dev/null)" \
     || http_code="000"
   echo "PUT object -> HTTP $http_code"
@@ -360,21 +435,22 @@ run_fixture() {
   fi
 
   # 3d. register the material -> 202 {material_id, job_id}
-  out="$(curl -sS -X POST "$API_URL/v1/courses/$course_id/materials" \
+  REGISTER_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"s3_key": sys.argv[1], "title": sys.argv[2]}))' "$s3_key" "$label")"
+  out="$(curl -sS --noproxy '*' -X POST "$API_URL/v1/courses/$course_id/materials" \
     -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
     -H "Content-Type: application/json" \
-    -d "{\"s3_key\":\"$s3_key\",\"title\":\"$label\"}" \
+    -d "$REGISTER_PAYLOAD" \
     -w "\n%{http_code}")"
   http_code="$(printf '%s' "$out" | tail -1)"
   body="$EVIDENCE_DIR/$id-register.json"
   printf '%s' "$out" | sed '$d' > "$body"
   echo "POST materials (register) -> HTTP $http_code"
   if [ "$http_code" != "202" ]; then
-    record "$id" "FAIL" "register HTTP $http_code (expected 202; broker publish failure leaves a committed pending row) — $body"
+    record "$id" "FAIL" "register HTTP $http_code (expected 202; broker publish failure leaves a committed pending row) — $(scrub_presigned "$(cat "$body")")"
     return 1
   fi
-  material_id="$(json_field "$body" "data['material_id']")"
-  job_id="$(json_field "$body" "data['job_id']")"
+  material_id="$(json_field "$body" "material_id")"
+  job_id="$(json_field "$body" "job_id")"
   if [ -z "$material_id" ]; then
     record "$id" "FAIL" "register returned no material_id"
     return 1
@@ -382,25 +458,26 @@ run_fixture() {
   echo "$id material $material_id" >> "$CREATED_IDS"
   echo "material_id: $material_id   job_id (correlation only): $job_id"
 
-  # 3e. poll the real lifecycle
+  # 3e. poll the real lifecycle (SECONDS is bash's real-time counter — the
+  # previous counter credited only POLL_INTERVAL per iteration while each
+  # curl could add up to 10 s, overshooting the configured timeout)
   echo "Polling GET /v1/materials/$material_id/status (bounded: ${SMOKE_TIMEOUT}s, interval ${POLL_INTERVAL}s) ..."
   final_status=""
   PREV_ST=""
   ST=""
-  ELAPSED=0
-  while [ "$ELAPSED" -lt "$SMOKE_TIMEOUT" ]; do
-    ST="$(curl -sS --max-time 10 -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
+  SECONDS=0
+  while [ "$SECONDS" -lt "$SMOKE_TIMEOUT" ]; do
+    ST="$(curl -sS --noproxy '*' --max-time 10 -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
         "$API_URL/v1/materials/$material_id/status" 2>/dev/null \
         | python3 -c "import json,sys; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || true)"
     if [ -n "$ST" ] && [ "$ST" != "$PREV_ST" ]; then
-      echo "  [t=${ELAPSED}s] status: $ST"
+      echo "  [t=${SECONDS}s] status: $ST"
       PREV_ST="$ST"
     fi
     case "$ST" in
       ready|failed) final_status="$ST"; break ;;
     esac
     sleep "$POLL_INTERVAL"
-    ELAPSED=$((ELAPSED + POLL_INTERVAL))
   done
 
   if [ -z "$final_status" ]; then
@@ -413,7 +490,7 @@ run_fixture() {
   fi
 
   # 3f. persistence: status endpoint + course materials list
-  LIST_CODE="$(curl -sS -o "$EVIDENCE_DIR/$id-list.json" -w "%{http_code}" \
+  LIST_CODE="$(curl -sS --noproxy '*' -o "$EVIDENCE_DIR/$id-list.json" -w "%{http_code}" \
     -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
     "$API_URL/v1/courses/$course_id/materials" 2>/dev/null)"
   LIST_HAS="$(python3 -c "
@@ -457,10 +534,10 @@ run_fixture ar_born "$AR_PDF" "Arabic born-digital" || AR_RC=$?
 section "4. Data and authorization sanity (regression check only — PR #79 behavior is accepted, not redesigned)"
 if [ "$STUDENT_OK" = "1" ]; then
   # 4a. the smoke course must be INVISIBLE in the student's owner-scoped list
-  ST_LIST_CODE="$(curl -sS -o "$EVIDENCE_DIR/student-courses.json" -w "%{http_code}" \
+  ST_LIST_CODE="$(curl -sS --noproxy '*' -o "$EVIDENCE_DIR/student-courses.json" -w "%{http_code}" \
     -H "Authorization: Bearer $(cat "$STUDENT_TOKEN_FILE")" \
     "$API_URL/v1/courses" 2>/dev/null)"
-  EN_COURSE_ID="$(json_field "$EVIDENCE_DIR/en_born-course.json" "data['id']")"
+  EN_COURSE_ID="$(json_field "$EVIDENCE_DIR/en_born-course.json" "id")"
   LEAK="$(python3 -c "
 import json
 try:
@@ -468,7 +545,9 @@ try:
     print('LEAK' if any(c.get('id') == '$EN_COURSE_ID' for c in items) else 'ISOLATED')
 except Exception:
     print('PARSE_ERROR')" 2>/dev/null)"
-  if [ "$ST_LIST_CODE" = "200" ] && [ "$LEAK" = "ISOLATED" ]; then
+  if [ "$ST_LIST_CODE" = "401" ]; then
+    record "sanity.student-isolation" "BLOCKED" "student token rejected (HTTP 401 — expired or invalid by the time of this late check) — re-run to exercise the isolation check; NOT an ownership result"
+  elif [ "$ST_LIST_CODE" = "200" ] && [ "$LEAK" = "ISOLATED" ]; then
     echo "student course list: owner-scoped (smoke course absent) — HTTP $ST_LIST_CODE"
     record "sanity.student-isolation" "PASS" "GET /v1/courses (student) = 200 and the instructor's smoke course is absent (owner scoping intact)"
   else
@@ -476,13 +555,15 @@ except Exception:
   fi
 
   # 4b. the student must NOT read the instructor's material status
-  EN_MATERIAL_ID="$(json_field "$EVIDENCE_DIR/en_born-register.json" "data['material_id']")"
-  ST_STATUS_CODE="$(curl -sS -o /dev/null -w "%{http_code}" \
+  EN_MATERIAL_ID="$(json_field "$EVIDENCE_DIR/en_born-register.json" "material_id")"
+  ST_STATUS_CODE="$(curl -sS --noproxy '*' -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer $(cat "$STUDENT_TOKEN_FILE")" \
     "$API_URL/v1/materials/$EN_MATERIAL_ID/status" 2>/dev/null)"
   if [ "$ST_STATUS_CODE" = "403" ] || [ "$ST_STATUS_CODE" = "404" ]; then
     echo "student material-status read -> HTTP $ST_STATUS_CODE (ownership enforced)"
     record "sanity.status-ownership" "PASS" "GET /v1/materials/{id}/status (student) -> HTTP $ST_STATUS_CODE — course-ownership enforcement intact"
+  elif [ "$ST_STATUS_CODE" = "401" ]; then
+    record "sanity.status-ownership" "BLOCKED" "student token rejected (HTTP 401 — expired or invalid) — ownership NOT exercised; re-run"
   else
     record "sanity.status-ownership" "FAIL" "student material-status read -> HTTP $ST_STATUS_CODE (expected 403/404) — ownership regression"
   fi
@@ -494,41 +575,91 @@ fi
 # ----------------------------- 5. cleanup -----------------------------------
 section "5. Cleanup (only THIS run's recorded resources; skipped with --keep-resources / KEEP_RESOURCES=1)"
 if [ "$KEEP_RESOURCES" = "1" ]; then
-  echo "KEEP_RESOURCES=1 — resources left in place; ids in $CREATED_IDS"
-  record "cleanup" "SKIPPED" "explicitly skipped — smoke resources remain (ids recorded)"
+  echo "KEEP_RESOURCES=1 (--keep-resources) — resources left in place; ids in $CREATED_IDS"
+  record "cleanup.skipped" "SKIPPED" "explicitly skipped — smoke resources remain (ids recorded)"
 else
-  # 5a. FK-less vector rows first (exact recorded material ids, guarded)
-  V_DEL=0
+  # 5a. FK-less vector rows first (exact recorded material ids), then VERIFY
+  # the deletion instead of only counting attempted statements
+  V_FAIL=0
   while read -r FID KIND RID; do
     [ "$KIND" = "material" ] || continue
-    "$DC[@]" exec -T db psql -U openlearn -d openlearn_dev -tAc \
-      "DELETE FROM vector_records WHERE id LIKE '${RID}:%';" >/dev/null 2>&1 && V_DEL=$((V_DEL+1))
+    "${DC[@]}" exec -T db psql -U openlearn -d openlearn_dev -tAc \
+      "DELETE FROM vector_records WHERE id LIKE '${RID}:%';" >/dev/null 2>&1
+    V_LEFT="$("${DC[@]}" exec -T db psql -U openlearn -d openlearn_dev -tAc \
+      "SELECT count(*) FROM vector_records WHERE id LIKE '${RID}:%';" 2>/dev/null | tr -d '[:space:]')"
+    [ "$V_LEFT" = "0" ] || { echo "WARN: vector rows for $RID still present after delete"; V_FAIL=$((V_FAIL+1)); }
   done < "$CREATED_IDS"
-  echo "vector rows deleted for $V_DEL material(s) (FK-less table — explicit first)"
+  if [ "$V_FAIL" = "0" ]; then
+    record "cleanup.vectors" "PASS" "vector rows deleted and verified absent for every recorded material id"
+  else
+    record "cleanup.vectors" "FAIL" "$V_FAIL material id(s) still have vector_records rows after delete — inspect the db"
+  fi
 
-  # 5b. course via the API (cascades the material row; API-enforced ownership)
+  # 5b. course via the API (cascades the material row; API-enforced ownership).
+  # A failed DELETE is a real cleanup failure and is recorded as one.
+  C_FAIL=0
   C_DEL=0
   while read -r FID KIND RID; do
     [ "$KIND" = "course" ] || continue
-    CODE="$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+    CODE="$(curl -sS --noproxy '*' -o /dev/null -w "%{http_code}" -X DELETE \
       -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
       "$API_URL/v1/courses/$RID" 2>/dev/null)"
     echo "DELETE course $RID -> HTTP $CODE"
-    [ "$CODE" = "200" ] || [ "$CODE" = "204" ] && C_DEL=$((C_DEL+1))
-  done < "$CREATED_IDS"
-
-  # 5c. S3 objects by exact recorded key, deletion verified (B7/B8 discipline)
-  MINIO_BUCKET="$(env_var_value S3_BUCKET_NAME "$REPO_DIR/.env.local")"
-  while read -r FID KIND RID; do
-    [ "$KIND" = "s3_key" ] || continue
-    "$DC[@]" exec -T minio mc rm --force "local/$MINIO_BUCKET/$RID" >/dev/null 2>&1
-    if "${DC[@]}" exec -T minio mc stat "local/$MINIO_BUCKET/$RID" >/dev/null 2>&1; then
-      echo "WARN: object $RID still present after rm"
-      record "cleanup" "FAIL" "S3 object $RID survived deletion — inspect the minio service"
+    if [ "$CODE" = "200" ] || [ "$CODE" = "204" ]; then
+      C_DEL=$((C_DEL+1))
     else
-      echo "S3 object deleted + verified gone: $RID"
+      C_FAIL=$((C_FAIL+1))
     fi
   done < "$CREATED_IDS"
+  if [ "$C_FAIL" = "0" ] && [ "$C_DEL" -gt 0 ]; then
+    record "cleanup.course" "PASS" "course DELETE accepted for all $C_DEL recorded course id(s)"
+  elif [ "$C_DEL" = "0" ] && [ "$C_FAIL" = "0" ]; then
+    record "cleanup.course" "SKIPPED" "no course ids were recorded (run failed before course creation)"
+  else
+    record "cleanup.course" "FAIL" "$C_FAIL course DELETE(s) failed (non-200/204) — course (and its pending material rows) may remain; ids in created-ids.txt"
+  fi
+
+  # 5c. S3 objects by exact recorded key, deletion VERIFIED with a health
+  # precondition. Two committed-baseline defects are fixed here:
+  #   (1) the unbraced "$DC[@]" expansion made `mc rm` a guaranteed
+  #       command-not-found (objects were never deleted while `mc stat`, which
+  #       WAS braced, then reported the survivor); all compose invocations in
+  #       this script now use "${DC[@]}";
+  #   (2) `mc stat` failure was treated as proof of absence, so a broken
+  #       mc/alias produced "verified gone" while objects leaked. The bucket
+  #       listing precondition below runs through the SAME alias before any
+  #       deletion, making a broken mc unable to masquerade as verification.
+  MINIO_BUCKET="$(env_var_value S3_BUCKET_NAME "$REPO_DIR/.env.local")"
+  S3_COUNT=0; S3_FAIL=0; S3_UNKNOWN=0
+  if ! "${DC[@]}" exec -T minio mc ls "local/$MINIO_BUCKET" >/dev/null 2>&1; then
+    echo "WARN: mc cannot list local/$MINIO_BUCKET — deletion cannot be verified"
+    S3_UNKNOWN=$((S3_UNKNOWN+1))
+  else
+    while read -r FID KIND RID; do
+      [ "$KIND" = "s3_key" ] || continue
+      S3_COUNT=$((S3_COUNT+1))
+      if ! "${DC[@]}" exec -T minio mc rm --force "local/$MINIO_BUCKET/$RID" >/dev/null 2>&1; then
+        echo "WARN: mc rm failed for $RID (exit non-zero)"
+        S3_FAIL=$((S3_FAIL+1))
+      fi
+      # independent authenticated absence check through the same verified client
+      if "${DC[@]}" exec -T minio mc stat "local/$MINIO_BUCKET/$RID" >/dev/null 2>&1; then
+        echo "WARN: object $RID still present after rm"
+        S3_FAIL=$((S3_FAIL+1))
+      else
+        echo "S3 object deleted + verified gone: $RID"
+      fi
+    done < "$CREATED_IDS"
+  fi
+  if [ "$S3_UNKNOWN" != "0" ]; then
+    record "cleanup.s3" "FAIL" "S3 cleanup verification IMPOSSIBLE (mc/alias/endpoint broken — bucket listing failed); object state UNKNOWN, do not treat cleanup as done; keys in created-ids.txt"
+  elif [ "$S3_FAIL" = "0" ] && [ "$S3_COUNT" -gt 0 ]; then
+    record "cleanup.s3" "PASS" "$S3_COUNT S3 object(s) deleted and independently verified absent (mc ls precondition + per-key stat)"
+  elif [ "$S3_COUNT" = "0" ] && [ "$S3_FAIL" = "0" ]; then
+    record "cleanup.s3" "SKIPPED" "no s3 keys were recorded (run failed before presign)"
+  else
+    record "cleanup.s3" "FAIL" "$S3_FAIL of $S3_COUNT S3 object(s) survived deletion or failed to delete — inspect the minio service; keys in created-ids.txt"
+  fi
 
   # 5d. verify the material rows are gone (course delete cascades them)
   LEFT=0
@@ -539,21 +670,37 @@ else
     [ "$N" = "0" ] || LEFT=$((LEFT+1))
   done < "$CREATED_IDS"
   if [ "$LEFT" = "0" ]; then
-    record "cleanup" "PASS" "all smoke resources deleted and verified (vectors, course+material cascade, S3 objects)"
+    record "cleanup.db" "PASS" "material rows verified absent after the course cascade"
   else
-    record "cleanup" "FAIL" "$LEFT material row(s) survived the course cascade — inspect the db"
+    record "cleanup.db" "FAIL" "$LEFT material row(s) survived the course cascade — inspect the db"
   fi
+  MAIN_CLEANUP_DONE=1
 fi
 
 # ----------------------------- 6. verdict -----------------------------------
 section "6. Verdict"
 echo "Results (SMOKERESULT|fixture|status|note):"
 FAILED=0
+RESULT_COUNT=0
 while IFS= read -r line; do
   echo "  $line"
+  RESULT_COUNT=$((RESULT_COUNT+1))
   state="$(printf '%s' "$line" | awk -F'|' '{print $3}')"
   case "$state" in FAIL|BLOCKED) FAILED=1 ;; esac
 done < "$RESULTS"
+# Aggregation hardening: an empty or fixture-less results file must never
+# yield a PASS (e.g. an interrupted run whose per-fixture FAIL lines were
+# never written). Both locked fixtures must have an explicit PASS line.
+if [ "$RESULT_COUNT" = "0" ]; then
+  echo "  (results file empty — no checks recorded; treating as incomplete run)"
+  FAILED=1
+fi
+for FIX in en_born ar_born; do
+  if ! grep -q "^SMOKERESULT|${FIX}|PASS|" "$RESULTS"; then
+    echo "  MISSING: no PASS recorded for ${FIX} — the run is incomplete, not a pass"
+    FAILED=1
+  fi
+done
 echo
 echo "embedding provider configured for the worker: $EMB_PROVIDER"
 echo "(bge-m3 = real vectors; mock = placeholder vectors — a mocked stage, not a real-embeddings pass)"
