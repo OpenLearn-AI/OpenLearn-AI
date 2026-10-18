@@ -117,6 +117,26 @@ AR_PDF="$REPO_DIR/experiments/OCR/ocr-benchmark/data/raw/custom/2. Arabic born-d
 
 DC=(docker compose --env-file "$REPO_DIR/.env.local" -f "$REPO_DIR/infra/docker-compose.dev.yml")
 
+# Run `mc` inside the running MinIO service container through an alias that is
+# re-established from that container's OWN runtime credentials on every call.
+# The MinIO image ships a default `local` alias with EMPTY credentials, so an
+# unauthenticated `mc ready local` passes while every authenticated operation
+# (`stat`/`ls`/`rm`) is denied; any alias written into the container's writable
+# layer is also lost on recreation. Re-deriving the alias from
+# $MINIO_ROOT_USER/$MINIO_ROOT_PASSWORD each call keeps cleanup working after
+# recreation without hardcoding or printing any secret. Cleanup stays
+# fail-closed: callers must treat a non-zero status as "not verified deleted",
+# never as proof of absence. Exit status: 3 = alias could not be established.
+minio_mc() {
+  # `< /dev/null`: `docker compose exec` otherwise forwards the caller's stdin,
+  # which silently drained the `while read ... < created-ids.txt` cleanup loops
+  # after their first iteration (only the first resource was ever processed).
+  "${DC[@]}" exec -T minio sh -c '
+    mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 || exit 3
+    exec mc "$@"
+  ' mc "$@" < /dev/null
+}
+
 TS="$(date +%Y%m%d-%H%M%S)"
 EVIDENCE_DIR="${EVIDENCE_DIR:-$REPO_DIR/../openlearn-material-smoke-evidence/run-$TS}"
 mkdir -p "$EVIDENCE_DIR"
@@ -182,7 +202,7 @@ trap_cleanup_exit() {
      && [ "$RESOURCES_PROCESSED" = "1" ] && [ -s "$CREATED_IDS" ]; then
     echo "" | tee -a "$LOG"
     echo "INTERRUPTED before the normal cleanup — best-effort fallback deletion follows" | tee -a "$LOG"
-    while read -r FID KIND RID; do
+    while read -r FID KIND RID <&3; do
       case "$KIND" in
         material)
           "${DC[@]}" exec -T db psql -U openlearn -d openlearn_dev -tAc \
@@ -194,9 +214,9 @@ trap_cleanup_exit() {
               "$API_URL/v1/courses/$RID" >/dev/null 2>&1 || true
           fi ;;
         s3_key)
-          "${DC[@]}" exec -T minio mc rm --force "local/$(env_var_value S3_BUCKET_NAME "$REPO_DIR/.env.local")/$RID" >/dev/null 2>&1 || true ;;
+          minio_mc rm --force "local/$(env_var_value S3_BUCKET_NAME "$REPO_DIR/.env.local")/$RID" >/dev/null 2>&1 || true ;;
       esac
-    done < "$CREATED_IDS"
+    done 3< "$CREATED_IDS"
     record "cleanup.trap" "BLOCKED" "run interrupted before the normal cleanup; best-effort fallback deletion executed — verify remaining resources with the ids in created-ids.txt"
   fi
   exit "$rc"
@@ -295,9 +315,16 @@ const fs = require('fs');
         }
       } catch (_) {}
     });
-    await page.goto(base + '/login');
+    // Wait for the app's initial Keycloak `check-sso` (prompt=none) silent
+    // probe to settle before clicking. The LoginForm's first `getKeycloak()`
+    // call runs `init({ onLoad: 'check-sso' })`; if the button is clicked
+    // while that silent round-trip is still in flight, its redirect clobbers
+    // the interactive-login navigation and the page lands back on
+    // `/login#error=login_required`, so `#username` never appears. Waiting for
+    // `networkidle` (no auth weakening, same real PKCE flow) removes the race.
+    await page.goto(base + '/login', { waitUntil: 'networkidle', timeout: 20000 });
     await page.getByRole('button', { name: /sign in with openlearn ai/i }).click();
-    await page.waitForSelector('#username', { state: 'visible' });
+    await page.waitForSelector('#username', { state: 'visible', timeout: 20000 });
     await page.fill('#username', user);
     await page.fill('#password', pass);
     await page.click('#kc-login');
@@ -581,14 +608,14 @@ else
   # 5a. FK-less vector rows first (exact recorded material ids), then VERIFY
   # the deletion instead of only counting attempted statements
   V_FAIL=0
-  while read -r FID KIND RID; do
+  while read -r FID KIND RID <&3; do
     [ "$KIND" = "material" ] || continue
     "${DC[@]}" exec -T db psql -U openlearn -d openlearn_dev -tAc \
       "DELETE FROM vector_records WHERE id LIKE '${RID}:%';" >/dev/null 2>&1
     V_LEFT="$("${DC[@]}" exec -T db psql -U openlearn -d openlearn_dev -tAc \
       "SELECT count(*) FROM vector_records WHERE id LIKE '${RID}:%';" 2>/dev/null | tr -d '[:space:]')"
     [ "$V_LEFT" = "0" ] || { echo "WARN: vector rows for $RID still present after delete"; V_FAIL=$((V_FAIL+1)); }
-  done < "$CREATED_IDS"
+  done 3< "$CREATED_IDS"
   if [ "$V_FAIL" = "0" ]; then
     record "cleanup.vectors" "PASS" "vector rows deleted and verified absent for every recorded material id"
   else
@@ -599,7 +626,7 @@ else
   # A failed DELETE is a real cleanup failure and is recorded as one.
   C_FAIL=0
   C_DEL=0
-  while read -r FID KIND RID; do
+  while read -r FID KIND RID <&3; do
     [ "$KIND" = "course" ] || continue
     CODE="$(curl -sS --noproxy '*' -o /dev/null -w "%{http_code}" -X DELETE \
       -H "Authorization: Bearer $(cat "$INSTRUCTOR_TOKEN_FILE")" \
@@ -610,7 +637,7 @@ else
     else
       C_FAIL=$((C_FAIL+1))
     fi
-  done < "$CREATED_IDS"
+  done 3< "$CREATED_IDS"
   if [ "$C_FAIL" = "0" ] && [ "$C_DEL" -gt 0 ]; then
     record "cleanup.course" "PASS" "course DELETE accepted for all $C_DEL recorded course id(s)"
   elif [ "$C_DEL" = "0" ] && [ "$C_FAIL" = "0" ]; then
@@ -620,36 +647,43 @@ else
   fi
 
   # 5c. S3 objects by exact recorded key, deletion VERIFIED with a health
-  # precondition. Two committed-baseline defects are fixed here:
+  # precondition. Committed-baseline defects fixed here:
   #   (1) the unbraced "$DC[@]" expansion made `mc rm` a guaranteed
   #       command-not-found (objects were never deleted while `mc stat`, which
-  #       WAS braced, then reported the survivor); all compose invocations in
-  #       this script now use "${DC[@]}";
+  #       WAS braced, then reported the survivor); the bug is gone and all
+  #       compose/minio calls now use the authenticated minio_mc helper;
   #   (2) `mc stat` failure was treated as proof of absence, so a broken
   #       mc/alias produced "verified gone" while objects leaked. The bucket
-  #       listing precondition below runs through the SAME alias before any
-  #       deletion, making a broken mc unable to masquerade as verification.
+  #       listing precondition below runs through the SAME authenticated alias
+  #       before any deletion, and the per-key absence check distinguishes a
+  #       genuine "not found" from an alias/client failure (exit 3), which is
+  #       counted as UNKNOWN — never as a successful deletion.
   MINIO_BUCKET="$(env_var_value S3_BUCKET_NAME "$REPO_DIR/.env.local")"
   S3_COUNT=0; S3_FAIL=0; S3_UNKNOWN=0
-  if ! "${DC[@]}" exec -T minio mc ls "local/$MINIO_BUCKET" >/dev/null 2>&1; then
+  if ! minio_mc ls "local/$MINIO_BUCKET" >/dev/null 2>&1; then
     echo "WARN: mc cannot list local/$MINIO_BUCKET — deletion cannot be verified"
     S3_UNKNOWN=$((S3_UNKNOWN+1))
   else
-    while read -r FID KIND RID; do
+    while read -r FID KIND RID <&3; do
       [ "$KIND" = "s3_key" ] || continue
       S3_COUNT=$((S3_COUNT+1))
-      if ! "${DC[@]}" exec -T minio mc rm --force "local/$MINIO_BUCKET/$RID" >/dev/null 2>&1; then
+      if ! minio_mc rm --force "local/$MINIO_BUCKET/$RID" >/dev/null 2>&1; then
         echo "WARN: mc rm failed for $RID (exit non-zero)"
         S3_FAIL=$((S3_FAIL+1))
       fi
       # independent authenticated absence check through the same verified client
-      if "${DC[@]}" exec -T minio mc stat "local/$MINIO_BUCKET/$RID" >/dev/null 2>&1; then
+      minio_mc stat "local/$MINIO_BUCKET/$RID" >/dev/null 2>&1
+      stat_rc=$?
+      if [ "$stat_rc" -eq 0 ]; then
         echo "WARN: object $RID still present after rm"
         S3_FAIL=$((S3_FAIL+1))
+      elif [ "$stat_rc" -eq 3 ]; then
+        echo "WARN: alias/client unavailable while verifying $RID — absence NOT proven"
+        S3_UNKNOWN=$((S3_UNKNOWN+1))
       else
         echo "S3 object deleted + verified gone: $RID"
       fi
-    done < "$CREATED_IDS"
+    done 3< "$CREATED_IDS"
   fi
   if [ "$S3_UNKNOWN" != "0" ]; then
     record "cleanup.s3" "FAIL" "S3 cleanup verification IMPOSSIBLE (mc/alias/endpoint broken — bucket listing failed); object state UNKNOWN, do not treat cleanup as done; keys in created-ids.txt"
@@ -663,12 +697,12 @@ else
 
   # 5d. verify the material rows are gone (course delete cascades them)
   LEFT=0
-  while read -r FID KIND RID; do
+  while read -r FID KIND RID <&3; do
     [ "$KIND" = "material" ] || continue
     N="$("${DC[@]}" exec -T db psql -U openlearn -d openlearn_dev -tAc \
       "SELECT count(*) FROM materials WHERE id='${RID}';" 2>/dev/null | tr -d '[:space:]')"
     [ "$N" = "0" ] || LEFT=$((LEFT+1))
-  done < "$CREATED_IDS"
+  done 3< "$CREATED_IDS"
   if [ "$LEFT" = "0" ]; then
     record "cleanup.db" "PASS" "material rows verified absent after the course cascade"
   else

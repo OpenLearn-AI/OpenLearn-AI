@@ -34,6 +34,28 @@ if not settings.redis_url and not settings.redis_password:
     settings.redis_password = "test-redis-password"
 
 
+# PAL provider selection is likewise developer-configurable: backend/.env
+# legitimately points the real pipeline at bge-m3 / postgres (and could point
+# OCR/reasoning at gemini/litellm). Tests that assert the factory's
+# "defaults to settings" selection or that drive the wired pipeline with the
+# mock store must not depend on that local choice. Requesting this fixture
+# selects the mock providers explicitly through the SAME settings contract the
+# factory reads (monkeypatch restores the original values afterwards), so the
+# production defaults and application behavior are untouched.
+_MOCK_AI_PROVIDER_FIELDS = (
+    "ai_ocr_provider",
+    "ai_embedding_provider",
+    "ai_reasoning_provider",
+    "ai_vector_db_provider",
+)
+
+
+@pytest.fixture
+def mock_ai_providers(monkeypatch: pytest.MonkeyPatch) -> None:
+    for field in _MOCK_AI_PROVIDER_FIELDS:
+        monkeypatch.setattr(settings, field, "mock")
+
+
 @pytest_asyncio.fixture
 async def db_session():
     engine = create_async_engine(

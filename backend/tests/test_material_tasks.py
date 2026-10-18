@@ -842,15 +842,16 @@ _PAGE_TEXT = (
 
 @pytest.mark.asyncio
 async def test_wired_pipeline_fetch_ingest_persist_marks_ready_and_cleans_temp(
-    db_session, worker_session_factory, monkeypatch
+    db_session, worker_session_factory, monkeypatch, mock_ai_providers
 ):
     """B5 wired happy path: fetch → Stage 1 → Stage 2 → ``ready``.
 
-    Uses the real seam, real factory (settings default to the mock vector
-    store), real chunker, and the real lifecycle; only the storage fetch and
-    Docling conversion are faked. Asserts argument propagation into the
-    fetch, material-scoped vector identities, the live session passed to the
-    provider, and deterministic temp-directory cleanup after success.
+    Uses the real seam, real factory (``mock_ai_providers`` explicitly selects
+    the mock store, independent of any developer env file), real chunker, and
+    the real lifecycle; only the storage fetch and Docling conversion are
+    faked. Asserts argument propagation into the fetch, material-scoped vector
+    identities, the live session passed to the provider, and deterministic
+    temp-directory cleanup after success.
     """
     owner = await _create_user(
         db_session, "b5-wired-ready-owner", "b5-wired-ready@example.com"

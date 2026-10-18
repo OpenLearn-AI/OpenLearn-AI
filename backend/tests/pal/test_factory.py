@@ -14,7 +14,7 @@ from app.pal.providers.reasoning.mock_provider import MockReasoningProvider
 from app.pal.providers.vector_db.mock_provider import MockVectorDBProvider
 
 
-def test_get_ocr_provider_defaults_to_config():
+def test_get_ocr_provider_defaults_to_config(mock_ai_providers):
     provider = get_ocr_provider()
     assert isinstance(provider, MockOCRProvider)
 
@@ -24,7 +24,7 @@ def test_get_ocr_provider_explicit():
     assert isinstance(provider, MockOCRProvider)
 
 
-def test_get_embedding_provider_defaults_to_config():
+def test_get_embedding_provider_defaults_to_config(mock_ai_providers):
     provider = get_embedding_provider()
     assert isinstance(provider, MockEmbeddingProvider)
     assert provider.dimension == settings.ai_embedding_dimension
@@ -36,7 +36,7 @@ def test_get_embedding_provider_explicit():
     assert provider.dimension == 768
 
 
-def test_get_reasoning_provider_defaults_to_config():
+def test_get_reasoning_provider_defaults_to_config(mock_ai_providers):
     provider = get_reasoning_provider()
     assert isinstance(provider, MockReasoningProvider)
 
@@ -46,7 +46,7 @@ def test_get_reasoning_provider_explicit():
     assert isinstance(provider, MockReasoningProvider)
 
 
-def test_get_vector_db_provider_defaults_to_config():
+def test_get_vector_db_provider_defaults_to_config(mock_ai_providers):
     provider = get_vector_db_provider()
     assert isinstance(provider, MockVectorDBProvider)
 

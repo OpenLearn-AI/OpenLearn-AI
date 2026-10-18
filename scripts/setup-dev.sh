@@ -495,6 +495,24 @@ report_duplicate_keys "${REPO_ROOT}/backend/.env"
 # ===========================================================================
 COMPOSE=(docker compose --env-file .env.local -f "${COMPOSE_FILE}")
 
+# Run `mc` inside the running MinIO service container through an alias that is
+# re-established from that container's OWN runtime credentials on every call.
+# The MinIO image ships a default `local` alias with EMPTY credentials, so an
+# unauthenticated `mc ready local` passes while every authenticated operation
+# (`stat`/`ls`/`rm`) is denied; any alias written into the container's writable
+# layer is also lost on recreation. Re-deriving the alias from
+# $MINIO_ROOT_USER/$MINIO_ROOT_PASSWORD each call keeps these checks working
+# after recreation without hardcoding or printing any secret. `mc alias set` is
+# an offline config write (it does not contact the server); the following `mc`
+# call is the real authenticated probe. Exit status: 3 means the alias could not
+# be established; otherwise mc's own status is returned.
+minio_mc() {
+    "${COMPOSE[@]}" exec -T minio sh -c '
+        mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 || exit 3
+        exec mc "$@"
+    ' mc "$@"
+}
+
 log "Phase 4/8 — Docker infrastructure (db, redis, minio, keycloak, keycloak-bootstrap)"
 
 log "Starting database container..."
@@ -618,7 +636,19 @@ if [ "${MINIO_INIT_EXIT_CODE}" -ne 0 ]; then
     die "Bucket creation failed. Fix the error above and re-run."
 fi
 
-ok "Materials bucket present: $(env_var_value S3_BUCKET_NAME .env.local) (the bucket name is configuration, not a secret)"
+ok "minio-init completed (bucket creation is idempotent; the bucket is confirmed with an authenticated check next)."
+
+# Authenticated confirmation that the bucket is really reachable with the
+# configured credentials — the unauthenticated `mc ready local` above cannot
+# see this (see the minio_mc comment). Failing here means the service container
+# cannot authenticate, which is exactly the defect this check guards against.
+MINIO_BUCKET="$(env_var_value S3_BUCKET_NAME .env.local)"
+
+if minio_mc stat "local/${MINIO_BUCKET}" >/dev/null 2>&1; then
+    ok "Materials bucket confirmed present (authenticated): ${MINIO_BUCKET} (the bucket name is configuration, not a secret)"
+else
+    die "MinIO bucket '${MINIO_BUCKET}' is not reachable with the configured credentials. Confirm MINIO_ROOT_USER/MINIO_ROOT_PASSWORD in .env.local match the running minio container, then re-run."
+fi
 
 # ---------------------------------------------------------------------------
 # Database creation
@@ -978,14 +1008,31 @@ else
     die "Redis is no longer reachable."
 fi
 
-if "${COMPOSE[@]}" exec -T minio mc ready local >/dev/null 2>&1 &&
-    "${COMPOSE[@]}" exec -T minio mc stat "local/$(env_var_value S3_BUCKET_NAME .env.local)" >/dev/null 2>&1; then
+# Final MinIO check, distinguishing the three failure modes the old single
+# `mc stat` collapsed into one misleading message ("not ready or bucket
+# missing"): (a) the service is not running, (b) authentication fails, (c) the
+# bucket is genuinely missing. The bucket name is configuration, not a secret.
+MINIO_BUCKET="$(env_var_value S3_BUCKET_NAME .env.local)"
 
-    ok "MinIO reachable on localhost:9000; bucket '$(env_var_value S3_BUCKET_NAME .env.local)' present"
+if [ -z "$("${COMPOSE[@]}" ps --status running -q minio 2>/dev/null)" ]; then
+
+    die "The 'minio' service is not running. Start it with: ${COMPOSE[*]} up -d minio"
+
+elif ! minio_mc ready local >/dev/null 2>&1; then
+
+    die "The 'minio' service is running but its S3 API is not answering. Check: ${COMPOSE[*]} logs --tail 40 minio"
+
+elif ! minio_mc ls local/ >/dev/null 2>&1; then
+
+    die "MinIO is answering but authenticated requests are DENIED — the credentials in .env.local do not match the running minio container. Re-create it with: ${COMPOSE[*]} up -d --force-recreate minio"
+
+elif minio_mc stat "local/${MINIO_BUCKET}" >/dev/null 2>&1; then
+
+    ok "MinIO reachable on localhost:9000; bucket '${MINIO_BUCKET}' confirmed present (authenticated)"
 
 else
 
-    die "MinIO is not ready or the materials bucket is missing."
+    die "MinIO is authenticated but the materials bucket '${MINIO_BUCKET}' does not exist. Create it with: ${COMPOSE[*]} --profile init up -d minio-init && ${COMPOSE[*]} --profile init wait minio-init"
 fi
 
 if kc_realm_probe; then

@@ -27,10 +27,14 @@ Thumbs.db
 experiments/OCR/ocr-benchmark/data/raw/misraj/
 experiments/OCR/ocr-benchmark/data/raw/bce-arabic-v1/
 
-# Environment-file backups and editor snapshots — REAL credentials were
+# Environment-file backups and editor/tool snapshots — REAL credentials were
 # committed this way once (backend/.env.before-expiration-fix,
-# backend/.env.pre-s3-dedupe-20261018-071203, removed in the reliability
-# batch). Never commit anything matching this class; legitimate templates are
-# the *.env.example files, which stay tracked.
+# backend/.env.pre-s3-dedupe-20261018-071203). These are ignored so the class
+# cannot be re-added by accident; legitimate templates are the *.env.example
+# files, which stay tracked. Note: removing a file from the latest revision
+# does NOT erase its copies from earlier Git history — rotate any exposed
+# secret.
 *.env.*
 !*.env.example
+# Snapshots of tracked scripts (e.g. verify-local-environment.sh.pre-keycloak-*).
+*.sh.pre-*

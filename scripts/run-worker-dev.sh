@@ -81,7 +81,9 @@ fi
 
 # --- worker environment ------------------------------------------------------
 env_var_value() {
-  sed -n "s/^${1}=//p" "$2" | head -1 | tr -d '\r'
+  # last wins, matching python-dotenv and the other dev scripts
+  # (setup-dev.sh / verify-local-environment.sh / run-material-smoke-test.sh)
+  sed -n "s/^${1}=//p" "$2" | tail -1 | tr -d '\r'
 }
 
 REDIS_PASSWORD="$(env_var_value REDIS_PASSWORD "${REPO_ROOT}/.env.local")"

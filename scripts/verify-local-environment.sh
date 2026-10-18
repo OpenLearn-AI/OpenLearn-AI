@@ -98,6 +98,22 @@ API_URL="${API_URL:-http://localhost:8000}"
 KC_DISCOVERY="${KC_DISCOVERY:-http://localhost:8080/realms/openlearn/.well-known/openid-configuration}"
 DC=(docker compose --env-file "$REPO_DIR/.env.local" -f "$REPO_DIR/infra/docker-compose.dev.yml")
 
+# Run `mc` inside the running MinIO service container through an alias that is
+# re-established from that container's OWN runtime credentials on every call.
+# The MinIO image ships a default `local` alias with EMPTY credentials, so an
+# unauthenticated `mc ready local` passes while every authenticated operation
+# (`stat`/`ls`/`rm`) is denied; any alias written into the container's writable
+# layer is also lost on recreation. Re-deriving the alias from
+# $MINIO_ROOT_USER/$MINIO_ROOT_PASSWORD each call keeps these checks working
+# after recreation without hardcoding or printing any secret. Exit status: 3
+# means the alias could not be established; otherwise mc's own status returns.
+minio_mc() {
+  "${DC[@]}" exec -T minio sh -c '
+    mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 || exit 3
+    exec mc "$@"
+  ' mc "$@"
+}
+
 START_BACKEND=0
 for arg in "$@"; do
   case "$arg" in
@@ -217,15 +233,22 @@ fi
 
 MINIO_BUCKET="$(env_var_value S3_BUCKET_NAME "$REPO_DIR/.env.local")"
 if printf '%s\n' "$PS_OUT" | grep -qx "minio"; then
-  if "${DC[@]}" exec -T minio mc ready local >/dev/null 2>&1; then
+  if minio_mc ready local >/dev/null 2>&1; then
     record "services.minio.ready" "PASS" "S3 API answers (mc ready local)"
   else
     record "services.minio.ready" "FAIL" "minio running but S3 API not ready — check: docker compose logs minio"
   fi
-  if [ -n "$MINIO_BUCKET" ] && "${DC[@]}" exec -T minio mc stat "local/$MINIO_BUCKET" >/dev/null 2>&1; then
-    record "services.minio.bucket" "PASS" "bucket '$MINIO_BUCKET' exists (bucket name is config, not a secret)"
+  # Authenticated probe: an unauthenticated `mc ready local` cannot detect the
+  # empty-default-alias defect, so verify credentials with a bucket listing and
+  # report auth failure separately from a genuinely missing bucket.
+  if ! minio_mc ls local/ >/dev/null 2>&1; then
+    record "services.minio.auth" "FAIL" "authenticated S3 requests denied — .env.local credentials do not match the running minio container; re-create it with: docker compose --env-file .env.local -f infra/docker-compose.dev.yml up -d --force-recreate minio"
+  elif [ -z "$MINIO_BUCKET" ]; then
+    record "services.minio.bucket" "FAIL" "S3_BUCKET_NAME missing/empty in .env.local"
+  elif minio_mc stat "local/$MINIO_BUCKET" >/dev/null 2>&1; then
+    record "services.minio.bucket" "PASS" "bucket '$MINIO_BUCKET' exists, authenticated (bucket name is config, not a secret)"
   else
-    record "services.minio.bucket" "FAIL" "bucket missing — run the one-shot init: docker compose --env-file .env.local -f infra/docker-compose.dev.yml --profile init up -d minio-init && docker compose --env-file .env.local -f infra/docker-compose.dev.yml --profile init wait minio-init"
+    record "services.minio.bucket" "FAIL" "credentials OK but bucket '$MINIO_BUCKET' does not exist — create it: docker compose --env-file .env.local -f infra/docker-compose.dev.yml --profile init up -d minio-init && docker compose --env-file .env.local -f infra/docker-compose.dev.yml --profile init wait minio-init"
   fi
 fi
 

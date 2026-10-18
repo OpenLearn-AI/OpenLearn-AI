@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -99,8 +97,14 @@ services:
     volumes:
       - minio_dev_data:/data
     healthcheck:
-      # Same check staging uses — proves the S3 API answers, not just the port.
-      test: ["CMD", "mc", "ready", "local"]
+      # Authenticated probe. An unauthenticated `mc ready local` (what staging
+      # uses) answers even when the image's default `local` alias has EMPTY
+      # credentials, so Docker reported "healthy" while every authenticated
+      # operation (`mc stat`/`ls`/`rm`) was denied. Re-establishing the alias
+      # from this container's own credentials and listing buckets proves the S3
+      # API answers AND that the configured credentials authenticate. No secret
+      # is written into the compose file — `$$` defers to the container env.
+      test: ["CMD-SHELL", "mc alias set local http://127.0.0.1:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\" >/dev/null 2>&1 && mc ls local/ >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 5
