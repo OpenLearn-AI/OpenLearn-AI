@@ -63,6 +63,14 @@ test.describe("Login smoke flow", () => {
       name: /sign in with openlearn ai/i,
     });
     await expect(signInButton).toBeVisible();
+
+    // LoginForm enables the button only once Keycloak init has settled:
+    // on a fresh context a non-silent `check-sso` round trips to Keycloak
+    // and back before the login page settles, and a click processed
+    // before that round trip completes is destroyed with the first
+    // document (the intermittent `#username` timeout). Waiting for the
+    // enabled state — never a fixed delay — makes the click deterministic.
+    await expect(signInButton).toBeEnabled({ timeout: 30_000 });
     await signInButton.click();
 
     // 3. We are now on Keycloak's hosted login page. Wait for the

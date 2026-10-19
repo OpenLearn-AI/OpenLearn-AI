@@ -19,6 +19,36 @@ export function LoginForm() {
     const [error, setError] = React.useState<string | null>(null);
     const searchParams = useSearchParams();
 
+    // Keycloak is initialized with a non-silent `check-sso` (lib/keycloak.ts):
+    // while unauthenticated, `init()` performs a full OIDC redirect to
+    // Keycloak and back before the adapter settles, so the very first
+    // document that renders this page is torn down mid-initialization.
+    // A click processed before that round trip completes is silently
+    // destroyed with the document (the adapter's login() never even
+    // resolves). Gate the button on `getKeycloak()` settling instead.
+    // This is purely observational — AuthProvider already starts init on
+    // mount and both callers share the same init promise — so the OIDC
+    // flow itself is unchanged. The button also re-enables when init
+    // fails (null instance): clicking then surfaces the existing error
+    // message rather than dead-ending.
+    const [isReady, setIsReady] = React.useState(false);
+
+    React.useEffect(() => {
+        let cancelled = false;
+
+        // getKeycloak() always settles (instance or null) — it catches
+        // init errors internally and never rejects.
+        getKeycloak().then(() => {
+            if (!cancelled) {
+                setIsReady(true);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const handleLogin = async () => {
         setIsLoading(true);
         setError(null);
@@ -80,7 +110,7 @@ export function LoginForm() {
                 <Button
                     type="button"
                     onClick={handleLogin}
-                    disabled={isLoading}
+                    disabled={isLoading || !isReady}
                     className="w-full"
                 >
                     {isLoading

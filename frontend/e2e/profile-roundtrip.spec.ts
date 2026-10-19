@@ -193,9 +193,22 @@ async function performKeycloakLogin(
   password: string,
 ) {
   await page.goto("/login");
-  await page
-    .getByRole("button", { name: /sign in with openlearn ai/i })
-    .click();
+
+  // The app initializes Keycloak with a non-silent `check-sso`
+  // (lib/keycloak.ts): on a fresh, unauthenticated context the browser is
+  // redirected to Keycloak and back before the login page settles, and a
+  // click processed before that round trip completes is destroyed with
+  // the first document — the intermittent `#username` timeout. LoginForm
+  // enables its button only once Keycloak init has settled, so wait for
+  // that state (never a fixed delay) before clicking. The 30s budget
+  // spans the full check-sso round trip, matching the waitForURL budget
+  // below.
+  const signInButton = page.getByRole("button", {
+    name: /sign in with openlearn ai/i,
+  });
+  await expect(signInButton).toBeEnabled({ timeout: 30_000 });
+  await signInButton.click();
+
   await page.waitForSelector("#username", { state: "visible" });
   await page.fill("#username", username);
   await page.fill("#password", password);
