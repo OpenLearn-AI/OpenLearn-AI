@@ -74,7 +74,7 @@ Batch 0.1's local verification (2026-10-14, run `run-20261014-190840`) answered 
 
 - **Open Question #1 (F5) — CLOSED** as above.
 - **Open Question #2 (staging CORS live preflight) — OPEN, carried to Batch 2.1.** The LOCAL preflight is confirmed (2026-10-14: HTTP 200, origin echo for `http://localhost:3000`, `authorization` header allowed, credentials true) — the compose-provided `CORS_ORIGINS` mechanism works end to end for the local origin. Seyam scoped the 0.1 verification to the local project, so the staging-host confirmation is outstanding; it is a named input to 2.1's environment decision and can be produced anytime via `scripts/run-batch-0.1-local-verification.sh --with-staging-preflight` from a staging-reachable host.
-- **Open Question #4 (demo environment) — default recorded:** staging preferred pending the staging preflight; **local dev is the documented fallback**. The actual choice is Batch 2.1's decision, made with Q2's answer in hand.
+- **Open Question #4 (demo environment) — default recorded:** staging preferred pending the staging preflight; **local dev is the documented fallback**. The actual choice is Batch 2.1's decision, made with Q2's answer in hand. **[SUPERSEDED 2026-10-20 — see §10: the owner locked LOCAL as the demo environment on 2026-10-18 (Decision A of `OpenLearn-AI_Batch-2.1_Product-Owner_Decision-Lock.md`); staging is optional]**
 - This freeze does **not** pass Gate A on staging CORS: Gate A is passed on the strength of the local preflight confirmation plus the owner's explicit scoping decision, with the staging confirmation recorded as the one carried-over evidence item (see ledger, Gate A entry).
 
 ## 6. Frozen demo journey candidate (roadmap v2.0 §19; finalized in 2.1)
@@ -106,3 +106,16 @@ One refinement is already encoded in §22 and repeated here for visibility: **"R
 | Execution | GLM (Super Z), 2026-10-15, documentation-only, against `frontend-redesign` @ `7ebe978` |
 | Effect | Phases 1–5 execute exactly this scope. Any scope change — new finding, reclassification, exclusion relitigation — requires new evidence, a decision record in this file's lineage, and Seyam's explicit authorization of the batch that carries it |
 | Next | **Batch 1.1 — Correctness fixes on core flows (F3, F4, S10, F6)** — awaiting Seyam's explicit authorization per the lifecycle rules |
+
+## 10. Amendment (2026-10-20) — the §5 Open Question #4 default is superseded (R7 executed)
+
+This amendment follows this note's own rule (§9): the change rests on **new evidence** (the owner's Batch 2.1 decision lock of 2026-10-18, cross-verified against repository evidence in `OpenLearn-AI_Batch-2.1_Product-Owner_Decision-Lock.md`), a **decision record in this file's lineage** (the section below), and an **explicitly authorized batch** (the documentation-closure batch of 2026-10-20, authorized by Seyam as Step 4 of the execution plan). The original §5 wording above is intentionally left unedited apart from the dated pointer; this section, not that pointer, is the authoritative supersession record.
+
+| Field | Value |
+|---|---|
+| Superseded record | §5, Open Question #4 default: "staging preferred pending the staging preflight; local dev is the documented fallback" (recorded 2026-10-15) |
+| Superseding decision | **Decision A — Local-first development and environment** (`APPROVED`): local development is the default; the primary demo environment is the local application stack; staging remains available as an optional secondary environment and is not the default demo dependency |
+| Evidence | `OpenLearn-AI_Batch-2.1_Product-Owner_Decision-Lock.md` §3 (Decision A) and §7 (R1–R9 dispositions); execution-ledger decision-lock entry and its 2.1 discovery §5.2 source list; this item is R7 of that reconciliation list |
+| Disposition of the related Q2 item | The staging-host CORS live preflight remains optional evidence for the now-optional staging environment (ledger Open Question #2, reclassified 2026-10-18); it is not a demo prerequisite and can be produced anytime via `scripts/run-batch-0.1-local-verification.sh --with-staging-preflight` from a staging-reachable host |
+| Effect on this note | §§1–9 stand as the frozen scope record of 2026-10-15; only the §5 environment default is superseded. The frozen classifications (§6 matrix, §22 exclusions), the finding register, and the F5 settlement are untouched |
+| Executed by | The documentation-closure batch (Step 4), 2026-10-20, isolated clone at `frontend-redesign` @ `60f71da`; delivered as a patch — the owner applies, commits, and pushes per the lifecycle rules |
