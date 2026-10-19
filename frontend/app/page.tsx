@@ -19,14 +19,17 @@ export default function Home() {
                     Welcome to OpenLearn AI
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                    Your Personal AI-Powered Learning Hub
+                    One home for your courses — and a clearer picture of what
+                    you know
                 </h1>
                 <p className="text-primary-foreground/80 text-sm max-w-2xl">
-                    Upload your course materials, interact with intelligent RAG
-                    assistants, explore dynamic knowledge graphs, and master your
-                    subjects with custom generated quizzes and flashcards.
+                    Study materials end up scattered across folders, drives,
+                    and platforms, and it is hard to see what you have actually
+                    mastered and what still needs review. OpenLearn AI brings
+                    your courses together in one place today, and is building
+                    toward AI-assisted insight into your own learning.
                 </p>
-                <div className="pt-2">
+                <div className="pt-2 flex flex-wrap gap-3">
                     {!isLoading &&
                         (isAuthenticated ? (
                             <Button
@@ -36,30 +39,40 @@ export default function Home() {
                                 Go to Dashboard
                             </Button>
                         ) : (
-                            <Button
-                                size="lg"
-                                render={<Link href="/login" />}
-                            >
-                                Get Started - Sign In
-                            </Button>
+                            <>
+                                <Button
+                                    size="lg"
+                                    render={<Link href="/register" />}
+                                >
+                                    Get Started
+                                </Button>
+                                <Button
+                                    size="lg"
+                                    variant="outline"
+                                    render={<Link href="/login" />}
+                                >
+                                    Log in
+                                </Button>
+                            </>
                         ))}
                 </div>
             </div>
 
-            {/* Features & Quick Actions Grid */}
+            {/* Capabilities Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Quick Course / Material Actions */}
+                {/* Available today */}
                 <div className="bg-card p-6 rounded-2xl border border-border shadow-xs space-y-4 flex flex-col justify-between transition-colors">
                     <div className="space-y-2">
                         <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-                            Materials &amp; RAG
+                            Available today
                         </span>
                         <h3 className="font-bold text-card-foreground text-lg">
-                            Start Learning a New Subject
+                            Organize your learning
                         </h3>
                         <p className="text-xs text-muted-foreground">
-                            Create a course and upload study documents to generate
-                            an adaptive learning path.
+                            Create courses, keep them in one place, and set up
+                            your learner profile so the platform fits how you
+                            study.
                         </p>
                     </div>
                     <div className="flex gap-3 pt-2">
@@ -67,56 +80,66 @@ export default function Home() {
                             className="flex-1"
                             render={<Link href="/courses/new" />}
                         >
-                            Create Course
+                            Create a course
                         </Button>
                         <Button
                             variant="outline"
                             className="flex-1"
                             render={<Link href="/courses" />}
                         >
-                            View My Materials
+                            Browse courses
                         </Button>
                     </div>
                 </div>
 
-                {/* AI Tools & Capabilities */}
+                {/* Future direction — clearly labeled, not clickable */}
                 <div className="bg-card p-6 rounded-2xl border border-border shadow-xs space-y-4 flex flex-col justify-between transition-colors">
                     <div className="space-y-2">
-                        <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-                            Platform Features
-                        </span>
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-primary uppercase tracking-wider">
+                                Where we&apos;re headed
+                            </span>
+                            <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-semibold">
+                                Planned
+                            </span>
+                        </div>
                         <h3 className="font-bold text-card-foreground text-lg">
-                            Interactive AI Tools
+                            On the roadmap
                         </h3>
                         <p className="text-xs text-muted-foreground">
-                            Leverage cutting-edge models to accelerate your
-                            comprehension.
+                            These capabilities are planned and are not part of
+                            the product yet.
                         </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                        <Link
-                            href="/dashboard"
-                            className="p-3 rounded-xl border border-border bg-secondary/50 hover:border-primary/50 hover:bg-secondary transition group block"
-                        >
-                            <div className="font-semibold text-sm text-card-foreground group-hover:text-primary">
-                                RAG Chat
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                                Ask questions on your docs
-                            </div>
-                        </Link>
-                        <Link
-                            href="/dashboard"
-                            className="p-3 rounded-xl border border-border bg-secondary/50 hover:border-primary/50 hover:bg-secondary transition group block"
-                        >
-                            <div className="font-semibold text-sm text-card-foreground group-hover:text-primary">
-                                Knowledge Graph
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                                Visualize concepts map
-                            </div>
-                        </Link>
-                    </div>
+                    <ul className="space-y-2 pt-2 text-sm text-card-foreground">
+                        <li className="flex items-center justify-between gap-2 border border-border rounded-xl px-3 py-2 bg-secondary/50">
+                            <span>Material upload and processing</span>
+                            <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-semibold">
+                                Planned
+                            </span>
+                        </li>
+                        <li className="flex items-center justify-between gap-2 border border-border rounded-xl px-3 py-2 bg-secondary/50">
+                            <span>AI chat on your course materials</span>
+                            <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-semibold">
+                                Planned
+                            </span>
+                        </li>
+                        <li className="flex items-center justify-between gap-2 border border-border rounded-xl px-3 py-2 bg-secondary/50">
+                            <span>Knowledge graphs of course concepts</span>
+                            <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-semibold">
+                                Planned
+                            </span>
+                        </li>
+                        <li className="flex items-center justify-between gap-2 border border-border rounded-xl px-3 py-2 bg-secondary/50">
+                            <span>
+                                Adaptive learning paths, quizzes, and
+                                flashcards
+                            </span>
+                            <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-semibold">
+                                Planned
+                            </span>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>

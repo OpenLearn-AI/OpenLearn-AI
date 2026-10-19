@@ -38,3 +38,5 @@ experiments/OCR/ocr-benchmark/data/raw/bce-arabic-v1/
 !*.env.example
 # Snapshots of tracked scripts (e.g. verify-local-environment.sh.pre-keycloak-*).
 *.sh.pre-*
+frontend/test-results/
+*.patch

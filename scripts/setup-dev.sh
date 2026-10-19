@@ -159,6 +159,12 @@ esac
 if [ "${PYTHON_IS_WINDOWS_SHELL}" = "true" ] && command -v py.exe >/dev/null 2>&1; then
     PYTHON_CMD=(py.exe -3.12)
     PYTHON_LABEL="Windows CPython 3.12 (py launcher)"
+elif command -v python3.12 >/dev/null 2>&1; then
+    PYTHON_CMD=(python3.12)
+    PYTHON_LABEL="python3.12"
+elif command -v uv >/dev/null 2>&1 && UV_PY="$(uv python find 3.12 2>/dev/null)"; then
+    PYTHON_CMD=("${UV_PY}")
+    PYTHON_LABEL="uv-managed Python 3.12"
 elif command -v python3 >/dev/null 2>&1; then
     PYTHON_CMD=(python3)
     PYTHON_LABEL="python3"

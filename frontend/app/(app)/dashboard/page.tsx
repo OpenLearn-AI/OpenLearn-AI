@@ -9,11 +9,53 @@ import { ErrorState } from "@/components/state/ErrorState";
 import { EmptyState } from "@/components/state/EmptyState";
 import { Button } from "@/components/ui/button";
 import { useCourses } from "@/features/courses/api/useCourses";
+import { useProfile } from "@/features/profile/api/useProfile";
+import type { Profile } from "@/features/profile/schemas";
+
+/**
+ * The six user-facing content fields of `ProfileResponse` (the identity
+ * fields `id`/`user_id` are excluded). This is the denominator of the
+ * profile-completeness measure — the same derivation recorded in the
+ * ledger's Batch 1.4 real-metric inventory: a field counts as carried
+ * when it is non-null AND non-empty. Four fields are non-nullable in the
+ * contract (guaranteed present once a profile exists); `university` and
+ * `learning_style_vark` are the only variable ones.
+ */
+const PROFILE_FIELD_COUNT = 6;
+
+function countMissingProfileFields(profile: Profile): number {
+    const values = [
+        profile.education_level,
+        profile.major,
+        profile.preferred_language,
+        profile.university,
+        profile.learning_style_vark,
+        profile.daily_available_minutes,
+    ];
+    const carried = values.filter(
+        (value) => value !== null && String(value).trim() !== "",
+    ).length;
+    return PROFILE_FIELD_COUNT - carried;
+}
 
 export default function DashboardPage() {
-    const { data: courses, isLoading, isError, error, refetch } = useCourses();
+    const {
+        data: courses,
+        isLoading: coursesLoading,
+        isError: coursesError,
+        error,
+        refetch,
+    } = useCourses();
+    const {
+        data: profile,
+        isLoading: profileLoading,
+        isError: profileError,
+    } = useProfile();
 
     const courseCount = courses?.length ?? 0;
+    const missingProfileFields = profile === null || profile === undefined
+        ? null
+        : countMissingProfileFields(profile);
 
     return (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8 bg-background min-h-screen">
@@ -21,71 +63,74 @@ export default function DashboardPage() {
             <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-6 sm:p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="space-y-1">
                     <span className="bg-primary-foreground/10 text-primary-foreground/90 text-xs px-3 py-1 rounded-full font-medium">
-                        Student Dashboard
+                        Dashboard
                     </span>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight pt-1">
                         Welcome Back!
                     </h1>
                     <p className="text-primary-foreground/80 text-sm max-w-xl">
-                        Continue your adaptive learning journey, interact with
-                        your documents via RAG, and track your active modules.
+                        Manage your courses and keep your profile up to date.
                     </p>
                 </div>
             </div>
 
-            {/* Quick Stats Grid — real data only */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Quick Stats Grid — real data only (owner-scoped course count
+                via GET /v1/courses, and the profile-field measure derived
+                from GET /v1/users/me) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-card p-5 rounded-2xl border border-border shadow-xs space-y-1">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Active Materials
+                        Your Courses
                     </span>
                     <div className="text-2xl font-bold text-foreground">
-                        {courseCount} {courseCount === 1 ? "Course" : "Courses"}
+                        {coursesLoading
+                            ? "Loading..."
+                            : coursesError
+                              ? "—"
+                              : `${courseCount} ${courseCount === 1 ? "Course" : "Courses"}`}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        {courseCount > 0
-                            ? "View in your materials list"
-                            : "Create your first course to get started"}
+                        {coursesLoading
+                            ? "Fetching your courses."
+                            : coursesError
+                              ? "Couldn't load your courses."
+                              : courseCount > 0
+                                ? "The courses you own. Browse them below."
+                                : "Create your first course to get started."}
                     </p>
                 </div>
                 <div className="bg-card p-5 rounded-2xl border border-border shadow-xs space-y-1">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        RAG Sessions
+                        Profile
                     </span>
                     <div className="text-2xl font-bold text-foreground">
-                        Coming soon
+                        {profileLoading
+                            ? "Loading..."
+                            : profileError
+                              ? "—"
+                              : profile === null
+                                ? "Not set up"
+                                : missingProfileFields === 0
+                                  ? "Complete"
+                                  : `${missingProfileFields} of ${PROFILE_FIELD_COUNT} fields left`}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Not available yet
-                    </p>
-                </div>
-                <div className="bg-card p-5 rounded-2xl border border-border shadow-xs space-y-1">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Generated Quizzes
-                    </span>
-                    <div className="text-2xl font-bold text-foreground">
-                        Coming soon
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                        Not available yet
-                    </p>
-                </div>
-                <div className="bg-card p-5 rounded-2xl border border-border shadow-xs space-y-1">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Knowledge Nodes
-                    </span>
-                    <div className="text-2xl font-bold text-foreground">
-                        Coming soon
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                        Not available yet
+                        {profileLoading
+                            ? "Fetching your profile."
+                            : profileError
+                              ? "Couldn't load your profile."
+                              : profile === null
+                                ? "Create your profile to personalize your dashboard."
+                                : missingProfileFields === 0
+                                  ? "All profile fields are filled in."
+                                  : "Fields you can still fill in on your profile."}
                     </p>
                 </div>
             </div>
 
-            {/* Main Tools & Chat Section */}
+            {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left 2 Columns: Courses + Quick Access */}
+                {/* Left 2 Columns: Courses + Quick Actions */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* Your Courses */}
                     <div className="bg-card rounded-2xl border border-border p-6 shadow-xs space-y-4">
@@ -95,7 +140,8 @@ export default function DashboardPage() {
                                     Your Courses
                                 </h3>
                                 <p className="text-xs text-muted-foreground">
-                                    Pick up where you left off.
+                                    The four most recently created of your
+                                    courses.
                                 </p>
                             </div>
                             <Button
@@ -107,9 +153,9 @@ export default function DashboardPage() {
                             </Button>
                         </div>
 
-                        {isLoading ? (
+                        {coursesLoading ? (
                             <LoadingBlock message="Loading your courses..." />
-                        ) : isError ? (
+                        ) : coursesError ? (
                             <ErrorState
                                 message={
                                     error instanceof Error
@@ -138,58 +184,38 @@ export default function DashboardPage() {
                         )}
                     </div>
 
-                    {/* RAG Chat Quick Access Box */}
+                    {/* Quick Actions — real destinations only */}
                     <div className="bg-card rounded-2xl border border-border p-6 shadow-xs space-y-4">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h3 className="font-bold text-foreground text-base">
-                                    Intelligent RAG Assistant
-                                </h3>
-                                <p className="text-xs text-muted-foreground">
-                                    Ask questions directly based on your uploaded
-                                    course files.
-                                </p>
-                            </div>
+                        <div>
+                            <h3 className="font-bold text-foreground text-base">
+                                Quick Actions
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                                Things you can do in the product today.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                render={<Link href="/courses/new" />}
+                            >
+                                Create a course
+                            </Button>
                             <Button
                                 variant="outline"
                                 size="sm"
                                 render={<Link href="/courses" />}
                             >
-                                Open Chat &rarr;
+                                Browse your courses
                             </Button>
-                        </div>
-                        <div className="bg-secondary/50 p-4 rounded-xl border border-border flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground font-medium">
-                                Coming soon
-                            </span>
-                            <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-semibold">
-                                Planned
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Knowledge Graph Preview Box */}
-                    <div className="bg-card rounded-2xl border border-border p-6 shadow-xs space-y-4">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h3 className="font-bold text-foreground text-base">
-                                    Knowledge Graph Visualizer
-                                </h3>
-                                <p className="text-xs text-muted-foreground">
-                                    Explore relationship maps between core
-                                    concepts.
-                                </p>
-                            </div>
                             <Button
                                 variant="outline"
                                 size="sm"
-                                render={<Link href="/courses" />}
+                                render={<Link href="/profile" />}
                             >
-                                View Graph &rarr;
+                                Update your profile
                             </Button>
-                        </div>
-                        <div className="h-32 bg-secondary/50 rounded-xl border border-dashed border-border flex items-center justify-center text-xs text-muted-foreground">
-                            Coming soon
                         </div>
                     </div>
                 </div>
