@@ -628,11 +628,11 @@ ok "MinIO is ready"
 
 log "Running minio-init (creates the materials bucket if missing — idempotent)..."
 
-MINIO_INIT_EXIT_CODE=0
-
-"${COMPOSE[@]}" --profile init up -d minio-init &&
-    "${COMPOSE[@]}" --profile init wait minio-init ||
+if "${COMPOSE[@]}" --profile init run --rm minio-init; then
+    MINIO_INIT_EXIT_CODE=0
+else
     MINIO_INIT_EXIT_CODE=$?
+fi
 
 if [ "${MINIO_INIT_EXIT_CODE}" -ne 0 ]; then
 
@@ -1038,7 +1038,7 @@ elif minio_mc stat "local/${MINIO_BUCKET}" >/dev/null 2>&1; then
 
 else
 
-    die "MinIO is authenticated but the materials bucket '${MINIO_BUCKET}' does not exist. Create it with: ${COMPOSE[*]} --profile init up -d minio-init && ${COMPOSE[*]} --profile init wait minio-init"
+    die "MinIO is authenticated but the materials bucket '${MINIO_BUCKET}' does not exist. Re-run setup-dev.sh to create it."
 fi
 
 if kc_realm_probe; then
