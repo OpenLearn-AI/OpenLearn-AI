@@ -5,7 +5,7 @@ services:
     image: ghcr.io/openlearn-ai/openlearn-backend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - ENVIRONMENT=staging
       - DATABASE_URL=${DATABASE_URL}
@@ -44,7 +44,7 @@ services:
     image: ghcr.io/openlearn-ai/openlearn-frontend:${IMAGE_TAG:-staging}
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
       - SENTRY_DSN=${SENTRY_DSN}
@@ -296,7 +296,7 @@ services:
     container_name: staging-keycloak
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN_USER}
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
