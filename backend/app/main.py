@@ -18,9 +18,16 @@ from app.services.auth.user_service import (
 )
 
 
+# Interactive docs and the OpenAPI schema are not served in production
+# (review finding B-03).
+_is_production = settings.environment == "production"
+
 app = FastAPI(
     title=settings.app_name,
     version="0.2.0",
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
 )
 
 setup_observability()
@@ -29,8 +36,11 @@ setup_metrics(app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
+    # Authentication is a bearer token in the Authorization header, not a
+    # cookie, so credentialed CORS is not needed (review finding B-11).
+    # Headers stay open: the browser Sentry SDK adds tracing headers.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

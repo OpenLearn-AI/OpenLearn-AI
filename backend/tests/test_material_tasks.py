@@ -57,6 +57,7 @@ from app.config import settings  # noqa: E402
 from app.models.course import Course  # noqa: E402
 from app.models.material import (  # noqa: E402
     FAILED_STATUS,
+    PENDING_STATUS,
     PROCESSING_STATUS,
     READY_STATUS,
     Material,
@@ -88,6 +89,8 @@ from app.pal.providers.vector_db.mock_provider import (  # noqa: E402
 from app.pal.providers.vector_db.postgres_provider import (  # noqa: E402
     PostgresVectorDBProvider,
 )
+from app.pal.models.types import VectorRecord  # noqa: E402
+from celery.exceptions import Retry  # noqa: E402
 
 @pytest_asyncio.fixture
 async def worker_session_factory():
@@ -767,9 +770,13 @@ class _FakeStorageFetch:
         self.content = content
         self.error = error
         self.calls: list[tuple[str, str]] = []
+        self.expected_etags: list[str | None] = []
 
-    def __call__(self, s3_key: str, destination_dir: str) -> Path:
+    def __call__(
+        self, s3_key: str, destination_dir: str, expected_etag: str | None = None
+    ) -> Path:
         self.calls.append((s3_key, destination_dir))
+        self.expected_etags.append(expected_etag)
         if self.error is not None:
             raise self.error
         destination = Path(destination_dir) / PurePosixPath(s3_key).name
@@ -833,6 +840,58 @@ async def _count_vector_records(material_id: str) -> int:
         await engine.dispose()
 
 
+async def _read_material_pages(material_id: uuid.UUID) -> list[tuple[int, str]]:
+    """Read committed material_pages rows via an independent engine
+    (same connection-independence rule as ``_read_material_status``)."""
+    engine = create_async_engine(settings.database_url)
+    factory = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    try:
+        async with factory() as db:
+            result = await db.execute(
+                text(
+                    "SELECT page_number, text FROM material_pages "
+                    "WHERE material_id = :mid ORDER BY page_number"
+                ),
+                {"mid": str(material_id)},
+            )
+            return [(row[0], row[1]) for row in result.all()]
+    finally:
+        await engine.dispose()
+
+
+async def _seed_material_pages(
+    db: AsyncSession, material_id: uuid.UUID, rows: list[tuple[int, str]]
+) -> None:
+    """Seed committed page rows for a material (simulates a previous
+    successful attempt's output)."""
+    from app.models.material_page import MaterialPage
+
+    for page_number, page_text in rows:
+        db.add(
+            MaterialPage(
+                material_id=material_id, page_number=page_number, text=page_text
+            )
+        )
+    await db.commit()
+
+
+def _fail_after_page_write(monkeypatch) -> None:
+    """Inject a failure immediately AFTER the real page-persistence call ran
+    on the shared session (same injection strategy as the post-upsert error:
+    the real write executes, then the seam raises)."""
+    real_replace = material_tasks.replace_material_pages
+
+    async def failing_replace(db, material_id, *, pages):
+        await real_replace(db, material_id, pages=pages)
+        raise RuntimeError("forced post-page-write failure")
+
+    monkeypatch.setattr(material_tasks, "replace_material_pages", failing_replace)
+
+
 _PAGE_TEXT = (
     "Wired pipeline fixture page: this single-page PDF carries well over the "
     "fifty-character OCR threshold, so the targeted-OCR path never fires and "
@@ -857,7 +916,9 @@ async def test_wired_pipeline_fetch_ingest_persist_marks_ready_and_cleans_temp(
         db_session, "b5-wired-ready-owner", "b5-wired-ready@example.com"
     )
     course = await _create_course(db_session, owner)
-    material = await _create_material(db_session, course, owner)
+    material = await _create_material(
+        db_session, course, owner, s3_etag='"etag-v1"'
+    )
     s3_key = material.s3_key
 
     _install_fake_converter(monkeypatch, [_PAGE_TEXT])
@@ -880,6 +941,8 @@ async def test_wired_pipeline_fetch_ingest_persist_marks_ready_and_cleans_temp(
     # Task arguments propagate into the storage fetch.
     assert [call[0] for call in fetch.calls] == [s3_key]
     assert len(fetch.calls) == 1
+    # Review fix: the fetch is pinned to the ETag recorded at registration.
+    assert fetch.expected_etags == ['"etag-v1"']
 
     # The seam built the factory's provider and handed it the live session.
     assert isinstance(captured["provider"], MockVectorDBProvider)
@@ -1069,3 +1132,296 @@ async def test_wired_pipeline_stage_failure_marks_failed_and_cleans_temp(
 
     await db_session.delete(owner)
     await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Week 9 output consistency — page persistence rides the success transaction
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_wired_pipeline_success_replaces_page_output_atomically(
+    db_session, worker_session_factory, monkeypatch
+):
+    """Week 9: a successful run persists the extracted pages and replaces a
+    previous attempt's page output. The rows are committed exactly when the
+    material turns ``ready`` (same commit), visible on an independent
+    connection."""
+    owner = await _create_user(
+        db_session, "w9-pages-ready-owner", "w9-pages-ready@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    s3_key = material.s3_key
+    # Output of a previous successful attempt (stale on reprocessing).
+    await _seed_material_pages(db_session, material.id, [(1, "stale old page")])
+
+    _install_fake_converter(monkeypatch, [_PAGE_TEXT])
+    fetch = _FakeStorageFetch(_build_single_page_pdf(_PAGE_TEXT))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+
+    status = await material_tasks._handle_material(
+        str(material.id),
+        s3_key,
+        str(course.id),
+        str(owner.id),
+        session_factory=worker_session_factory,
+    )
+
+    assert status == READY_STATUS
+    # Stale rows replaced by exactly this attempt's output (1-page source).
+    assert await _read_material_pages(material.id) == [(1, _PAGE_TEXT)]
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_wired_pipeline_failure_persists_no_page_output(
+    db_session, worker_session_factory, monkeypatch
+):
+    """Week 9: a failure inside content processing AFTER the page writes
+    executed on the shared session leaves zero page rows — the pinned
+    failure path's rollback discards the flushed writes, exactly like the
+    vector rows written by the same transaction."""
+    owner = await _create_user(
+        db_session, "w9-pages-fail-owner", "w9-pages-fail@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    s3_key = material.s3_key
+
+    monkeypatch.setattr(settings, "ai_vector_db_provider", "postgres")
+    _install_fake_converter(monkeypatch, [_PAGE_TEXT])
+    fetch = _FakeStorageFetch(_build_single_page_pdf(_PAGE_TEXT))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+    _fail_after_page_write(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="forced post-page-write failure"):
+        await material_tasks._handle_material(
+            str(material.id),
+            s3_key,
+            str(course.id),
+            str(owner.id),
+            session_factory=worker_session_factory,
+        )
+
+    # No page output survived the failed attempt...
+    assert await _read_material_pages(material.id) == []
+    # ...the vector rows of the same transaction were discarded too...
+    assert await _count_vector_records(str(material.id)) == 0
+    # ...and the material itself is recorded ``failed``.
+    assert await _read_material_status(material.id) == FAILED_STATUS
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_wired_pipeline_failure_keeps_previous_successful_output(
+    db_session, worker_session_factory, monkeypatch
+):
+    """Week 9: a failed attempt writes nothing AND destroys nothing — the
+    previous successful attempt's committed page output survives untouched."""
+    owner = await _create_user(
+        db_session, "w9-pages-keep-owner", "w9-pages-keep@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    s3_key = material.s3_key
+    previous_output = [(1, "previous success page 1")]
+    await _seed_material_pages(db_session, material.id, previous_output)
+
+    _install_fake_converter(monkeypatch, [_PAGE_TEXT])
+    fetch = _FakeStorageFetch(_build_single_page_pdf(_PAGE_TEXT))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+    _fail_after_page_write(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="forced post-page-write failure"):
+        await material_tasks._handle_material(
+            str(material.id),
+            s3_key,
+            str(course.id),
+            str(owner.id),
+            session_factory=worker_session_factory,
+        )
+
+    assert await _read_material_pages(material.id) == previous_output
+    assert await _read_material_status(material.id) == FAILED_STATUS
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Week 9 keep-more-pages rule and automatic retry
+# ---------------------------------------------------------------------------
+
+
+async def _seed_vector_record(db: AsyncSession, material_id: uuid.UUID, record_id: str) -> None:
+    from app.models.vector_record import EMBEDDING_DIMENSION
+
+    await PostgresVectorDBProvider(db).upsert(
+        [
+            VectorRecord(
+                id=record_id,
+                vector=[1.0] + [0.0] * (EMBEDDING_DIMENSION - 1),
+                content="old chunk",
+                metadata={"material_id": str(material_id)},
+            )
+        ]
+    )
+    await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_reprocess_with_fewer_pages_keeps_previous_output(
+    db_session, worker_session_factory, monkeypatch
+):
+    """Week 9: a run with fewer non-empty pages than the stored output is
+    discarded before any upsert; old pages and vectors stay, status ready."""
+    owner = await _create_user(
+        db_session, "w9-keep-more-owner", "w9-keep-more@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    previous_output = [(1, "old page one"), (2, "old page two")]
+    await _seed_material_pages(db_session, material.id, previous_output)
+    await _seed_vector_record(db_session, material.id, f"{material.id}:old")
+
+    monkeypatch.setattr(settings, "ai_vector_db_provider", "postgres")
+    _install_fake_converter(monkeypatch, [_PAGE_TEXT])
+    fetch = _FakeStorageFetch(_build_single_page_pdf(_PAGE_TEXT))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+
+    status = await material_tasks._handle_material(
+        str(material.id),
+        material.s3_key,
+        str(course.id),
+        str(owner.id),
+        session_factory=worker_session_factory,
+    )
+
+    assert status == READY_STATUS
+    assert await _read_material_pages(material.id) == previous_output
+    assert await _count_vector_records(str(material.id)) == 1
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_reprocess_with_equal_pages_replaces_old_vectors(
+    db_session, worker_session_factory, monkeypatch
+):
+    """Week 9: on a tie (or more pages) the new run wins: the material's old
+    vector rows are deleted and replaced together with the pages."""
+    owner = await _create_user(
+        db_session, "w9-replace-vectors-owner", "w9-replace-vectors@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    await _seed_material_pages(db_session, material.id, [(1, "old page one")])
+    old_id = f"{material.id}:old"
+    await _seed_vector_record(db_session, material.id, old_id)
+
+    monkeypatch.setattr(settings, "ai_vector_db_provider", "postgres")
+    _install_fake_converter(monkeypatch, [_PAGE_TEXT])
+    fetch = _FakeStorageFetch(_build_single_page_pdf(_PAGE_TEXT))
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", fetch)
+
+    status = await material_tasks._handle_material(
+        str(material.id),
+        material.s3_key,
+        str(course.id),
+        str(owner.id),
+        session_factory=worker_session_factory,
+    )
+
+    assert status == READY_STATUS
+    assert await _read_material_pages(material.id) == [(1, _PAGE_TEXT)]
+    count = await _count_vector_records(str(material.id))
+    assert count >= 1
+    result = await db_session.execute(
+        text("SELECT COUNT(*) FROM vector_records WHERE id = :id"), {"id": old_id}
+    )
+    assert result.scalar_one() == 0
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_non_final_failure_hands_material_back_as_pending(
+    db_session, worker_session_factory, monkeypatch
+):
+    """Week 9 auto-retry: a non-final failed attempt leaves the material
+    ``pending`` (not ``failed``) and does not touch the manual budget."""
+    owner = await _create_user(
+        db_session, "w9-auto-retry-owner", "w9-auto-retry@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+
+    def failing_fetch(s3_key, temp_dir, expected_etag=None):
+        raise RuntimeError("transient storage failure")
+
+    monkeypatch.setattr(material_tasks, "download_material_to_temp", failing_fetch)
+
+    with pytest.raises(material_tasks._AutoRetryRequested):
+        await material_tasks._handle_material(
+            str(material.id),
+            material.s3_key,
+            str(course.id),
+            str(owner.id),
+            session_factory=worker_session_factory,
+            final_attempt=False,
+        )
+
+    assert await _read_material_status(material.id) == PENDING_STATUS
+    await db_session.refresh(material)
+    assert material.retry_count == 0
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+def test_process_material_requeues_with_backoff_until_final_attempt(monkeypatch):
+    """Week 9 auto-retry: non-final attempts re-enqueue with doubling
+    countdown; the last attempt (retries == max_retries) is final."""
+    seen: list[bool] = []
+    retry_calls: list[dict] = []
+
+    async def fake_handle(material_id, s3_key, course_id, owner_id, *, session_factory, final_attempt):
+        seen.append(final_attempt)
+        if final_attempt:
+            return FAILED_STATUS
+        raise material_tasks._AutoRetryRequested() from RuntimeError("boom")
+
+    def fake_retry(*, exc, countdown):
+        retry_calls.append({"exc": exc, "countdown": countdown})
+        return Retry()
+
+    task = material_tasks.process_material
+    monkeypatch.setattr(material_tasks, "_handle_material", fake_handle)
+    monkeypatch.setattr(task, "retry", fake_retry)
+    assert task.max_retries == 3
+
+    args = (str(uuid.uuid4()), "key", str(uuid.uuid4()), str(uuid.uuid4()))
+    for retries in range(3):
+        task.push_request(retries=retries)
+        try:
+            with pytest.raises(Retry):
+                task.run(*args)
+        finally:
+            task.pop_request()
+
+    task.push_request(retries=3)
+    try:
+        assert task.run(*args) == FAILED_STATUS
+    finally:
+        task.pop_request()
+
+    assert seen == [False, False, False, True]
+    assert [c["countdown"] for c in retry_calls] == [60, 120, 240]
+    assert all(isinstance(c["exc"], RuntimeError) for c in retry_calls)

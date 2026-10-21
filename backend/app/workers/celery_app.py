@@ -36,6 +36,7 @@ celery_app = Celery(
     include=[
         "app.workers.tasks.sample",
         "app.workers.tasks.material_tasks",
+        "app.workers.tasks.maintenance_tasks",
     ],
 )
 
@@ -51,8 +52,8 @@ celery_app.conf.update(
 
     # Task time limits (W7 F10): soft 10m / hard 11m. SoftTimeLimitExceeded
     # feeds the existing material failure path (result: failed). The hard
-    # kill / OOM / container restart case remains the documented W7 residual
-    # gap; no reaper is built.
+    # kill / OOM / container restart case is covered by the periodic
+    # ``reap_stuck_materials`` task below (review finding B-07).
     task_soft_time_limit=600,
     task_time_limit=660,
 
@@ -84,8 +85,14 @@ celery_app.conf.update(
         },
     },
 
-    # Celery Beat
-    beat_schedule={},
+    # Celery Beat: needs a running ``celery ... beat`` process (staging compose
+    # has one; start one locally to exercise it).
+    beat_schedule={
+        "reap-stuck-materials": {
+            "task": "app.workers.tasks.maintenance_tasks.reap_stuck_materials",
+            "schedule": 300.0,
+        },
+    },
 )
 
 

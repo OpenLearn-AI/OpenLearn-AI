@@ -736,7 +736,11 @@ def test_materials_table_contract():
         "s3_key",
         "status",
         "uploaded_by",
+        "sha256",
+        "s3_etag",
+        "retry_count",
         "created_at",
+        "updated_at",
     }
 
     course_fk = list(table.columns["course_id"].foreign_keys)[0]
@@ -753,12 +757,42 @@ def test_materials_table_contract():
     assert table.columns["s3_key"].nullable is False
     assert table.columns["status"].nullable is False
 
+    # Week 9 deduplication and retry budget.
+    assert table.columns["sha256"].nullable is True
+    assert table.columns["retry_count"].nullable is False
+
     constraint_names = {constraint.name for constraint in table.constraints}
     assert "uq_materials_s3_key" in constraint_names
+    assert "uq_materials_course_sha256" in constraint_names
 
     index_names = {index.name for index in table.indexes}
     assert "ix_materials_course_id" in index_names
     assert "ix_materials_uploaded_by" in index_names
+
+
+def test_material_pages_table_contract():
+    """Week 9: durable per-page extracted text with 1-based page numbers."""
+    table = Base.metadata.tables["material_pages"]
+
+    assert set(table.columns.keys()) == {
+        "id",
+        "material_id",
+        "page_number",
+        "text",
+        "created_at",
+    }
+
+    material_fk = list(table.columns["material_id"].foreign_keys)[0]
+    assert material_fk.target_fullname == "materials.id"
+    assert material_fk.ondelete == "CASCADE"
+    assert table.columns["material_id"].nullable is False
+
+    assert table.columns["page_number"].nullable is False
+    assert table.columns["text"].nullable is False
+
+    constraint_names = {constraint.name for constraint in table.constraints}
+    assert "uq_material_pages_material_page" in constraint_names
+    assert "ck_material_pages_page_number_positive" in constraint_names
 
 
 @pytest.mark.asyncio

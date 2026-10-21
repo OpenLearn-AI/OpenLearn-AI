@@ -1,25 +1,24 @@
 import sys
+import hmac
 import logging
-import os
 import structlog
 import sentry_sdk
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, Response, status
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from prometheus_fastapi_instrumentator import Instrumentator
 
-
-_SENTRY_DEFAULT_ENVIRONMENT = "staging"
+from app.config import settings
 
 
 def _sentry_config(integrations=None) -> dict | None:
     """Sentry init kwargs when a DSN is configured; ``None`` is the no-op case."""
-    dsn = os.getenv("SENTRY_DSN", "")
-    if not dsn:
+    if not settings.sentry_dsn:
         return None
     config = {
-        "dsn": dsn,
-        "traces_sample_rate": 1.0,
-        "environment": os.getenv("ENVIRONMENT", _SENTRY_DEFAULT_ENVIRONMENT),
+        "dsn": settings.sentry_dsn,
+        "traces_sample_rate": settings.sentry_traces_sample_rate,
+        "environment": settings.environment,
     }
     if integrations is not None:
         config["integrations"] = integrations
@@ -106,4 +105,25 @@ def setup_metrics(app: FastAPI):
         return None
 
     pfi_routing._get_route_name = _safe_get_route_name
-    Instrumentator().instrument(app).expose(app)
+    Instrumentator().instrument(app)
+
+    # GET /metrics (review finding B-03). Protected with a bearer token when
+    # ``settings.metrics_token`` is set; with no token it is served outside
+    # production only. Evaluated per request so the setting can change at
+    # runtime (tests) and is never baked in at import.
+    @app.get("/metrics", include_in_schema=False)
+    def metrics(request: Request) -> Response:
+        token = settings.metrics_token
+        if token:
+            supplied = request.headers.get("authorization", "")
+            if not hmac.compare_digest(
+                supplied.encode(), f"Bearer {token}".encode()
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Not authenticated",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        elif settings.environment == "production":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

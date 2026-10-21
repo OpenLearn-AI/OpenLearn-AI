@@ -35,8 +35,8 @@ def _recorded_init():
 
 
 def test_worker_process_init_initializes_sentry_with_celery_integration(monkeypatch):
-    monkeypatch.setenv("SENTRY_DSN", FAKE_SENTRY_DSN)
-    monkeypatch.setenv("ENVIRONMENT", "staging")
+    monkeypatch.setattr(settings, "sentry_dsn", FAKE_SENTRY_DSN)
+    monkeypatch.setattr(settings, "environment", "staging")
     calls, record_init = _recorded_init()
     monkeypatch.setattr(sentry_sdk, "init", record_init)
 
@@ -46,26 +46,27 @@ def test_worker_process_init_initializes_sentry_with_celery_integration(monkeypa
     init_kwargs = calls[0]
     assert init_kwargs["dsn"] == FAKE_SENTRY_DSN
     assert init_kwargs["environment"] == "staging"
-    assert init_kwargs["traces_sample_rate"] == 1.0
+    assert init_kwargs["traces_sample_rate"] == settings.sentry_traces_sample_rate
+    assert settings.sentry_traces_sample_rate == 0.1
     assert any(
         isinstance(integration, CeleryIntegration)
         for integration in init_kwargs["integrations"]
     )
 
 
-def test_worker_process_init_uses_staging_environment_default(monkeypatch):
-    monkeypatch.setenv("SENTRY_DSN", FAKE_SENTRY_DSN)
-    monkeypatch.delenv("ENVIRONMENT", raising=False)
+def test_worker_process_init_uses_settings_environment(monkeypatch):
+    monkeypatch.setattr(settings, "sentry_dsn", FAKE_SENTRY_DSN)
+    monkeypatch.setattr(settings, "environment", "production")
     calls, record_init = _recorded_init()
     monkeypatch.setattr(sentry_sdk, "init", record_init)
 
     worker_process_init.send(sender=celery_app.celery_app)
 
-    assert calls[0]["environment"] == "staging"
+    assert calls[0]["environment"] == "production"
 
 
 def test_worker_process_init_is_noop_when_sentry_dsn_missing(monkeypatch):
-    monkeypatch.delenv("SENTRY_DSN", raising=False)
+    monkeypatch.setattr(settings, "sentry_dsn", "")
     calls, record_init = _recorded_init()
     monkeypatch.setattr(sentry_sdk, "init", record_init)
 
@@ -75,7 +76,7 @@ def test_worker_process_init_is_noop_when_sentry_dsn_missing(monkeypatch):
 
 
 def test_worker_process_init_is_noop_when_sentry_dsn_empty(monkeypatch):
-    monkeypatch.setenv("SENTRY_DSN", "")
+    monkeypatch.setattr(settings, "sentry_dsn", "")
     calls, record_init = _recorded_init()
     monkeypatch.setattr(sentry_sdk, "init", record_init)
 

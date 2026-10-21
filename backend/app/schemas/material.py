@@ -28,10 +28,20 @@ class UploadUrlCreate(BaseModel):
 
 
 class UploadUrlResponse(BaseModel):
+    """Presigned POST upload target.
+
+    The client sends a ``multipart/form-data`` POST to ``upload_url`` with every
+    entry of ``upload_fields`` as a form field, followed by the file as the
+    last field named ``file``. Storage rejects files larger than
+    ``max_size_bytes``.
+    """
+
     course_id: uuid.UUID
     title: str
     s3_key: str
     upload_url: str
+    upload_fields: dict[str, str]
+    max_size_bytes: int
     expires_in: int
 
 
@@ -65,11 +75,36 @@ class MaterialStatusResponse(BaseModel):
     status: MaterialStatus
 
 
+class MaterialPageResponse(BaseModel):
+    """One stored page of extracted text (1-based; text may be empty)."""
+
+    page_number: int = Field(
+        ge=1,
+        description="1-based page number within the processed document.",
+    )
+    text: str = Field(description="Extracted text of the page.")
+
+
+class MaterialPagesResponse(BaseModel):
+    """A material's stored pages in ascending order; empty until processed."""
+
+    material_id: uuid.UUID
+    pages: list[MaterialPageResponse]
+
+
 class MaterialAcceptedResponse(BaseModel):
     material_id: uuid.UUID
-    job_id: str = Field(
+    job_id: str | None = Field(
+        default=None,
         description=(
-            "Celery task id. Intended for log correlation only in W7; it is "
-            "not queryable through the API."
+            "Celery task id for a freshly enqueued processing job. ``None`` "
+            "when an existing material was reused (no new job). Intended for "
+            "log correlation only in W7; it is not queryable through the API."
+        ),
+    )
+    status: MaterialStatus = Field(
+        description=(
+            "``pending`` for a new or retried material, otherwise the "
+            "existing material's current status."
         )
     )

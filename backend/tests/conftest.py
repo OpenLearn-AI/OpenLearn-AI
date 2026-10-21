@@ -140,6 +140,8 @@ async def _create_material(
     owner: User,
     *,
     status: str = PENDING_STATUS,
+    sha256: str | None = None,
+    s3_etag: str | None = None,
 ) -> Material:
     material = Material(
         course_id=course.id,
@@ -147,8 +149,19 @@ async def _create_material(
         s3_key=f"courses/{course.id}/materials/{uuid.uuid4()}-slides.pdf",
         uploaded_by=owner.id,
         status=status,
+        sha256=sha256,
+        s3_etag=s3_etag,
     )
     db.add(material)
     await db.commit()
     await db.refresh(material)
     return material
+
+@pytest.fixture(autouse=True)
+def _reset_write_rate_limits():
+    """The per-user write rate limiter is process-global state."""
+    from app.api.rate_limit import reset_rate_limits
+
+    reset_rate_limits()
+    yield
+    reset_rate_limits()
