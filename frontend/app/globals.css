@@ -153,6 +153,11 @@
      SHADOWS
      ======================================================= */
 
+   /* Batch 3.1: shadow-xs is explicitly declared because shipped
+      consumers (Select, Textarea, LoadingBlock, ErrorState) already
+      apply `shadow-xs`; declaring it here centralizes the value in
+      the token layer instead of relying on Tailwind's default. */
+   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1),
       0 2px 4px -2px rgb(0 0 0 / 0.1);
@@ -391,5 +396,24 @@
    textarea,
    select {
       font: inherit;
+   }
+
+   /* Batch 3.1: reduced-motion guard. The product is a calm learning
+      surface; motion is limited to state feedback (transitions,
+      spinners, Base UI popup enter/exit). When the user requests
+      reduced motion, decorative movement is suppressed. Loading
+      states remain legible: LoadingBlock conveys status through its
+      text message and role="status" live region, not motion alone.
+      Theme switching already disables color transitions via
+      next-themes' disableTransitionOnChange. */
+   @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+         animation-duration: 0.01ms !important;
+         animation-iteration-count: 1 !important;
+         transition-duration: 0.01ms !important;
+         scroll-behavior: auto !important;
+      }
    }
 }
