@@ -17,6 +17,11 @@ These tokens are the shared UI contract for all future frontend work.
 The token layer was reviewed and ratified by **Batch 3.1 — Design direction and tokens**
 (2026-10-20). The binding decisions, their rationale, and the reserved hub-slot record
 are captured in [ADR-0010](./adr/0010-frontend-design-direction-and-tokens.md).
+**ADR-0010 was amended on 2026-10-23 (owner decision): the visual direction is now
+Light Steel — Steel Blue accent on the Light Steel neutral ramp — with a minimalist,
+text-first semantic-feedback policy and advisory borders with a strict focus ring;
+Arabic typography is explicitly deferred to a separately scoped sub-batch.** The
+amendment migrated token VALUES only: every token name below is unchanged.
 Downstream batches reference tokens, never raw values: token names are stable, and
 every literal color value lives only in `frontend/app/globals.css`.
 
@@ -65,6 +70,43 @@ The existing shadcn `destructive` token maps to the `error` semantic token.
 --destructive: var(--error);
 ```
 
+#### Minimalist semantic-feedback policy (ADR-0010 §2.7, 2026-10-23)
+
+Semantic feedback is **text-first**. Routine success, warning, error, and
+informational feedback does **not** use persistent tinted background panels:
+the default treatment is a neutral surface with a compact semantic icon, a short
+label, an inline message, or a status indicator. Semantic colors appear sparingly
+— icons, labels, inline validation, compact indicators — and color never carries
+state alone. Stronger treatment is reserved for genuinely destructive, blocking,
+or high-severity states, as a justified exception. Component visual migration to
+this policy belongs to the later batches that restyle those components.
+
+Implemented values (both themes, text-grade on their own surfaces — every pair
+AA-verified in the ledger validation matrix):
+
+| Token | Light | Dark (owner-specified) |
+| ------- | --------- | --------- |
+| `--success` | `#2F7D46` | `#69DB7C` |
+| `--warning` | `#B45309` (derived — see note) | `#FFC078` |
+| `--error` | `#BE3B2E` | `#FF8787` |
+| `--info` | `#2A7A9B` | `#74C0FC` |
+
+The light `--warning` is the one derived value: with tinted panels rejected, one
+value must serve both text-on-neutral (AA 4.5:1) and fill-with-light-ink roles;
+`#B45309` is the lightest amber satisfying both (4.76:1 on the page surface,
+5.02:1 on cards, 4.76:1 with `#F8F9FA` ink on fill) while keeping amber identity.
+Darker candidates were pre-computed and rejected as unnecessary; brighter ambers
+fail AA as text. The dark values are the owner-approved pastels used as text/
+icon-grade colors on dark surfaces (≥ 6.4:1 on every dark surface), with the
+committed dark `*-foreground` inks kept (all ≥ 8.5:1 on the new fills).
+
+Token audit (2026-10-23): no `--success-bg`/`--warning-bg`/`--error-bg`/`--info-bg`
+or `*-text` tokens exist in the repository — there was nothing to remove or
+consolidate. The two-tier `--*` / `--*-foreground` set is the complete state API;
+`--success` is consumed as text (`ProfileForm`), `--error` through the
+`destructive` alias across primitives and the async-state kit, and
+`text-destructive-foreground` by LogoutButton's solid hover. All are retained.
+
 ### Utility Colors
 
 | Token              | Purpose                   |
@@ -78,11 +120,15 @@ The existing shadcn `destructive` token maps to the `error` semantic token.
 ### Chart Colors
 
 `chart-1` … `chart-5` are defined in both themes and map to the brand and
-semantic hues (indigo, green, amber, purple, red). They currently have **no
-consumers**: no charts ship today, and analytics surfaces are scheduled well
+semantic hues (steel blue, green, amber, violet, terracotta). They currently have
+**no consumers**: no charts ship today, and analytics surfaces are scheduled well
 beyond the current roadmap horizon (plan W34+). The tokens exist so that the
 first real chart consumes the palette instead of inventing hex values. They
-are reserved, not deprecated — do not repurpose them for non-chart UI.
+are reserved, not deprecated — do not repurpose them for non-chart UI. The set
+was realigned to the Light Steel series in the 2026-10-23 amendment (zero
+consumers, zero render change); the amber step (`#D69E2E` light / `#E5B85C` dark)
+sits below 3:1 on light surfaces and is recorded as advisory — per WCAG 1.4.1
+charts must pair color with labels or shapes regardless.
 
 ### Sidebar Colors
 
@@ -252,9 +298,13 @@ Rules:
 
 * State styling consumes tokens (`ring`, `destructive`, `muted`) with alpha
   modifiers — never raw color literals.
-* Focus indication is always the `ring` token at the shared geometry (3px
-  ring, 50% alpha, `border-ring` edge) so keyboard focus looks identical on
-  every interactive element.
+* **Focus indication is the strict, non-negotiable signal** (ADR-0010 §2.8):
+  always the `ring` token at the shared geometry (3px ring, 50% alpha,
+  `border-ring` edge) so keyboard focus looks identical on every interactive
+  element. The full-opacity `border-ring` edge is the part that must keep passing
+  WCAG 1.4.11 against adjacent surfaces in BOTH themes (Steel Blue: 5.30:1 light,
+  ~3.4:1 dark against cards; the 50%-alpha ring is reinforcement). Any primitive
+  restyle must preserve this result.
 * `aria-invalid` is the only invalid hook: state is driven by attribute, so
   it works with plain forms and Base UI fields alike.
 * Disabled controls keep their shape and label (opacity, not `hidden`),
@@ -299,13 +349,17 @@ Rules for downstream batches:
 ## 10. Border Hierarchy
 
 Borders express structure with one weight; elevation uses rings and shadows,
-not heavier borders.
+not heavier borders. **Policy (ADR-0010 §2.8, 2026-10-23): borders are advisory**
+— quiet, subtle, and neutral; they are decorative structure, not the primary
+state carrier. Keyboard focus is the strict signal (§8). Inputs remain
+understandable without colored backgrounds: label + placeholder + border +
+focus ring carry the affordance.
 
 | Layer            | Convention                                              |
 | ---------------- | ------------------------------------------------------- |
-| Hairline borders | `border` (1px) with `border-border` on surfaces, dividers (`border-b`), and input edges (`border-input`) |
+| Hairline borders | `border` (1px) with `border-border` on surfaces, dividers (`border-b`), and input edges (`border-input`) — advisory ratios: light `#DEE2E6` 1.30:1 vs card, `#ADB5BD` input 2.07:1; dark keeps the alpha-over-surface convention (10% / 15% white) |
 | Card outline     | `ring-1 ring-foreground/10` on the Card primitive (soft, theme-adaptive outline) |
-| Focus ring       | `ring-3 ring-ring/50` — the interaction-state geometry from §8 |
+| Focus ring       | `ring-3 ring-ring/50` — the interaction-state geometry from §8; the strict, 1.4.11-passing part is the full-opacity `border-ring` edge |
 | Icon-slot padding| see §11 — direction-sensitive, uses logical properties after the 3.2 restyle |
 
 Rules:
@@ -373,13 +427,13 @@ The default theme is the light theme.
 
 Light mode uses:
 
-* A near-white application background
+* A near-white application background (`#F8F9FA`, the Light Steel ramp top)
 * White surfaces
-* Indigo as the primary brand color
-* Neutral secondary and muted surfaces
-* Semantic success, warning, error, and info colors
+* **Steel Blue** as the primary brand color (`#3B6EA5`)
+* Neutral secondary and muted surfaces (the Light Steel cool-grey ramp)
+* Semantic success, warning, error, and info colors as text-grade values
 
-The primary color is based on an indigo hue.
+The primary color is Steel Blue (ADR-0010 as amended 2026-10-23).
 
 ---
 
@@ -389,12 +443,14 @@ Dark mode is activated using the `.dark` class.
 
 Dark mode provides:
 
-* Dark application backgrounds
+* Dark application backgrounds — a deliberate surface ladder (`#171A1E` page →
+  `#1F2328` card → `#262B31` popover), not an inversion of the light theme
 * Dark elevated surfaces
-* Adjusted primary colors for visibility
-* Softer borders
-* Higher-contrast foreground colors
-* Adjusted semantic colors for dark backgrounds
+* Adjusted primary colors for visibility (the lighter steel tone `#6E9CC9` with
+  dark ink — mirroring the light theme's filled-primary pattern)
+* Softer borders (alpha-over-surface)
+* High-contrast foreground colors (capped at `#E9ECEF`, never pure white)
+* Semantic colors as the owner-approved text-grade pastels for dark backgrounds
 
 The same semantic token names are used in both themes.
 
@@ -471,6 +527,10 @@ text-info-foreground
   `text-left/right`) for direction-sensitive layout — use the logical
   properties from §11 instead.
 * Add motion that decorates rather than communicates (see §9).
+* Build routine success/warning/error/info feedback as persistent tinted
+  background panels or oversized colored alert cards — use the minimalist,
+  text-first treatments from §2 (ADR-0010 §2.7); color never carries state
+  alone.
 
 ---
 
@@ -494,15 +554,21 @@ Any future changes to the design system should update both the implementation an
 
 ## 18. Review Status
 
-Status: **Batch 3.1 — Design direction and tokens (ratified 2026-10-20)**
+Status: **Batch 3.1 — Design direction and tokens (ratified 2026-10-20); AMENDED
+2026-10-23 — Light Steel design-token migration (owner-authorized)**.
 
-The token layer was reviewed group-by-group against the repository evidence
-and the roadmap's Phase 3 constraints (calm, legible, purposeful; no gradient
-soup; no meaningless glassmorphism; nothing that fights legibility or RTL).
-Outcomes: the existing color, typography, spacing, radius, shadow, and
-breakpoint groups are ratified unchanged (`KEEP`); interaction states, motion
-(including the reduced-motion guard), the shadow-xs declaration, and the RTL
-logical-properties discipline are codified in this document and in
-[ADR-0010](./adr/0010-frontend-design-direction-and-tokens.md). The frontend
-production build and the full check chain were re-verified after these
-changes (see the Batch 3.1 ledger entry for the exact results).
+The original review ratified the then-existing token layer group-by-group. The
+2026-10-23 amendment (recorded in [ADR-0010](./adr/0010-frontend-design-direction-and-tokens.md)
+§1.1, §2.1, §2.7–§2.9) superseded the visual direction to **Light Steel** and
+migrated the color VALUES in `frontend/app/globals.css` — token names, the
+Tailwind 4 CSS-first model, the next-themes class strategy, typography,
+spacing, radius, shadow, and breakpoint decisions are all unchanged. The
+semantic-feedback policy is now minimalist and text-first (§2), borders are
+advisory with a strict focus ring (§8/§10), and the Arabic-font decision is
+explicitly deferred to a separately scoped sub-batch. Every foreground/background
+pair created or affected by the migration was contrast-verified in both themes
+(see the Batch 3.1-amendment ledger entry for the validation matrix, including
+the four recorded sub-threshold states that live in committed component classes
+and are routed to Batch 3.2). The frontend production build and the full check
+chain were re-verified after the migration (see the ledger entry for the exact
+results).

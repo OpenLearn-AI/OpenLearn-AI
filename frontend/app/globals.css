@@ -7,6 +7,12 @@
 /* =========================================================
    OPENLEARN AI — DESIGN TOKENS
    Tailwind CSS 4 + CSS Variables
+
+   Light Steel direction (ADR-0010 as amended 2026-10-23):
+   Steel Blue accent on the Light Steel neutral ramp, calm
+   surfaces in both themes. Token names are unchanged; only
+   color VALUES migrated. Hex comments record the approved
+   source values; docs/design-tokens.md is the usage contract.
    ========================================================= */
 
 @theme inline {
@@ -183,78 +189,83 @@
 
 :root {
    /* =======================================================
-     CORE
+     CORE — Light Steel light theme: page #F8F9FA, white
+     content surfaces, Light Steel neutral ramp for structure.
      ======================================================= */
 
-   --background: oklch(0.985 0.003 255);
-   --foreground: oklch(0.20 0.025 260);
+   --background: oklch(0.982 0.002 247.8); /* #F8F9FA */
+   --foreground: oklch(0.262 0.009 248.2); /* #212529 */
 
    /* =======================================================
      SURFACES
      ======================================================= */
 
    --card: oklch(1 0 0);
-   --card-foreground: oklch(0.20 0.025 260);
+   --card-foreground: oklch(0.262 0.009 248.2);
 
    --popover: oklch(1 0 0);
-   --popover-foreground: oklch(0.20 0.025 260);
+   --popover-foreground: oklch(0.262 0.009 248.2);
 
    /* =======================================================
-     BRAND
+     BRAND — Steel Blue accent (owner-approved 2026-10-23)
      ======================================================= */
 
-   --primary: oklch(0.55 0.22 264);
-   --primary-foreground: oklch(0.985 0 0);
+   --primary: oklch(0.528 0.103 251.9); /* #3B6EA5 */
+   --primary-foreground: oklch(0.982 0.002 247.8); /* #F8F9FA */
 
-   --secondary: oklch(0.95 0.015 255);
-   --secondary-foreground: oklch(0.25 0.035 260);
+   --secondary: oklch(0.942 0.005 247.9); /* #E9ECEF */
+   --secondary-foreground: oklch(0.345 0.013 248.2); /* #343A40 */
 
-   --accent: oklch(0.94 0.025 260);
-   --accent-foreground: oklch(0.30 0.06 260);
+   --accent: oklch(0.942 0.005 247.9); /* #E9ECEF */
+   --accent-foreground: oklch(0.262 0.009 248.2); /* #212529 */
 
    /* =======================================================
      MUTED
      ======================================================= */
 
-   --muted: oklch(0.95 0.01 255);
-   --muted-foreground: oklch(0.50 0.035 255);
+   --muted: oklch(0.942 0.005 247.9); /* #E9ECEF */
+   --muted-foreground: oklch(0.428 0.015 248.2); /* #495057 */
 
    /* =======================================================
-     SEMANTIC STATES
+     SEMANTIC STATES — minimalist, text-first feedback
+     (ADR-0010 §2.7): in this theme every semantic value is
+     text-grade on the neutral surfaces (AA verified).
      ======================================================= */
 
-   --success: oklch(0.62 0.18 155);
-   --success-foreground: oklch(0.98 0.01 155);
+   --success: oklch(0.527 0.115 150.3); /* #2F7D46 */
+   --success-foreground: oklch(0.982 0.002 247.8); /* #F8F9FA */
 
-   --warning: oklch(0.78 0.17 75);
-   --warning-foreground: oklch(0.25 0.04 75);
+   --warning: oklch(0.5553 0.1455 49); /* #B45309 — derived, see docs */
+   --warning-foreground: oklch(0.982 0.002 247.8); /* #F8F9FA */
 
-   --error: oklch(0.52 0.22 27);
-   --error-foreground: oklch(0.98 0.01 27);
+   --error: oklch(0.537 0.17 29.8); /* #BC392B — see docs note */
+   --error-foreground: oklch(1 0 0); /* #FFFFFF */
 
-   --info: oklch(0.62 0.18 240);
-   --info-foreground: oklch(0.98 0.01 240);
+   --info: oklch(0.546 0.091 229.5); /* #2A7A9B */
+   --info-foreground: oklch(0.982 0.002 247.8); /* #F8F9FA */
 
    /* Keep shadcn destructive compatible */
    --destructive: var(--error);
 
    /* =======================================================
-     BORDERS & INPUTS
+     BORDERS & INPUTS — advisory borders + strict focus ring
+     (ADR-0010 §2.8): quiet neutral edges; focus and
+     interactivity are carried by the ring, not heavy borders.
      ======================================================= */
 
-   --border: oklch(0.90 0.015 255);
-   --input: oklch(0.90 0.015 255);
-   --ring: oklch(0.55 0.22 264);
+   --border: oklch(0.911 0.007 247.9); /* #DEE2E6 */
+   --input: oklch(0.769 0.015 248); /* #ADB5BD */
+   --ring: oklch(0.528 0.103 251.9); /* #3B6EA5 */
 
    /* =======================================================
-     CHARTS
+     CHARTS — Light Steel series (reserved, zero consumers)
      ======================================================= */
 
-   --chart-1: oklch(0.55 0.22 264);
-   --chart-2: oklch(0.65 0.18 155);
-   --chart-3: oklch(0.72 0.16 75);
-   --chart-4: oklch(0.62 0.20 320);
-   --chart-5: oklch(0.60 0.20 30);
+   --chart-1: oklch(0.528 0.103 251.9); /* #3B6EA5 */
+   --chart-2: oklch(0.553 0.107 158); /* #2F855A */
+   --chart-3: oklch(0.734 0.138 80); /* #D69E2E */
+   --chart-4: oklch(0.572 0.104 294.4); /* #7C6BAF */
+   --chart-5: oklch(0.612 0.128 45.6); /* #C1683C */
 
    /* =======================================================
      BASE RADIUS
@@ -263,20 +274,20 @@
    --radius: 0.625rem;
 
    /* =======================================================
-     SIDEBAR
+     SIDEBAR — scaffold compatibility (zero consumers)
      ======================================================= */
 
    --sidebar: oklch(1 0 0);
-   --sidebar-foreground: oklch(0.20 0.025 260);
+   --sidebar-foreground: oklch(0.262 0.009 248.2);
 
-   --sidebar-primary: oklch(0.55 0.22 264);
-   --sidebar-primary-foreground: oklch(0.985 0 0);
+   --sidebar-primary: oklch(0.528 0.103 251.9);
+   --sidebar-primary-foreground: oklch(0.982 0.002 247.8);
 
-   --sidebar-accent: oklch(0.94 0.025 260);
-   --sidebar-accent-foreground: oklch(0.30 0.06 260);
+   --sidebar-accent: oklch(0.942 0.005 247.9);
+   --sidebar-accent-foreground: oklch(0.262 0.009 248.2);
 
-   --sidebar-border: oklch(0.90 0.015 255);
-   --sidebar-ring: oklch(0.55 0.22 264);
+   --sidebar-border: oklch(0.942 0.005 247.9);
+   --sidebar-ring: oklch(0.528 0.103 251.9);
 }
 
 /* =========================================================
@@ -285,93 +296,102 @@
 
 .dark {
    /* =======================================================
-     CORE
+     CORE — Light Steel dark ladder (deliberate design, not an
+     inversion): #171A1E page → #1F2328 card → #262B31 popover;
+     text is capped at #E9ECEF, never pure white.
      ======================================================= */
 
-   --background: oklch(0.15 0.025 260);
-   --foreground: oklch(0.96 0.01 255);
+   --background: oklch(0.216 0.009 255.6); /* #171A1E */
+   --foreground: oklch(0.942 0.005 247.9); /* #E9ECEF */
 
    /* =======================================================
      SURFACES
      ======================================================= */
 
-   --card: oklch(0.19 0.025 260);
-   --card-foreground: oklch(0.96 0.01 255);
+   --card: oklch(0.254 0.011 254); /* #1F2328 */
+   --card-foreground: oklch(0.942 0.005 247.9);
 
-   --popover: oklch(0.19 0.025 260);
-   --popover-foreground: oklch(0.96 0.01 255);
+   --popover: oklch(0.287 0.013 253); /* #262B31 */
+   --popover-foreground: oklch(0.942 0.005 247.9);
 
    /* =======================================================
-     BRAND
+     BRAND — dark primary flips to the lighter steel tone with
+     dark ink, mirroring the production primary pattern
      ======================================================= */
 
-   --primary: oklch(0.65 0.20 264);
-   --primary-foreground: oklch(0.15 0.025 260);
+   --primary: oklch(0.677 0.084 248.6); /* #6E9CC9 — owner-approved */
+   --primary-foreground: oklch(0.208 0.009 255.6); /* #15181C */
 
-   --secondary: oklch(0.25 0.025 260);
-   --secondary-foreground: oklch(0.96 0.01 255);
+   --secondary: oklch(0.306 0.014 248.3); /* #2A3036 */
+   --secondary-foreground: oklch(0.911 0.007 247.9); /* #DEE2E6 */
 
-   --accent: oklch(0.28 0.04 260);
-   --accent-foreground: oklch(0.95 0.015 255);
+   --accent: oklch(0.317 0.016 248.3); /* #2C333A */
+   --accent-foreground: oklch(0.942 0.005 247.9);
 
    /* =======================================================
      MUTED
      ======================================================= */
 
-   --muted: oklch(0.25 0.025 260);
-   --muted-foreground: oklch(0.70 0.025 255);
+   --muted: oklch(0.286 0.012 248.2); /* #262B30 */
+   --muted-foreground: oklch(0.769 0.015 248); /* #ADB5BD */
 
    /* =======================================================
-     SEMANTIC STATES
+     SEMANTIC STATES — owner-approved dark values (2026-10-23):
+     text-grade pastels on dark surfaces. The -foreground inks
+     are the committed dark values, kept (all ≥8.5:1 on the new
+     fills). Filled badges/buttons read as pastel fill + dark ink.
      ======================================================= */
 
-   --success: oklch(0.70 0.18 155);
+   --success: oklch(0.802 0.168 147.3); /* #69DB7C */
    --success-foreground: oklch(0.15 0.025 155);
 
-   --warning: oklch(0.78 0.17 75);
+   --warning: oklch(0.85 0.115 69); /* #FFC078 */
    --warning-foreground: oklch(0.18 0.025 75);
 
-   --error: oklch(0.65 0.20 27);
+   --error: oklch(0.756 0.146 21.1); /* #FF8787 */
    --error-foreground: oklch(0.15 0.025 27);
 
-   --info: oklch(0.70 0.18 240);
+   --info: oklch(0.782 0.115 243.8); /* #74C0FC */
    --info-foreground: oklch(0.15 0.025 240);
 
    --destructive: var(--error);
 
    /* =======================================================
-     BORDERS & INPUTS
+     BORDERS & INPUTS — alpha-over-surface convention kept
+     (advisory per ADR-0010 §2.8); the strict focus signal is
+     the --ring token below.
      ======================================================= */
 
    --border: oklch(1 0 0 / 10%);
    --input: oklch(1 0 0 / 15%);
-   --ring: oklch(0.65 0.20 264);
+   --ring: oklch(0.677 0.084 248.6); /* #6E9CC9 */
 
    /* =======================================================
-     CHARTS
+     CHARTS — raised-lightness Light Steel series (reserved)
      ======================================================= */
 
-   --chart-1: oklch(0.65 0.20 264);
-   --chart-2: oklch(0.70 0.18 155);
-   --chart-3: oklch(0.75 0.16 75);
-   --chart-4: oklch(0.68 0.20 320);
-   --chart-5: oklch(0.68 0.20 30);
+   --chart-1: oklch(0.677 0.084 248.6); /* #6E9CC9 */
+   --chart-2: oklch(0.714 0.12 156.1); /* #5CB983 */
+   --chart-3: oklch(0.805 0.122 83.3); /* #E5B85C */
+   --chart-4: oklch(0.709 0.081 292.4); /* #A298D0 */
+   --chart-5: oklch(0.713 0.106 46.5); /* #D98D68 */
 
    /* =======================================================
-     SIDEBAR
+     SIDEBAR — scaffold compatibility (zero consumers); sits
+     below cards in dark (production surface order)
      ======================================================= */
 
-   --sidebar: oklch(0.18 0.025 260);
-   --sidebar-foreground: oklch(0.96 0.01 255);
+   --sidebar: oklch(0.233 0.011 254.1); /* #1A1E23 */
+   --sidebar-foreground: oklch(0.942 0.005 247.9);
 
-   --sidebar-primary: oklch(0.65 0.20 264);
-   --sidebar-primary-foreground: oklch(0.15 0.025 260);
+   --sidebar-primary: oklch(0.677 0.084 248.6);
+   --sidebar-primary-foreground: oklch(0.208 0.009 255.6);
 
-   --sidebar-accent: oklch(0.28 0.04 260);
-   --sidebar-accent-foreground: oklch(0.95 0.015 255);
+   --sidebar-accent: oklch(0.306 0.014 248.3);
+   --sidebar-accent-foreground: oklch(0.942 0.005 247.9);
 
    --sidebar-border: oklch(1 0 0 / 10%);
-   --sidebar-ring: oklch(0.65 0.20 264);
+   --sidebar-ring: oklch(0.677 0.084 248.6);
 }
 
 /* =========================================================
