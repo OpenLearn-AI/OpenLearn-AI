@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+/* Vendored in Batch 3.2 (W5) — was: @import "shadcn/tailwind.css" (runtime dep, removed) */
+@import "../styles/shadcn.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -42,6 +43,7 @@
    --color-accent-foreground: var(--accent-foreground);
 
    --color-destructive: var(--destructive);
+   --color-destructive-foreground: var(--destructive-foreground);
 
    --color-border: var(--border);
    --color-input: var(--input);
@@ -246,6 +248,7 @@
 
    /* Keep shadcn destructive compatible */
    --destructive: var(--error);
+   --destructive-foreground: var(--error-foreground);
 
    /* =======================================================
      BORDERS & INPUTS — advisory borders + strict focus ring
@@ -355,6 +358,7 @@
    --info-foreground: oklch(0.15 0.025 240);
 
    --destructive: var(--error);
+   --destructive-foreground: var(--error-foreground);
 
    /* =======================================================
      BORDERS & INPUTS — alpha-over-surface convention kept

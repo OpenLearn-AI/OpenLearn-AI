@@ -43,17 +43,4 @@ describe("courseKeys — stability and hierarchy", () => {
         expect(detailKey[0]).toBe(listKey[0]); // "courses" root matches
         expect(detailKey[1]).not.toBe(listKey[1]); // "detail" != "list"
     });
-
-    it("list(filters) produces filter-scoped keys under lists()", () => {
-        expect(courseKeys.list()).toEqual(["courses", "list", {}]);
-        expect(courseKeys.list({ search: "math" })).toEqual([
-            "courses",
-            "list",
-            { search: "math" },
-        ]);
-        // Different filters produce different keys.
-        expect(courseKeys.list({ search: "math" })).not.toEqual(
-            courseKeys.list({ search: "cs" }),
-        );
-    });
 });

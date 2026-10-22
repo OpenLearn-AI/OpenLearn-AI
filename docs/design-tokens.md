@@ -8,7 +8,9 @@ The design system is implemented using:
 
 * Tailwind CSS 4
 * CSS custom properties
-* shadcn/ui
+* The shadcn component conventions (base-nova style on Base UI), with the
+  shadcn stylesheet **vendored** at `frontend/styles/shadcn.css` (Batch 3.2,
+  W5) — the `shadcn` CLI is no longer a runtime dependency
 * Light and dark themes
 * OKLCH color values
 
@@ -64,11 +66,18 @@ every literal color value lives only in `frontend/app/globals.css`.
 | `info`               | Informational states                      |
 | `info-foreground`    | Content displayed on info backgrounds     |
 
-The existing shadcn `destructive` token maps to the `error` semantic token.
+The existing shadcn `destructive` tokens map to the `error` semantic tokens.
 
 ```css
 --destructive: var(--error);
+--destructive-foreground: var(--error-foreground);
 ```
+
+(The `--destructive-foreground` alias and its `@theme inline` mapping were
+added in Batch 3.2: the `text-destructive-foreground` utility previously
+generated no CSS — the variable and mapping did not exist — so consumers of
+that utility silently had no hover text color. The alias completes the
+committed `destructive → error` alias chain.)
 
 #### Minimalist semantic-feedback policy (ADR-0010 §2.7, 2026-10-23)
 
@@ -280,18 +289,19 @@ Example:
 
 ## 8. Interaction States
 
-The primitives (Button, Input, Select, Textarea, Badge) implement one shared
-state vocabulary, keyed on the semantic tokens above. Batch 3.1 codifies it as
-the convention every restyled or new component must follow; Batch 3.2 applies
-it during the primitive restyle.
+The primitives (Button, Input, Select, Textarea — the Badge primitive was
+removed in Batch 3.2, S5) implement one shared state vocabulary, keyed on the
+semantic tokens above. Batch 3.1 codifies it as the convention every restyled
+or new component must follow; Batch 3.2 applies it during the primitive
+restyle.
 
 | State            | Convention (as implemented in the primitives)                              |
 | ---------------- | -------------------------------------------------------------------------- |
 | Focus (keyboard) | `focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50` |
-| Hover            | Alpha-tint of the surface token (`hover:bg-primary/80`, `hover:bg-muted`)   |
+| Hover            | Alpha-tint of the surface token (`hover:bg-primary/80`, `hover:bg-muted`). The destructive variant is the one exception: its fixed text token caps the passing tint at the base value, so hover flips to the solid fill (`hover:bg-destructive hover:text-destructive-foreground`) — AA-verified in both themes (Batch 3.2) |
 | Active / pressed | Displacement only: `active:translate-y-px` (interactive primitives)         |
 | Disabled         | `disabled:opacity-50 disabled:pointer-events-none` (+ `disabled:cursor-not-allowed` on form fields) |
-| Invalid          | `aria-invalid:border-destructive aria-invalid:ring-destructive/20` (with dark-theme variants) |
+| Invalid          | `aria-invalid:border-destructive aria-invalid:ring-destructive/20` (with dark-theme ring variants; the dark 50%-alpha border override was removed in Batch 3.2 so the full-opacity error border carries the invalid state in both themes) |
 | Selected / open  | State-reflecting utilities: `aria-expanded:bg-muted`, Base UI `data-*` variants |
 
 Rules:
@@ -395,13 +405,14 @@ a first-class prepared direction. The codified discipline:
 4. **Directional icons** (arrows, chevrons) that encode reading direction
    must flip in RTL (`rtl:rotate-180` or a logical-position swap); icons that
    represent a physical object (a printer, a download tray) do not flip.
-5. **Existing state, recorded honestly (2026-10-20):** the Navbar and UserInfo
-   already use logical utilities (`border-s ps-3`, `ms-4`). The Button and
-   Badge primitives still pair their icon slots with physical padding
-   (`has-data-[icon=inline-start]:pl-*` / `inline-end]:pr-*`). Because these
-   are primitive class-string changes, the fix is assigned to **Batch 3.2
-   (primitive restyle)**, not silently patched here; the full RTL audit runs
-   in Batch 4.4 with the Storybook direction toolbar.
+5. **Status (updated 2026-10-23, Batch 3.2):** the Navbar and UserInfo
+   already used logical utilities (`border-s ps-3`, `ms-4`). The Button and
+   Badge primitives paired their icon slots with physical padding
+   (`has-data-[icon=inline-start]:pl-*` / `inline-end]:pr-*`) — recorded as a
+   violation and routed to Batch 3.2, which **resolved it**: the Button icon
+   slots now use logical `ps-*`/`pe-*`, and the unused Badge primitive was
+   removed entirely (finding S5). The full RTL audit runs in Batch 4.4 with
+   the Storybook direction toolbar.
 6. **Verification**: `.storybook/preview.tsx` provides the Direction (LTR/RTL)
    toolbar that sets `dir` on the story iframe; both directions must be
    exercised when a component's layout is direction-sensitive.
@@ -542,6 +553,20 @@ The primary implementation is:
 frontend/app/globals.css
 ```
 
+The shadcn stylesheet (custom `data-*` variants and popup utilities consumed
+by the primitives) is vendored at:
+
+```text
+frontend/styles/shadcn.css
+```
+
+It is a verbatim copy of the `shadcn` package's `dist/tailwind.css`
+(v4.18.0, MIT — attribution header and license copy included in the same
+directory). Batch 3.2 (W5) vendored it and removed the `shadcn` CLI from the
+runtime dependencies; the stylesheet is now repository-owned. If a future
+batch upgrades the vendored stylesheet, it must re-verify the attribution
+header and this document in the same change.
+
 The documentation is:
 
 ```text
@@ -555,7 +580,8 @@ Any future changes to the design system should update both the implementation an
 ## 18. Review Status
 
 Status: **Batch 3.1 — Design direction and tokens (ratified 2026-10-20); AMENDED
-2026-10-23 — Light Steel design-token migration (owner-authorized)**.
+2026-10-23 — Light Steel design-token migration (owner-authorized); Batch 3.2 —
+Design system foundations in code applied to the primitives (2026-10-23).**
 
 The original review ratified the then-existing token layer group-by-group. The
 2026-10-23 amendment (recorded in [ADR-0010](./adr/0010-frontend-design-direction-and-tokens.md)
@@ -572,3 +598,13 @@ the four recorded sub-threshold states that live in committed component classes
 and are routed to Batch 3.2). The frontend production build and the full check
 chain were re-verified after the migration (see the ledger entry for the exact
 results).
+
+Batch 3.2 (2026-10-23) applied the interaction-state vocabulary across the
+primitive set: the five routed sub-threshold states were fixed (destructive
+hover now flips to the solid fill with `text-destructive-foreground`; the dark
+50%-alpha invalid-border override was removed in favor of the full-opacity
+error border), the Button/Badge icon-slot RTL violation was resolved (logical
+padding on Button; Badge removed with S5), the destructive-foreground alias
+was completed, and the alert-dialog primitive was added
+(`components/ui/dialog.tsx`). See the Batch 3.2 ledger entry for the full
+validation matrix.
