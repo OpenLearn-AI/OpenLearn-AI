@@ -43,6 +43,33 @@ config.viteFinal = async (viteConfig) => {
     'process.env.NEXT_PUBLIC_SENTRY_DSN': JSON.stringify(''),
     'process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT': JSON.stringify('development'),
   };
+
+  // Batch 4.1 corrective follow-up: alias `next/navigation` to a
+  // story-safe stub — the real App Router hooks throw "invariant
+  // expected app router to be mounted" outside Next.js, which crashed
+  // the auth-entry stories. Application builds are untouched (this
+  // config affects the Storybook bundle only).
+  const existingAlias = viteConfig.resolve?.alias;
+  const normalizedAlias = Array.isArray(existingAlias)
+    ? existingAlias
+    : existingAlias
+      ? Object.entries(existingAlias).map(([find, replacement]) => ({
+          find,
+          replacement,
+        }))
+      : [];
+
+  viteConfig.resolve = {
+    ...viteConfig.resolve,
+    alias: [
+      ...normalizedAlias,
+      {
+        find: /^next\/navigation$/,
+        replacement: new URL('./next-navigation-stub.ts', import.meta.url).pathname,
+      },
+    ],
+  };
+
   return viteConfig;
 };
 

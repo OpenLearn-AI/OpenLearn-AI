@@ -6,15 +6,16 @@ import { performKeycloakLogin } from "./helpers";
  * E2E smoke flow #1 — login → dashboard.
  *
  * This spec exercises the REAL authentication path:
- *   1. Visit `/login` on our origin.
- *   2. Click the "Sign in with OpenLearn AI" button — this triggers a
- *      full OIDC redirect to the Keycloak server's hosted login page.
- *   3. Fill the Keycloak-hosted form (#username, #password) and submit
+ *   1. Visit `/login` on our origin — the entry bridge auto-initiates
+ *      the existing OIDC login (corrective follow-up §C.4), so the
+ *      browser lands on the Keycloak-hosted login page without any
+ *      intermediate click.
+ *   2. Fill the Keycloak-hosted form (#username, #password) and submit
  *      (#kc-login) — these selectors are defined by the Keycloak theme,
  *      not by this repo, but they are the documented selectors across
  *      every Keycloak version since ~10.x.
- *   4. Wait for the redirect back to our origin at `/dashboard`.
- *   5. Assert meaningful dashboard content is present (the "Welcome Back!"
+ *   3. Wait for the redirect back to our origin at `/dashboard`.
+ *   4. Assert meaningful dashboard content is present (the "Welcome Back!"
  *      heading + the UserInfo block rendering the test user's email).
  *
  * Batch 4.1: the post-login wait is onboarding-aware (shared helper).

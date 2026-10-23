@@ -1,36 +1,35 @@
 import { Suspense } from "react";
-import { LoginForm } from "@/components/auth/LoginForm";
+
+import { OidcEntryBridge } from "@/components/auth/OidcEntryBridge";
+import { LoadingBlock } from "@/components/state/LoadingBlock";
 
 /**
- * Login entry (Batch 4.1 presentation refresh).
+ * Login entry — minimal redirect bridge (Batch 4.1 corrective follow-up
+ * §C.4).
  *
- * The page owns the entry card and the pinned heading "Sign in to your
- * account" (the E2E login spec locates it by role + name); the brand
- * identity and theme toggle come from the shared `(auth)` layout.
- * `LoginForm` provides the OIDC button and its states — the button's
- * text ("Sign in with OpenLearn AI") and the redirect handler are
- * unchanged.
+ * The previous local card ("Sign in to your account" + a separate OIDC
+ * button) added an extra click between the landing page and Keycloak;
+ * this page now hands the visit straight to the shared
+ * `OidcEntryBridge`, which initiates the EXISTING Keycloak flow
+ * directly (carrying the validated `redirectedFrom` deep link exactly
+ * as before). The bridge's manual state keeps the E2E-pinned
+ * "Sign in with OpenLearn AI" button for the return-after-attempt and
+ * error paths.
+ *
+ * The Suspense boundary is required by Next.js because the bridge reads
+ * `useSearchParams()` (the `redirectedFrom` query param carried over by
+ * AuthGuard).
  */
 export default function LoginPage() {
     return (
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-xs">
-            <div className="mb-6 space-y-1.5">
-                <h2 className="text-2xl font-bold text-card-foreground">
-                    Sign in to your account
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    Welcome back — your courses are right where you left them.
-                </p>
-            </div>
-
-            {/*
-              Suspense boundary required by Next.js because LoginForm
-              uses useSearchParams() to read the `redirectedFrom`
-              query param carried over by AuthGuard.
-            */}
-            <Suspense fallback={null}>
-                <LoginForm />
-            </Suspense>
-        </div>
+        <Suspense
+            fallback={
+                <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-xs">
+                    <LoadingBlock message="Preparing sign-in…" />
+                </div>
+            }
+        >
+            <OidcEntryBridge mode="login" />
+        </Suspense>
     );
 }

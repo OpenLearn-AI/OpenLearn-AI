@@ -6,8 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
+import { ChoiceTileGroup } from "@/components/ui/choice-tile-group";
 import {
     profileSchema,
     type Profile,
@@ -17,10 +17,11 @@ import { profileKeys } from "@/features/profile/keys";
 import { useUpdateProfile } from "@/features/profile/api/useProfileMutation";
 
 /**
- * First-login profile setup wizard (Batch 4.1 — owner decisions Q2/Q3).
+ * First-login profile setup wizard (Batch 4.1 — owner decisions Q2/Q3;
+ * presentation refined by the corrective follow-up).
  *
- * Contract rules (verified against `docs/openapi.json` and the existing
- * schema layer — nothing invented):
+ * Contract rules (verified against `docs/openapi.json` — nothing
+ * invented):
  *   - `PUT /v1/users/me` is a FULL-REPLACEMENT upsert: every call must
  *     carry all four required fields; omitted optional fields
  *     (`university`, `learning_style_vark`) are cleared. The wizard
@@ -32,13 +33,21 @@ import { useUpdateProfile } from "@/features/profile/api/useProfileMutation";
  *     prefills the wizard (a user who revisits `/onboarding` edits
  *     rather than erases). No client-only completion flag exists or is
  *     created.
+ *   - Every field is SINGLE-VALUED in the contract, so all choice
+ *     controls are single-select. The tiles map only finite,
+ *     contract-backed choices — the `preferred_language` enum, common
+ *     integer presets for `daily_available_minutes` (the input stays
+ *     for any value 1–1440), and the four VARK styles the product's
+ *     own hint documents for the free-text `learning_style_vark`.
+ *     Education level, major, and university remain text inputs (no
+ *     trusted catalog exists; none is invented).
  *
- * UX rules (Q3): three manageable steps, explicit progress, backward
- * navigation that never loses entered values, per-step Zod validation
- * from the shared `profileSchema` (single source of truth with
- * `ProfileForm`), explicit saving/success/failure states, no success
- * claim before the API confirms, and a retry path that preserves every
- * entered value.
+ * UX rules (Q3 + corrective follow-up §A.1): three steps with a clear
+ * hierarchy — step position, title, one-line instruction, fields,
+ * navigation. Backward navigation never loses entered values; per-step
+ * Zod validation comes from the shared `profileSchema`; saving,
+ * success, failure, and retry are explicit; no success claim before
+ * the API confirms.
  *
  * Redirect safety: the CALLER owns navigation — the wizard reports the
  * confirmed save through its `onSaved` callback, and the onboarding
@@ -53,9 +62,37 @@ import { useUpdateProfile } from "@/features/profile/api/useProfileMutation";
  */
 
 const STEPS = [
-    { title: "About your studies" },
-    { title: "Your study rhythm" },
-    { title: "Optional details & review" },
+    {
+        title: "About your studies",
+        instruction: "Where you are and what you study.",
+    },
+    {
+        title: "Your study rhythm",
+        instruction: "Your daily study time and preferred language.",
+    },
+    {
+        title: "Optional details",
+        instruction: "Skip either field, review your answers, then save.",
+    },
+] as const;
+
+const MINUTES_PRESETS = [
+    { value: "15", label: "15 min" },
+    { value: "30", label: "30 min" },
+    { value: "60", label: "1 hour" },
+    { value: "120", label: "2 hours" },
+] as const;
+
+const LANGUAGE_OPTIONS = [
+    { value: "en", label: "English" },
+    { value: "ar", label: "العربية" },
+] as const;
+
+const VARK_OPTIONS = [
+    { value: "Visual", label: "Visual" },
+    { value: "Aural", label: "Aural" },
+    { value: "Read/Write", label: "Read/Write" },
+    { value: "Kinesthetic", label: "Kinesthetic" },
 ] as const;
 
 /**
@@ -122,6 +159,8 @@ export function ProfileSetupWizard({
     const [step, setStep] = useState(0);
     const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
     const [saved, setSaved] = useState(false);
+
+    const busy = updateProfile.isPending || saved;
 
     /**
      * The full-replacement payload, assembled exactly as `ProfileForm`
@@ -211,33 +250,38 @@ export function ProfileSetupWizard({
 
     return (
         <form onSubmit={handleSubmit} noValidate className="space-y-6">
-            {/* Explicit progress — real step position, no fake bar. The
-                live region announces step changes to screen readers. */}
-            <div className="space-y-2">
-                <p
-                    aria-live="polite"
-                    className="text-xs font-semibold uppercase tracking-wider text-primary"
-                >
-                    Step {step + 1} of {STEPS.length} — {STEPS[step].title}
-                </p>
-                <div
-                    aria-hidden="true"
-                    className="flex gap-1.5"
-                >
-                    {STEPS.map((s, index) => (
-                        <span
-                            key={s.title}
-                            className={`h-1 flex-1 rounded-full ${
-                                index <= step
-                                    ? "bg-primary"
-                                    : "bg-muted"
-                            }`}
-                        />
-                    ))}
+            {/* Step header: position + title + one-line instruction.
+                The live region announces step changes to screen readers;
+                the segments are decorative progress markers. */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                    <p
+                        aria-live="polite"
+                        className="text-xs font-semibold uppercase tracking-wider text-primary"
+                    >
+                        Step {step + 1} of {STEPS.length}
+                    </p>
+                    <div aria-hidden="true" className="flex w-24 gap-1.5">
+                        {STEPS.map((s, index) => (
+                            <span
+                                key={s.title}
+                                className={`h-1 flex-1 rounded-full ${
+                                    index <= step
+                                        ? "bg-primary"
+                                        : "bg-muted"
+                                }`}
+                            />
+                        ))}
+                    </div>
                 </div>
-                <h2 className="text-xl font-bold tracking-tight text-card-foreground">
-                    {STEPS[step].title}
-                </h2>
+                <div className="space-y-1">
+                    <h2 className="text-xl font-bold tracking-tight text-card-foreground">
+                        {STEPS[step].title}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                        {STEPS[step].instruction}
+                    </p>
+                </div>
             </div>
 
             {step === 0 && (
@@ -249,11 +293,12 @@ export function ProfileSetupWizard({
                     >
                         <Input
                             id="onboarding-education-level"
+                            placeholder="e.g. High school, Undergraduate, Postgraduate"
                             value={educationLevel}
                             onChange={(event) =>
                                 setEducationLevel(event.target.value)
                             }
-                            disabled={updateProfile.isPending || saved}
+                            disabled={busy}
                             aria-invalid={Boolean(
                                 fieldErrors.education_level,
                             )}
@@ -267,9 +312,10 @@ export function ProfileSetupWizard({
                     >
                         <Input
                             id="onboarding-major"
+                            placeholder="e.g. Computer Science"
                             value={major}
                             onChange={(event) => setMajor(event.target.value)}
-                            disabled={updateProfile.isPending || saved}
+                            disabled={busy}
                             aria-invalid={Boolean(fieldErrors.major)}
                         />
                     </Field>
@@ -278,50 +324,66 @@ export function ProfileSetupWizard({
 
             {step === 1 && (
                 <div className="space-y-4">
-                    <Field
-                        label="Daily Available Minutes"
-                        htmlFor="onboarding-daily-available-minutes"
-                        hint="How many minutes you can realistically study per day (1–1440)."
-                        error={fieldErrors.daily_available_minutes}
-                    >
+                    <div className="space-y-2">
+                        <ChoiceTileGroup
+                            id="onboarding-daily-minutes"
+                            label="Daily study time"
+                            options={MINUTES_PRESETS}
+                            value={
+                                MINUTES_PRESETS.some(
+                                    (preset) =>
+                                        preset.value === dailyAvailableMinutes,
+                                )
+                                    ? dailyAvailableMinutes
+                                    : ""
+                            }
+                            onValueChange={setDailyAvailableMinutes}
+                            disabled={busy}
+                        />
+                        {/* Contract: any integer 1–1440 — the presets are
+                            shortcuts, the input stays the honest control
+                            for every other value. */}
                         <Input
                             id="onboarding-daily-available-minutes"
+                            aria-label="Custom minutes per day"
                             type="number"
+                            inputMode="numeric"
                             min={1}
                             max={1440}
+                            placeholder="Custom (1–1440)"
                             value={dailyAvailableMinutes}
                             onChange={(event) =>
                                 setDailyAvailableMinutes(event.target.value)
                             }
-                            disabled={updateProfile.isPending || saved}
+                            disabled={busy}
                             aria-invalid={Boolean(
                                 fieldErrors.daily_available_minutes,
                             )}
+                            className="max-w-44"
                         />
-                    </Field>
+                        {fieldErrors.daily_available_minutes ? (
+                            <p
+                                id="onboarding-daily-minutes-error"
+                                role="alert"
+                                className="text-sm text-destructive"
+                            >
+                                {fieldErrors.daily_available_minutes}
+                            </p>
+                        ) : null}
+                    </div>
 
-                    <Field
-                        label="Preferred Language"
-                        htmlFor="onboarding-preferred-language"
+                    <ChoiceTileGroup
+                        id="onboarding-preferred-language"
+                        label="Preferred language"
+                        options={LANGUAGE_OPTIONS}
+                        value={preferredLanguage}
+                        onValueChange={(next) =>
+                            setPreferredLanguage(next as "en" | "ar")
+                        }
                         error={fieldErrors.preferred_language}
-                    >
-                        <Select
-                            id="onboarding-preferred-language"
-                            value={preferredLanguage}
-                            onChange={(event) =>
-                                setPreferredLanguage(
-                                    event.target.value as "en" | "ar",
-                                )
-                            }
-                            disabled={updateProfile.isPending || saved}
-                            aria-invalid={Boolean(
-                                fieldErrors.preferred_language,
-                            )}
-                        >
-                            <option value="en">English</option>
-                            <option value="ar">Arabic</option>
-                        </Select>
-                    </Field>
+                        disabled={busy}
+                        groupClassName="[&>button]:flex-1 [&>button]:basis-40"
+                    />
                 </div>
             )}
 
@@ -335,35 +397,39 @@ export function ProfileSetupWizard({
                         >
                             <Input
                                 id="onboarding-university"
+                                placeholder="e.g. Cairo University"
                                 value={university}
                                 onChange={(event) =>
                                     setUniversity(event.target.value)
                                 }
-                                disabled={updateProfile.isPending || saved}
+                                disabled={busy}
                                 aria-invalid={Boolean(
                                     fieldErrors.university,
                                 )}
                             />
                         </Field>
 
-                        <Field
-                            label="Learning Style (VARK) (optional)"
-                            htmlFor="onboarding-learning-style"
-                            hint="Up to 20 characters — for example Visual, Aural, Read/Write, or Kinesthetic."
+                        <ChoiceTileGroup
+                            id="onboarding-learning-style"
+                            label="Learning style (optional)"
+                            options={VARK_OPTIONS}
+                            value={learningStyle}
+                            onValueChange={setLearningStyle}
+                            disabled={busy}
                             error={fieldErrors.learning_style_vark}
-                        >
-                            <Input
-                                id="onboarding-learning-style"
-                                value={learningStyle}
-                                onChange={(event) =>
-                                    setLearningStyle(event.target.value)
-                                }
-                                disabled={updateProfile.isPending || saved}
-                                aria-invalid={Boolean(
-                                    fieldErrors.learning_style_vark,
-                                )}
-                            />
-                        </Field>
+                            groupClassName="[&>button]:min-w-[calc(50%-0.5rem)] sm:[&>button]:flex-1"
+                            action={
+                                learningStyle && !busy ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setLearningStyle("")}
+                                        className="rounded text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                                    >
+                                        Clear
+                                    </button>
+                                ) : undefined
+                            }
+                        />
                     </div>
 
                     {/* Review of the complete payload that will be sent —
@@ -378,24 +444,21 @@ export function ProfileSetupWizard({
                         >
                             Review your answers
                         </h3>
-                        <dl className="mt-3 space-y-1.5 text-sm">
+                        <dl className="mt-2.5 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
                             {(
                                 [
                                     ["Education Level", review.education_level],
                                     ["Major", review.major],
                                     [
-                                        "Daily Available Minutes",
+                                        "Daily study time",
                                         review.daily_available_minutes,
                                     ],
                                     [
-                                        "Preferred Language",
+                                        "Preferred language",
                                         review.preferred_language,
                                     ],
                                     ["University", review.university],
-                                    [
-                                        "Learning Style (VARK)",
-                                        review.learning_style_vark,
-                                    ],
+                                    ["Learning style", review.learning_style_vark],
                                 ] as const
                             ).map(([label, value]) => (
                                 <div
@@ -433,7 +496,7 @@ export function ProfileSetupWizard({
                         type="button"
                         variant="outline"
                         onClick={() => goToStep(step - 1)}
-                        disabled={updateProfile.isPending || saved}
+                        disabled={busy}
                     >
                         Back
                     </Button>
@@ -441,10 +504,7 @@ export function ProfileSetupWizard({
                     <span aria-hidden="true" />
                 )}
 
-                <Button
-                    type="submit"
-                    disabled={updateProfile.isPending || saved}
-                >
+                <Button type="submit" disabled={busy}>
                     {step < STEPS.length - 1
                         ? "Continue"
                         : updateProfile.isPending

@@ -1,11 +1,10 @@
-import Link from "next/link";
-
 import { BrandMark } from "@/components/brand/BrandMark";
 import { ProductIdentityVisual } from "@/components/brand/ProductIdentityVisual";
-import { Button } from "@/components/ui/button";
+import { OidcEntryButton } from "@/components/auth/OidcEntryButton";
 
 /**
- * The public landing page (Batch 4.1) — presentational shell.
+ * The public landing page (Batch 4.1; navbar + CTA placement corrected
+ * by the follow-up).
  *
  * This component is deliberately free of auth/data hooks: the page
  * wrapper (`app/page.tsx`) owns the small auth-aware redirect, and this
@@ -15,7 +14,9 @@ import { Button } from "@/components/ui/button";
  * page public at runtime (no `useMe` call — the pre-4.1 landing's
  * unconditional `useMe` bounced signed-out visitors to `/login` via the
  * global 401 recovery) and makes the whole surface hermetically
- * storyable.
+ * storyable. The navbar's auth actions initiate the existing Keycloak
+ * flows DIRECTLY through `OidcEntryButton` (whose adapter import is
+ * click-time dynamic), so the page never initializes Keycloak at rest.
  *
  * Content rules (owner-approved messaging, Batch 4.1 brief §3):
  *   - Only verified capabilities are presented as available; every
@@ -28,6 +29,12 @@ import { Button } from "@/components/ui/button";
  *   - Light Steel only: semantic tokens, no gradients, no
  *     glassmorphism, logical CSS properties throughout (RTL-ready), and
  *     no decorative motion (reduced-motion safe by construction).
+ *
+ * Auth-CTA placement (corrective follow-up §B.2): "Log in" and "Create
+ * account" appear ONLY in the sticky top bar (§B.1) — the hero and the
+ * closing section carry no duplicate authentication buttons, and the
+ * footer repeats none either. The sticky bar keeps the entry points one
+ * glance away everywhere on the page.
  */
 
 const CAPABILITIES = [
@@ -78,21 +85,20 @@ const FUTURE_ITEMS = [
 export function LandingPage() {
     return (
         <div className="flex min-h-svh flex-col bg-background text-foreground">
-            {/* ── 1. Top bar ─────────────────────────────────────────── */}
-            <header className="border-b border-border bg-background">
+            {/* ── 1. Sticky top bar ─────────────────────────────────── */}
+            <header className="sticky top-0 z-40 border-b border-border bg-background">
                 <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
                     <BrandMark />
                     <div className="flex items-center gap-2">
-                        <Button
+                        <OidcEntryButton
+                            mode="login"
                             variant="ghost"
-                            render={<Link href="/login" />}
-                            className="hidden sm:inline-flex"
                         >
                             Log in
-                        </Button>
-                        <Button render={<Link href="/register" />}>
+                        </OidcEntryButton>
+                        <OidcEntryButton mode="register">
                             Create account
-                        </Button>
+                        </OidcEntryButton>
                     </div>
                 </div>
             </header>
@@ -123,21 +129,6 @@ export function LandingPage() {
                             today it keeps your courses and study setup
                             organized.
                         </p>
-                        <div className="flex flex-wrap gap-3 pt-1">
-                            <Button
-                                size="lg"
-                                render={<Link href="/register" />}
-                            >
-                                Create account
-                            </Button>
-                            <Button
-                                size="lg"
-                                variant="outline"
-                                render={<Link href="/login" />}
-                            >
-                                Log in
-                            </Button>
-                        </div>
                     </div>
 
                     {/* The original Product Identity Visual (Q1). The
@@ -320,57 +311,32 @@ export function LandingPage() {
                     </div>
                 </section>
 
-                {/* ── 7. Final CTA band ─────────────────────────────── */}
+                {/* ── 7. Closing statement ──────────────────────────── */}
                 <section
                     aria-labelledby="landing-cta-heading"
                     className="py-12 sm:py-14"
                 >
-                    <div className="flex flex-col items-start gap-5 rounded-2xl border border-border bg-card p-6 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-8">
-                        <div className="space-y-1.5">
-                            <h2
-                                id="landing-cta-heading"
-                                className="text-xl font-bold tracking-tight sm:text-2xl"
-                            >
-                                Start with your courses. Grow from there.
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                Create an account, set up your profile, and
-                                bring your learning together.
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                            <Button render={<Link href="/register" />}>
-                                Create account
-                            </Button>
-                            <Button
-                                variant="outline"
-                                render={<Link href="/login" />}
-                            >
-                                Log in
-                            </Button>
-                        </div>
+                    <div className="flex flex-col items-start gap-1.5 rounded-2xl border border-border bg-card p-6 shadow-xs sm:p-8">
+                        <h2
+                            id="landing-cta-heading"
+                            className="text-xl font-bold tracking-tight sm:text-2xl"
+                        >
+                            Start with your courses. Grow from there.
+                        </h2>
+                        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                            Create an account, set up your profile, and bring
+                            your learning together — the account and log-in
+                            actions are in the bar above, wherever you are on
+                            this page.
+                        </p>
                     </div>
                 </section>
             </main>
 
             {/* ── Footer ─────────────────────────────────────────────── */}
             <footer className="border-t border-border bg-background">
-                <div className="mx-auto flex w-full max-w-6xl flex-col items-start justify-between gap-3 px-4 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:px-6">
+                <div className="mx-auto w-full max-w-6xl px-4 py-6 text-sm text-muted-foreground sm:px-6">
                     <p>OpenLearn AI — Adaptive Learning Platform</p>
-                    <div className="flex items-center gap-4">
-                        <Link
-                            href="/login"
-                            className="rounded outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                        >
-                            Log in
-                        </Link>
-                        <Link
-                            href="/register"
-                            className="rounded outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                        >
-                            Create account
-                        </Link>
-                    </div>
                 </div>
             </footer>
         </div>

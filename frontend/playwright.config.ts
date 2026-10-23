@@ -33,8 +33,9 @@ import { defineConfig, devices } from "@playwright/test";
  *                               from the Playwright runner)
  *   - NEXT_PUBLIC_KEYCLOAK_URL / REALM / CLIENT_ID
  *
- * Auth flow: clicking our "Sign in with OpenLearn AI" button triggers a
- * full OIDC redirect to Keycloak's hosted login page. The specs fill the
+ * Auth flow: visiting `/login` auto-initiates the existing OIDC login
+ * (the entry bridge — corrective follow-up §C.4) and triggers a full
+ * redirect to Keycloak's hosted login page. The specs fill the
  * Keycloak form (#username, #password, #kc-login), then wait for the
  * redirect back to our origin.
  */

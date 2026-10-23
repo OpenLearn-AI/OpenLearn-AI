@@ -62,10 +62,11 @@ function WizardDemo({
     return (
         <QueryClientProvider client={queryClient}>
             <div className="min-h-svh bg-background p-6 flex items-start justify-center">
-                <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-xs">
+                <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-xs">
                     <h1 className="text-2xl font-bold">Set up your profile</h1>
                     <p className="mb-6 mt-1.5 text-sm text-muted-foreground">
-                        A few basics so OpenLearn AI fits how you study.
+                        A few basics so OpenLearn AI fits how you study — you
+                        can change them anytime.
                     </p>
                     <ProfileSetupWizard
                         profile={profile}
@@ -159,6 +160,65 @@ export const PrefilledFromExistingProfile: Story = {
     },
 };
 
+export const StepTwoTilesSelectChoices: Story = {
+    // The corrective follow-up's tile controls: finite, contract-backed
+    // choices are single-select tiles (the language enum and minute
+    // presets); the custom minutes input stays for any value 1–1440.
+    args: { profile: null },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+
+        // Advance to step 2.
+        await userEvent.type(
+            canvas.getByLabelText("Education Level"),
+            "Undergraduate",
+        );
+        await userEvent.type(canvas.getByLabelText("Major"), "Physics");
+        await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
+        await expect(canvas.getByText(/Step 2 of 3/)).toBeVisible();
+
+        // Default selection: the wizard defaults to 60 minutes — the
+        // "1 hour" preset tile starts checked.
+        await expect(
+            canvas.getByRole("radio", { name: "1 hour" }),
+        ).toHaveAttribute("aria-checked", "true");
+
+        // Choosing a preset updates the value (the custom input shows
+        // the same value — one source of truth).
+        await userEvent.click(canvas.getByRole("radio", { name: "30 min" }));
+        await expect(
+            canvas.getByRole("radio", { name: "30 min" }),
+        ).toHaveAttribute("aria-checked", "true");
+        await expect(
+            canvas.getByRole("radio", { name: "1 hour" }),
+        ).toHaveAttribute("aria-checked", "false");
+        await expect(
+            canvas.getByLabelText("Custom minutes per day"),
+        ).toHaveValue(30);
+
+        // A custom value outside the presets clears every tile.
+        const custom = canvas.getByLabelText("Custom minutes per day");
+        await userEvent.clear(custom);
+        await userEvent.type(custom, "75");
+        await expect(
+            canvas.getByRole("radio", { name: "1 hour" }),
+        ).toHaveAttribute("aria-checked", "false");
+
+        // Language is the contract's two-value enum as tiles; Arabic is
+        // selectable (and the selection is exclusive).
+        await expect(
+            canvas.getByRole("radio", { name: "English" }),
+        ).toHaveAttribute("aria-checked", "true");
+        await userEvent.click(canvas.getByRole("radio", { name: "العربية" }));
+        await expect(
+            canvas.getByRole("radio", { name: "العربية" }),
+        ).toHaveAttribute("aria-checked", "true");
+        await expect(
+            canvas.getByRole("radio", { name: "English" }),
+        ).toHaveAttribute("aria-checked", "false");
+    },
+};
+
 export const ReviewStepShowsAccumulatedPayload: Story = {
     args: { profile: null },
     play: async ({ canvasElement }) => {
@@ -172,15 +232,9 @@ export const ReviewStepShowsAccumulatedPayload: Story = {
         await userEvent.type(canvas.getByLabelText("Major"), "Physics");
         await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 
-        // Step 2 → 3 (review). The minutes field starts at the wizard's
-        // default "60" — clear it first so the value under test is 90.
-        const minutes = canvas.getByLabelText("Daily Available Minutes");
-        await userEvent.clear(minutes);
-        await userEvent.type(minutes, "90");
-        await userEvent.selectOptions(
-            canvas.getByLabelText("Preferred Language"),
-            "en",
-        );
+        // Step 2 → 3 (review): minutes via the preset tile, language
+        // left on its default (English).
+        await userEvent.click(canvas.getByRole("radio", { name: "1 hour" }));
         await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 
         await expect(canvas.getByText(/Step 3 of 3/)).toBeVisible();
@@ -193,7 +247,7 @@ export const ReviewStepShowsAccumulatedPayload: Story = {
         await expect(canvas.getByText("Undergraduate")).toBeVisible();
         await expect(canvas.getByText("Physics")).toBeVisible();
         await expect(
-            canvas.getByText("90 minutes / day"),
+            canvas.getByText("60 minutes / day"),
         ).toBeVisible();
         await expect(
             canvas.getByRole("button", { name: "Save profile" }),

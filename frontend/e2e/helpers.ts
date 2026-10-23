@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
- * Shared E2E helpers (Batch 4.1).
+ * Shared E2E helpers (Batch 4.1; corrective follow-up revision).
  *
  * Batch 4.1 adds a first-login onboarding gate to every protected
  * route: a user without a profile (the backend's 404 for
@@ -13,25 +13,45 @@ import { expect, type Page } from "@playwright/test";
  * onboarding specs share ONE definition of "post-login settles on the
  * dashboard".
  *
- * The helpers keep the real Keycloak OIDC flow exactly as before
- * (`/login` → "Sign in with OpenLearn AI" → Keycloak's hosted form
- * #username/#password/#kc-login → redirect back to our origin); the
- * only addition is that the post-login wait accepts BOTH landing
- * routes (`/dashboard` directly for users who already have a profile,
- * `/onboarding` for fresh users) and completes the wizard when it
- * appears.
+ * Corrective follow-up: `/login` is now a DIRECT bridge to Keycloak —
+ * arriving there auto-initiates the existing OIDC login once per tab
+ * (the hosted form appears without any intermediate click; the manual
+ * "Sign in with OpenLearn AI" button remains for return-after-attempt
+ * and error arrivals). The helpers keep the real Keycloak OIDC flow
+ * (`/login` → Keycloak's hosted form #username/#password/#kc-login →
+ * redirect back to our origin) and complete the wizard through the real
+ * UI with deterministic values — no auth state is mocked anywhere in
+ * this file.
  *
- * The wizard is completed through the real UI with deterministic
- * values — no auth state is mocked anywhere in this file.
+ * The revised wizard presents finite, contract-backed choices as
+ * single-select tiles: the minute presets map onto the integer
+ * `daily_available_minutes` (any 1–1440 value still goes through the
+ * custom input), and the `preferred_language` enum maps to
+ * English/العربية tiles.
  */
 
 /** Deterministic values the shared helper writes into the wizard. */
 export const ONBOARDING_WIZARD_VALUES = {
     educationLevel: "E2E Onboarding Education",
     major: "E2E Onboarding Major",
-    dailyAvailableMinutes: "90",
+    // Preset-tile values (the wizard's tiles for daily_available_minutes).
+    dailyAvailableMinutes: "60",
+    // preferred_language enum value (the "English" tile).
     preferredLanguage: "en",
 } as const;
+
+/** Tile labels for the contract values the helper writes. */
+const MINUTE_TILE_LABELS: Record<string, string> = {
+    "15": "15 min",
+    "30": "30 min",
+    "60": "1 hour",
+    "120": "2 hours",
+};
+
+const LANGUAGE_TILE_LABELS: Record<string, string> = {
+    en: "English",
+    ar: "العربية",
+};
 
 /**
  * Complete the onboarding wizard through the real UI. Assumes the
@@ -58,13 +78,25 @@ export async function completeOnboardingWizard(
     await page.getByLabel("Major").fill(values.major);
     await page.getByRole("button", { name: "Continue" }).click();
 
-    // Step 2 — Your study rhythm.
+    // Step 2 — Your study rhythm: finite, contract-backed choices as
+    // single-select tiles.
     await expect(page.getByText(/Step 2 of 3/)).toBeVisible();
-    const minutes = page.getByLabel("Daily Available Minutes");
-    await minutes.fill(values.dailyAvailableMinutes);
-    await page
-        .getByLabel("Preferred Language")
-        .selectOption(values.preferredLanguage);
+    const minutesTile = MINUTE_TILE_LABELS[values.dailyAvailableMinutes];
+    if (!minutesTile) {
+        throw new Error(
+            `No preset tile for dailyAvailableMinutes "${values.dailyAvailableMinutes}" — use 15/30/60/120 or extend MINUTE_TILE_LABELS`,
+        );
+    }
+    await page.getByRole("radio", { name: minutesTile }).click();
+
+    const languageTile = LANGUAGE_TILE_LABELS[values.preferredLanguage];
+    if (!languageTile) {
+        throw new Error(
+            `No tile for preferredLanguage "${values.preferredLanguage}" — use en/ar`,
+        );
+    }
+    await page.getByRole("radio", { name: languageTile }).click();
+
     await page.getByRole("button", { name: "Continue" }).click();
 
     // Step 3 — Optional details & review. The shared helper skips the
@@ -79,19 +111,17 @@ export async function completeOnboardingWizard(
 }
 
 /**
- * Perform the real Keycloak OIDC login via our login page and settle
- * the post-login state, onboarding-aware.
+ * Perform the real Keycloak OIDC login and settle the post-login state,
+ * onboarding-aware.
  *
- * Legacy behavior (2.2.1 fix, preserved): wait for the sign-in button's
- * ENABLED state before clicking — a click processed during the
- * non-silent `check-sso` round trip is destroyed with its document.
- *
- * Batch 4.1 addition: after the Keycloak redirect the browser lands on
- * `/dashboard` (profile exists) or `/onboarding` (fresh user routed by
- * the gate). When the wizard appears it is completed with
- * deterministic values, so every caller — and the assertions in the
- * specs — can rely on the session ending on `/dashboard` with an
- * existing profile.
+ * Corrective follow-up: navigating to `/login` IS the login action —
+ * the entry bridge auto-initiates the existing Keycloak flow once per
+ * tab (loop-guarded: a return arrival shows the explicit button
+ * instead of auto-redirecting again), so this helper waits for the
+ * hosted form to appear. The post-login wait accepts BOTH landing
+ * routes (`/dashboard` directly for users who already have a profile,
+ * `/onboarding` for fresh users) and completes the wizard when it
+ * appears.
  */
 export async function performKeycloakLogin(
     page: Page,
@@ -100,13 +130,10 @@ export async function performKeycloakLogin(
 ): Promise<void> {
     await page.goto("/login");
 
-    const signInButton = page.getByRole("button", {
-        name: /sign in with openlearn ai/i,
-    });
-    await expect(signInButton).toBeEnabled({ timeout: 30_000 });
-    await signInButton.click();
-
-    await page.waitForSelector("#username", { state: "visible" });
+    // The bridge's auto-initiation covers auth initialization +
+    // Keycloak redirect; the hosted form (#username) is the first
+    // Keycloak-owned element on the other side.
+    await page.waitForSelector("#username", { state: "visible", timeout: 30_000 });
     await page.fill("#username", username);
     await page.fill("#password", password);
     await page.click("#kc-login");

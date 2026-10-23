@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "@/lib/utils";
 import { getKeycloak } from "@/lib/keycloak";
+import { markOidcAttempt } from "@/features/auth/oidc-attempt";
 
 /**
  * The shared logout control.
@@ -39,6 +40,13 @@ export function LogoutButton({
         }
 
         queryClient.clear();
+
+        // The logout redirect lands on `/login` (unchanged target). Mark
+        // the OIDC attempt BEFORE leaving so the arrival renders the
+        // explicit sign-in form instead of auto-redirecting straight
+        // back into Keycloak — logout must never become an instant
+        // re-login loop (corrective follow-up §C.4 loop audit).
+        markOidcAttempt("login");
 
         await keycloak.logout({
             redirectUri: `${window.location.origin}/login`,

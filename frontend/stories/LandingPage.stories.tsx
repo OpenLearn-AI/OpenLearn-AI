@@ -4,18 +4,21 @@ import { expect, within } from "storybook/test";
 import { LandingPage } from "../components/landing/LandingPage";
 
 /**
- * Landing-page stories (Batch 4.1).
+ * Landing-page stories (Batch 4.1; CTA placement corrected by the
+ * follow-up).
  *
  * `LandingPage` is the presentational composition — the page wrapper
  * (`app/page.tsx`) owns the auth-aware redirect, and no hook, query, or
- * Keycloak initialization runs anywhere in this tree. The stories are
- * therefore hermetic by construction: no providers, no network.
+ * Keycloak initialization runs anywhere in this tree at REST (the
+ * navbar's `OidcEntryButton` imports the Keycloak adapter dynamically,
+ * at click time). The stories are therefore hermetic by construction:
+ * no providers, no network.
  *
- * The play assertions pin the approved messaging structure and the
- * capability-honesty rules: the hero copy, both CTAs with their real
- * destinations, the original Product Identity Visual (no screenshot —
- * owner decision Q1/Q6), and the explicit "In development" / "Planned"
- * labeling of future items (never presented as available).
+ * The play assertions pin the approved messaging structure, the
+ * capability-honesty rules, and the follow-up's auth-CTA placement:
+ * "Log in" / "Create account" exist ONLY as the sticky top bar's
+ * actions — the hero, the closing section, and the footer repeat
+ * neither.
  *
  * Accessibility: the axe checks from the a11y addon run on every story
  * (fail-on-violation configuration untouched). The identity visual is
@@ -38,28 +41,45 @@ export const FullPage: Story = {
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
 
-        // Top bar: brand identity + the two auth actions.
-        const brand = canvas.getByRole("link", { name: "OpenLearn AI" });
-        await expect(brand).toHaveAttribute("href", "/");
+        // Sticky top bar: brand identity + the two auth actions.
+        const header = canvasElement.querySelector("header");
+        await expect(header).not.toBeNull();
+        // §B.1: the navbar stays visible while scrolling — position
+        // sticky at the viewport top, above page content (z-40).
+        await expect(header).toHaveClass("sticky");
+        await expect(header).toHaveClass("top-0");
+        await expect(header).toHaveClass("z-40");
 
-        // Hero: approved positioning + the two CTAs.
+        // §B.2 + §C.3: the ONLY auth actions on the page live here, and
+        // they are direct Keycloak actions (buttons), not links into a
+        // local form.
+        const loginActions = canvas.getAllByRole("button", {
+            name: "Log in",
+        });
+        await expect(loginActions).toHaveLength(1);
+        const registerActions = canvas.getAllByRole("button", {
+            name: "Create account",
+        });
+        await expect(registerActions).toHaveLength(1);
+        for (const action of [...loginActions, ...registerActions]) {
+            await expect(header).toContainElement(action);
+        }
+
+        // No leftover auth links anywhere (hero / closing / footer).
+        await expect(
+            canvas.queryByRole("link", { name: "Log in" }),
+        ).toBeNull();
+        await expect(
+            canvas.queryByRole("link", { name: "Create account" }),
+        ).toBeNull();
+
+        // Hero: approved positioning copy (no CTA row).
         await expect(
             canvas.getByRole("heading", {
                 level: 1,
                 name: /Bring your learning together/,
             }),
         ).toBeVisible();
-
-        const registerLinks = canvas.getAllByRole("link", {
-            name: "Create account",
-        });
-        for (const link of registerLinks) {
-            await expect(link).toHaveAttribute("href", "/register");
-        }
-        const loginLinks = canvas.getAllByRole("link", { name: "Log in" });
-        for (const link of loginLinks) {
-            await expect(link).toHaveAttribute("href", "/login");
-        }
 
         // The original Product Identity Visual is implemented as part of
         // the page (a token-drawn decorative SVG — no raster screenshot).

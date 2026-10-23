@@ -184,12 +184,11 @@ test.describe("Onboarding gate and wizard", () => {
     await sharedPage.getByLabel("Major").fill(ONBOARDING_WIZARD_VALUES.major);
     await sharedPage.getByRole("button", { name: "Continue" }).click();
 
+    // Step 2: finite choices as single-select tiles.
     await sharedPage
-      .getByLabel("Daily Available Minutes")
-      .fill(ONBOARDING_WIZARD_VALUES.dailyAvailableMinutes);
-    await sharedPage
-      .getByLabel("Preferred Language")
-      .selectOption(ONBOARDING_WIZARD_VALUES.preferredLanguage);
+      .getByRole("radio", { name: "1 hour" })
+      .click();
+    await sharedPage.getByRole("radio", { name: "English" }).click();
     await sharedPage.getByRole("button", { name: "Continue" }).click();
 
     await sharedPage.getByRole("button", { name: "Save profile" }).click();

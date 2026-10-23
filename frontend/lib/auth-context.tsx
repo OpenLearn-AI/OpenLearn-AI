@@ -90,3 +90,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
     return useContext(AuthContext);
 }
+
+/**
+ * Test/story injection provider (Batch 4.1 corrective follow-up).
+ *
+ * Renders the REAL context with a caller-supplied value — used by
+ * Storybook stories that need a deterministic auth state (e.g. the
+ * auth-entry bridge's manual state) without booting the real Keycloak
+ * adapter. The production `AuthProvider` above is untouched; this is
+ * purely an injection point and is not used by any application route.
+ */
+export function AuthStateProvider({
+    value,
+    children,
+}: {
+    value: AuthContextValue;
+    children: ReactNode;
+}) {
+    return (
+        <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+    );
+}

@@ -78,14 +78,14 @@ function OnboardingContent() {
     }
 
     return (
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-xs">
+        <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-xs">
             <div className="mb-6 space-y-1.5">
                 <h1 className="text-2xl font-bold text-card-foreground">
                     Set up your profile
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                    A few basics so OpenLearn AI fits how you study. You can
-                    update these anytime from your profile.
+                    A few basics so OpenLearn AI fits how you study — you can
+                    change them anytime.
                 </p>
             </div>
 
