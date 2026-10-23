@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import { useProfile } from "@/features/profile/api/useProfile";
 import { useMe } from "@/features/auth/api/useMe";
-import { useUserName } from "@/components/UserName";
+import { useUserName } from "@/features/auth/useUserName";
 import { LoadingBlock } from "@/components/state/LoadingBlock";
 import { ErrorState } from "@/components/state/ErrorState";
 import { Button } from "@/components/ui/button";

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { UserInfo } from "@/components/auth/UserInfo";
-import { LogoutButton } from "@/components/auth/LogoutButton";
 import { CourseCard } from "@/components/CourseCard";
 import { LoadingBlock } from "@/components/state/LoadingBlock";
 import { ErrorState } from "@/components/state/ErrorState";
@@ -220,7 +219,11 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Right Column: User Info & Session Controls */}
+                {/* Right Column: User Info. Logout moved to the shared
+                    shell account region in Batch 3.3 — the former
+                    Dashboard-only Session Control card hosted the same
+                    LogoutButton component and was removed once the shell
+                    replacement was in place. */}
                 <div className="space-y-6">
                     {/* User Profile Card */}
                     <div className="bg-card rounded-2xl border border-border p-6 shadow-xs space-y-4">
@@ -229,21 +232,6 @@ export default function DashboardPage() {
                         </h3>
                         <div className="bg-secondary/50 p-4 rounded-xl border border-border">
                             <UserInfo />
-                        </div>
-                    </div>
-
-                    {/* Session Management Card */}
-                    <div className="bg-card rounded-2xl border border-border p-6 shadow-xs space-y-4 flex flex-col justify-between">
-                        <div>
-                            <h3 className="font-bold text-foreground text-base mb-1">
-                                Session Control
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                                Securely manage your active login session.
-                            </p>
-                        </div>
-                        <div className="pt-2">
-                            <LogoutButton />
                         </div>
                     </div>
                 </div>

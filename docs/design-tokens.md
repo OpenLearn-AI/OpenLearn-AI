@@ -142,11 +142,15 @@ charts must pair color with labels or shapes regardless.
 ### Sidebar Colors
 
 The `sidebar-*` group (background, foreground, primary, accent, border, ring)
-follows the shadcn scaffold convention and is defined in both themes. No
-sidebar component exists in the application today; the application shell is
-a top navbar. The group is kept for scaffold compatibility. If a future
-redesign batch does not adopt a sidebar surface, removing the unused group is
-a candidate for that batch's scope — not a decision made here.
+follows the shadcn scaffold convention and is defined in both themes. The
+group was reserved scaffold compatibility until Batch 3.3: the application
+shell was a top navbar with no sidebar surface. **Batch 3.3 (2026-10-23)
+adopted the group as the application shell's dedicated surface tokens** —
+the desktop sidebar and the mobile navigation drawer consume `sidebar`,
+`sidebar-foreground`, `sidebar-accent`, `sidebar-accent-foreground`,
+`sidebar-border`, and `sidebar-primary`; no other surface may use them for
+non-shell purposes. The dark `--sidebar` value sits between the page and
+card surfaces (the production surface order recorded in Batch 3.1).
 
 ---
 
@@ -405,14 +409,16 @@ a first-class prepared direction. The codified discipline:
 4. **Directional icons** (arrows, chevrons) that encode reading direction
    must flip in RTL (`rtl:rotate-180` or a logical-position swap); icons that
    represent a physical object (a printer, a download tray) do not flip.
-5. **Status (updated 2026-10-23, Batch 3.2):** the Navbar and UserInfo
-   already used logical utilities (`border-s ps-3`, `ms-4`). The Button and
-   Badge primitives paired their icon slots with physical padding
-   (`has-data-[icon=inline-start]:pl-*` / `inline-end]:pr-*`) — recorded as a
-   violation and routed to Batch 3.2, which **resolved it**: the Button icon
-   slots now use logical `ps-*`/`pe-*`, and the unused Badge primitive was
-   removed entirely (finding S5). The full RTL audit runs in Batch 4.4 with
-   the Storybook direction toolbar.
+5. **Status (updated 2026-10-23, Batches 3.2–3.3):** the legacy Navbar and
+   UserInfo already used logical utilities (`border-s ps-3`, `ms-4`); the
+   Button and Badge primitives' physical icon-slot padding was the recorded
+   violation, and Batch 3.2 **resolved it**: the Button icon slots now use
+   logical `ps-*`/`pe-*`, and the unused Badge primitive was removed entirely
+   (finding S5). Batch 3.3 replaced the Navbar with the shell — the desktop
+   sidebar, mobile drawer, and account region are built on logical utilities
+   (`border-e`, `start-*`, `before:start-0`, inline-end tooltip placement)
+   with direction-aware `rtl:rotate-180` flips on directional icons. The full
+   RTL audit runs in Batch 4.4 with the Storybook direction toolbar.
 6. **Verification**: `.storybook/preview.tsx` provides the Direction (LTR/RTL)
    toolbar that sets `dir` on the story iframe; both directions must be
    exercised when a component's layout is direction-sensitive.
@@ -421,13 +427,15 @@ a first-class prepared direction. The codified discipline:
 
 ## 12. Reserved Token Groups (no consumers today)
 
-Two groups exist in the token layer without application consumers:
+One group remains in the token layer without application consumers:
 
 * **Charts** (`chart-1`…`chart-5`) — reserved for future analytics surfaces;
   see §2.
-* **Sidebar** (`sidebar-*`) — shadcn scaffold compatibility; see §2.
 
-Both are defined with full light/dark parity. They are documented so that
+(The `sidebar-*` group left this list in Batch 3.3: the application shell's
+sidebar and mobile drawer are its first consumers — see §2.)
+
+It is defined with full light/dark parity and documented so that
 "unused" is a recorded fact with a reason, not a trap for later cleanup.
 
 ---
