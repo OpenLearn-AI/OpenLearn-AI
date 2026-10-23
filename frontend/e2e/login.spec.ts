@@ -1,4 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+
+import { performKeycloakLogin } from "./helpers";
 
 /**
  * E2E smoke flow #1 — login → dashboard.
@@ -14,6 +16,14 @@ import { test, expect, type Page } from "@playwright/test";
  *   4. Wait for the redirect back to our origin at `/dashboard`.
  *   5. Assert meaningful dashboard content is present (the "Welcome Back!"
  *      heading + the UserInfo block rendering the test user's email).
+ *
+ * Batch 4.1: the post-login wait is onboarding-aware (shared helper).
+ * A fresh user without a profile is routed to the `/onboarding` wizard
+ * by the `(app)` gate; the helper completes the wizard through the real
+ * UI with deterministic values before the dashboard assertions below
+ * run. On a used environment (profile already exists) the helper's
+ * wizard branch is simply skipped. The dashboard assertions themselves
+ * are unchanged — NOT weakened.
  *
  * Why fill the Keycloak form rather than mock our auth state: Phase 6
  * requires the suite to "prove that a real user can authenticate and
@@ -47,46 +57,9 @@ test.describe("Login smoke flow", () => {
 
   test("user authenticates via Keycloak and lands on /dashboard", async ({
     page,
-  }: { page: Page }) => {
-    // 1. Start at the login page on our origin.
-    await page.goto("/login");
-
-    // The login page renders a brand header + a card with the OIDC button.
-    await expect(
-      page.getByRole("heading", { name: /sign in to your account/i }),
-    ).toBeVisible();
-
-    // 2. Click our OIDC redirect button. The visible text comes from
-    //    components/auth/LoginForm.tsx — "Sign in with OpenLearn AI"
-    //    (or "Connecting..." while the redirect is being initiated).
-    const signInButton = page.getByRole("button", {
-      name: /sign in with openlearn ai/i,
-    });
-    await expect(signInButton).toBeVisible();
-
-    // LoginForm enables the button only once Keycloak init has settled:
-    // on a fresh context a non-silent `check-sso` round trips to Keycloak
-    // and back before the login page settles, and a click processed
-    // before that round trip completes is destroyed with the first
-    // document (the intermittent `#username` timeout). Waiting for the
-    // enabled state — never a fixed delay — makes the click deterministic.
-    await expect(signInButton).toBeEnabled({ timeout: 30_000 });
-    await signInButton.click();
-
-    // 3. We are now on Keycloak's hosted login page. Wait for the
-    //    username field. Keycloak's standard theme uses #username and
-    //    #password; these are stable across Keycloak versions.
-    await page.waitForSelector("#username", { state: "visible" });
-    await page.fill("#username", E2E_USERNAME!);
-    await page.fill("#password", E2E_PASSWORD!);
-
-    // Submit. Keycloak's standard theme uses #kc-login.
-    await page.click("#kc-login");
-
-    // 4. Wait for the redirect back to our origin at /dashboard.
-    //    Keycloak posts back to our redirectUri which LoginForm sets to
-    //    `${origin}/dashboard` (the Phase 3 default redirect policy).
-    await page.waitForURL(/\/dashboard$/, { timeout: 30_000 });
+  }) => {
+    // 1–4. Real OIDC login; onboarding-aware settle on /dashboard.
+    await performKeycloakLogin(page, E2E_USERNAME!, E2E_PASSWORD!);
 
     // 5. Assert meaningful dashboard content. The dashboard hero is
     //    "Welcome Back!" (app/(app)/dashboard/page.tsx) and the UserInfo

@@ -1,0 +1,219 @@
+/*
+ * OpenLearn AI — Keycloak login theme stylesheet (Batch 4.1).
+ *
+ * Scope: presentation only. Keycloak's own FreeMarker templates are
+ * intact (parent=keycloak), so every element ID and form behavior —
+ * #username, #password, #kc-login, #kc-registration — is unchanged.
+ * This stylesheet re-skins the hosted login/registration pages to the
+ * Light Steel direction so the hosted auth step reads as the same
+ * product as the application.
+ *
+ * Palette: the Light Steel token VALUES (the same hex sources recorded
+ * in frontend/app/globals.css and docs/design-tokens.md). A Keycloak
+ * theme cannot consume the application's Tailwind token layer — it is
+ * rendered by the Keycloak server, not by Next.js — so the values are
+ * mirrored here as plain CSS custom properties, with a comment naming
+ * the application token each one mirrors. Names are prefixed `--ol-`
+ * (OpenLearn) to avoid colliding with Keycloak/PatternFly variables.
+ *
+ * Dark mode: Keycloak cannot see the application's next-themes toggle,
+ * so the hosted pages follow the OS `prefers-color-scheme` — the honest
+ * system-level signal available to this surface. The in-app theme
+ * toggle behavior is unchanged.
+ *
+ * PatternFly generation coverage: Keycloak 26.x ships PatternFly
+ * classes; the class prefix has moved between `pf-v5-` and `pf-v6-`
+ * across minor releases. Every class-based rule below therefore lists
+ * BOTH prefixes with identical declarations, so the theme holds either
+ * way. The structural IDs (`#kc-header-wrapper`, `#kc-page-title`,
+ * `#kc-login`, ...) are stable across these versions and carry the
+ * most visible rules. Runtime rendering must still be confirmed on the
+ * owner machine against the real KC 26.7.3 pages (no Docker in the
+ * execution environment — recorded honestly in the batch report).
+ */
+
+/* ── Palette (mirrors of the application's Light Steel tokens) ───── */
+
+:root {
+  /* --primary (light) */
+  --ol-primary: #3b6ea5;
+  /* --primary-foreground (light) */
+  --ol-primary-foreground: #f8f9fa;
+  /* --background (light) */
+  --ol-bg: #f8f9fa;
+  /* --card (light) */
+  --ol-card: #ffffff;
+  /* --foreground (light) */
+  --ol-fg: #212529;
+  /* --muted-foreground (light) */
+  --ol-muted-fg: #495057;
+  /* --border (light) */
+  --ol-border: #dee2e6;
+  /* --error (light) */
+  --ol-error: #bc392b;
+  /* hover fill for the primary button — a hand-derived darker steel
+     step of #3b6ea5 (the application uses primary/80 compositing, which
+     has no direct equivalent in plain CSS here) */
+  --ol-primary-hover: #35618f;
+  /* focus ring — mirrors the application's --ring token */
+  --ol-ring: #3b6ea5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* --primary (dark) */
+    --ol-primary: #6e9cc9;
+    /* --primary-foreground (dark) */
+    --ol-primary-foreground: #15181c;
+    /* --background (dark) */
+    --ol-bg: #171a1e;
+    /* --card (dark) */
+    --ol-card: #1f2328;
+    /* --foreground (dark) */
+    --ol-fg: #e9ecef;
+    /* --muted-foreground (dark) */
+    --ol-muted-fg: #adb5bd;
+    /* --border (dark) — alpha-over-surface convention kept */
+    --ol-border: rgb(255 255 255 / 10%);
+    /* --error (dark) */
+    --ol-error: #ff8787;
+    /* lighter step for the dark primary hover */
+    --ol-primary-hover: #7ea9d2;
+    /* --ring (dark) */
+    --ol-ring: #6e9cc9;
+  }
+}
+
+/* ── Page background and base text ────────────────────────────────── */
+
+body {
+  background-color: var(--ol-bg);
+  color: var(--ol-fg);
+}
+
+/* ── Page-level brand block (logo + product name) ─────────────────── */
+/* Keycloak renders `loginTitleHtml` here as plain text; the theme puts
+   the product logo before it and styles the pair as the identity mark.
+   The image ships with the theme at resources/img/logo.png. */
+
+#kc-header-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  color: var(--ol-fg);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+#kc-header-wrapper::before {
+  content: "";
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  background: url("../img/logo.png") center / contain no-repeat;
+}
+
+/* ── The auth card ────────────────────────────────────────────────── */
+
+.pf-v5-c-login__main,
+.pf-v6-c-login__main {
+  background-color: var(--ol-card);
+  color: var(--ol-fg);
+  border: 1px solid var(--ol-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+/* Card heading (loginTitle / registerTitle from the message bundle). */
+
+#kc-page-title {
+  color: var(--ol-fg);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.pf-v5-c-login__main-header-desc,
+.pf-v6-c-login__main-header-desc {
+  color: var(--ol-muted-fg);
+}
+
+/* ── Form controls ────────────────────────────────────────────────── */
+
+.pf-v5-c-form-control,
+.pf-v6-c-form-control {
+  border-radius: 10px;
+}
+
+.pf-v5-c-form-control:focus,
+.pf-v6-c-form-control:focus {
+  outline: none;
+  border-color: var(--ol-ring);
+  box-shadow: 0 0 0 3px rgb(59 110 165 / 35%);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+/* Only the primary (submit) and link-style buttons are re-skinned; any
+   other variant keeps Keycloak's own treatment. */
+
+.pf-v5-c-button.pf-m-primary,
+.pf-v6-c-button.pf-m-primary {
+  background-color: var(--ol-primary);
+  color: var(--ol-primary-foreground);
+  border-radius: 10px;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-v6-c-button.pf-m-primary:hover {
+  background-color: var(--ol-primary-hover);
+  color: var(--ol-primary-foreground);
+}
+
+.pf-v5-c-button.pf-m-primary:focus,
+.pf-v6-c-button.pf-m-primary:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(59 110 165 / 35%);
+}
+
+.pf-v5-c-button.pf-m-link,
+.pf-v6-c-button.pf-m-link {
+  color: var(--ol-primary);
+}
+
+.pf-v5-c-button.pf-m-link:hover,
+.pf-v6-c-button.pf-m-link:hover {
+  color: var(--ol-primary-hover);
+}
+
+/* ── Secondary text rows (register link row, small print) ────────── */
+
+#kc-form-options,
+#kc-registration,
+.pf-v5-c-login__main-footer-band,
+.pf-v6-c-login__main-footer-band {
+  color: var(--ol-muted-fg);
+}
+
+#kc-registration a,
+.pf-v5-c-login__main-footer-band-item a,
+.pf-v6-c-login__main-footer-band-item a {
+  color: var(--ol-primary);
+}
+
+/* ── Feedback alerts (invalid credentials, info banners) ──────────── */
+/* Keep Keycloak's alert structure; align the danger accent with the
+   token error value and quiet the fill. */
+
+.pf-v5-c-alert.pf-m-danger,
+.pf-v6-c-alert.pf-m-danger {
+  border: 1px solid var(--ol-error);
+  background-color: var(--ol-card);
+  color: var(--ol-error);
+}
+
+.pf-v5-c-alert.pf-m-danger .pf-v5-c-alert__title,
+.pf-v6-c-alert.pf-m-danger .pf-v6-c-alert__title {
+  color: var(--ol-error);
+}

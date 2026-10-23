@@ -33,6 +33,13 @@ services:
     command: start-dev --import-realm
     volumes:
       - ./realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      # OpenLearn login theme (Batch 4.1): mounted into Keycloak's theme
+      # directory so the realm's `loginTheme: openlearn` resolves. Note:
+      # `--import-realm` skips import when the realm already exists on
+      # the persistent volume — after adding this mount, recreate the
+      # realm (or the keycloak_dev_data volume) once so the theme takes
+      # effect; see the Batch 4.1 report.
+      - ./keycloak/themes:/opt/keycloak/themes:ro
       - keycloak_dev_data:/opt/keycloak/data
     depends_on:
       db:

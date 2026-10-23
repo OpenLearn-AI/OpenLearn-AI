@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
+import { performKeycloakLogin } from "./helpers";
+
 /**
  * E2E smoke flow #2 — course create → read → update → delete.
  *
@@ -54,6 +56,9 @@ test.describe("Course CRUD smoke flow", () => {
 
   test.beforeAll(async ({ browser }: { browser: import("@playwright/test").Browser }) => {
     sharedPage = await browser.newPage();
+    // Onboarding-aware (Batch 4.1): a fresh user is routed through the
+    // wizard and returns to /dashboard with an existing profile; a used
+    // environment settles directly on /dashboard.
     await performKeycloakLogin(sharedPage, E2E_USERNAME!, E2E_PASSWORD!);
   });
 
@@ -181,38 +186,3 @@ test.describe("Course CRUD smoke flow", () => {
     ).toHaveCount(0);
   });
 });
-
-/**
- * Perform a real Keycloak login through our login page → Keycloak-hosted
- * form → redirect back to /dashboard. Cached storage state could also be
- * used, but this approach is simpler and avoids serialization races in
- * the beforeAll hook.
- */
-async function performKeycloakLogin(
-  page: Page,
-  username: string,
-  password: string,
-) {
-  await page.goto("/login");
-
-  // The app initializes Keycloak with a non-silent `check-sso`
-  // (lib/keycloak.ts): on a fresh, unauthenticated context the browser is
-  // redirected to Keycloak and back before the login page settles, and a
-  // click processed before that round trip completes is destroyed with
-  // the first document — the intermittent `#username` timeout. LoginForm
-  // enables its button only once Keycloak init has settled, so wait for
-  // that state (never a fixed delay) before clicking. The 30s budget
-  // spans the full check-sso round trip, matching the waitForURL budget
-  // below.
-  const signInButton = page.getByRole("button", {
-    name: /sign in with openlearn ai/i,
-  });
-  await expect(signInButton).toBeEnabled({ timeout: 30_000 });
-  await signInButton.click();
-
-  await page.waitForSelector("#username", { state: "visible" });
-  await page.fill("#username", username);
-  await page.fill("#password", password);
-  await page.click("#kc-login");
-  await page.waitForURL(/\/dashboard$/, { timeout: 30_000 });
-}

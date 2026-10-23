@@ -4,13 +4,6 @@ import * as React from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
 import { getKeycloak } from "@/lib/keycloak";
 import { safeRedirectTarget } from "@/features/auth/redirect";
 
@@ -85,40 +78,33 @@ export function LoginForm() {
         }
     };
 
+    // Batch 4.1 presentation refresh: the entry card, heading, and
+    // description now live in the login page (avoiding the previous
+    // card-in-card duplication). This component renders only the
+    // interactive part — the error line and the OIDC button, whose
+    // text states and handler are unchanged (E2E pins the button
+    // string).
     return (
-        <Card className="w-full max-w-md">
-            <CardHeader className="space-y-1">
-                <CardTitle className="text-2xl">
-                    Welcome back
-                </CardTitle>
-
-                <CardDescription>
-                    Sign in to your OpenLearn AI account
-                </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-                {error && (
-                    <p
-                        role="alert"
-                        className="text-sm text-destructive"
-                    >
-                        {error}
-                    </p>
-                )}
-
-                <Button
-                    type="button"
-                    onClick={handleLogin}
-                    disabled={isLoading || !isReady}
-                    className="w-full"
+        <div className="space-y-4">
+            {error && (
+                <p
+                    role="alert"
+                    className="text-sm text-destructive"
                 >
-                    {isLoading
-                        ? "Connecting..."
-                        : "Sign in with OpenLearn AI"}
-                </Button>
-            </CardContent>
-        </Card>
+                    {error}
+                </p>
+            )}
+
+            <Button
+                type="button"
+                onClick={handleLogin}
+                disabled={isLoading || !isReady}
+                className="w-full"
+            >
+                {isLoading
+                    ? "Connecting..."
+                    : "Sign in with OpenLearn AI"}
+            </Button>
+        </div>
     );
 }
-

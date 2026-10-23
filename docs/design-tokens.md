@@ -188,6 +188,28 @@ text/icon, indicator); `sidebar-primary-foreground` remains reserved
 for text on solid `sidebar-primary` fills (no current consumer); token
 names and values are unchanged.
 
+### Brand composition surfaces (Batch 4.1)
+
+The landing page's **Product Identity Visual**
+(`frontend/components/brand/ProductIdentityVisual.tsx`) is a token-drawn
+SVG composition — two arcs, two dots, and an open center — and is the
+first composed graphic built entirely from the semantic layer: strokes
+and fills use `stroke-primary` / `fill-primary` with the same alpha
+steps (`/35`–`/70`) the interactive layer uses for tints. No new tokens,
+no hardcoded colors, no raster assets; Light and Dark themes resolve it
+automatically because every color is a token reference. It is
+decorative (`aria-hidden`), static (no motion), and text-free (no RTL
+mirroring needed).
+
+The Keycloak login theme
+(`infra/keycloak/themes/openlearn/login/`) mirrors the same token VALUES
+as plain CSS custom properties (`--ol-*`, named for OpenLearn, prefixed
+to avoid colliding with Keycloak/PatternFly variables) — a Keycloak
+theme is rendered by the Keycloak server and cannot consume the
+Tailwind layer, so the mirror — with each property commented to its
+application token — is the documented bridge between the two surfaces.
+The application's own token layer remains the single source of truth.
+
 ---
 
 ## 3. Typography
