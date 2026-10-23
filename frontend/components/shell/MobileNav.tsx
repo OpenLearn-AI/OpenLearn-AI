@@ -142,10 +142,10 @@ export function MobileNav({
                                             }
                                             onClick={() => setOpen(false)}
                                             className={cn(
-                                                "relative flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+                                                "relative flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
                                                 isCurrent
-                                                    ? "bg-sidebar-accent font-medium text-sidebar-foreground before:absolute before:inset-y-1.5 before:start-0 before:w-0.5 before:rounded-full before:bg-sidebar-primary"
-                                                    : "text-sidebar-foreground/75",
+                                                    ? "bg-sidebar-primary/10 font-medium text-sidebar-primary before:absolute before:inset-y-1.5 before:start-0 before:w-0.5 before:rounded-full before:bg-sidebar-primary hover:bg-sidebar-primary/10 hover:text-sidebar-primary"
+                                                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                                             )}
                                         >
                                             <link.icon

@@ -152,6 +152,42 @@ the desktop sidebar and the mobile navigation drawer consume `sidebar`,
 non-shell purposes. The dark `--sidebar` value sits between the page and
 card surfaces (the production surface order recorded in Batch 3.1).
 
+**Current-route (active-item) treatment — pinned by the Batch 3.3
+follow-up (2026-10-23).** The initial Batch 3.3 active item rendered
+`sidebar-foreground` text on a `sidebar-accent` surface — technically
+AA-compliant but visually weak, because resting items carry the same
+foreground color and the accent tint is neutral. The pinned treatment
+is a Steel Blue pair on the existing semantic tokens:
+
+* **Surface + text/icon:** `bg-sidebar-primary/10` with
+  `text-sidebar-primary` — verified **4.66:1 (light)** and **4.98:1
+  (dark)** against the composited tint (AA 1.4.3 normal text ≥ 4.5:1;
+  the 16px icons and the indicator bar are non-text graphics and clear
+  1.4.11's 3:1 with margin). `/10` is the deepest alpha that passes in
+  BOTH themes with one utility (`/15` fails light at 4.35:1), so no
+  per-theme alpha override is needed.
+* **Resting items** remain `text-sidebar-foreground/75` on the bare
+  `sidebar` surface (6.78:1 light / 8.46:1 dark); **hover** remains
+  `sidebar-accent` + `sidebar-foreground` (13.03:1 / 11.25:1). The
+  current item carries matching hover utilities so hovering it never
+  strips the active treatment.
+* **The non-color-only indicator is unchanged**: a 0.5-wide
+  inline-start bar in solid `sidebar-primary` plus
+  `aria-current="page"` (WCAG 1.4.1).
+* **Evaluated and rejected:** a solid `sidebar-primary` fill with
+  `sidebar-primary-foreground` text passes AA in both themes (5.05:1
+  light / 6.15:1 dark) but makes every current route read as a
+  permanent primary button on a persistent navigation surface,
+  competing with real primary actions and with the calm Light Steel
+  direction — the tinted pair delivers the state contrast without the
+  weight.
+
+Intended use after this change: `sidebar-accent` = hover surface;
+`sidebar-primary` = the accent carried by the current route (tint,
+text/icon, indicator); `sidebar-primary-foreground` remains reserved
+for text on solid `sidebar-primary` fills (no current consumer); token
+names and values are unchanged.
+
 ---
 
 ## 3. Typography

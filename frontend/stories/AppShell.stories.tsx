@@ -10,14 +10,17 @@ import { AppShell } from "../components/shell/AppShell";
 import { authKeys } from "../features/auth/keys";
 
 /**
- * Application-shell stories (Batch 3.3).
+ * Application-shell stories (Batch 3.3 + follow-up).
  *
  * The sidebar and mobile navigation are presentational and receive
  * their data via props, so the stories exercise the real component
  * markup: expanded/collapsed desktop states, the current-route
  * treatment (aria-current + indicator + tint), icon-only accessible
  * naming, the tooltip behavior, and the mobile modal drawer's
- * open/close/navigation contract.
+ * open/close/navigation contract. The expanded and drawer stories
+ * also pin the final navigation inventory (Batch 3.3 follow-up owner
+ * IA decision: the public landing `/` is not a protected-navigation
+ * destination; the brand identity link remains, outside the nav list).
  *
  * Hermeticity: every story tree is wrapped in a QueryClientProvider
  * (LogoutButton reads the query client context). The full-shell story
@@ -102,7 +105,38 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const SidebarExpanded: Story = {};
+export const SidebarExpanded: Story = {
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+
+        // Final navigation inventory (Batch 3.3 follow-up): exactly the
+        // three protected destinations, in order — the public landing
+        // (`/`) is not a sidebar entry.
+        const nav = await canvas.findByRole(
+            "navigation",
+            { name: "Primary navigation" },
+            { timeout: 5000 },
+        );
+        const navLinks = within(nav).getAllByRole("link");
+        await expect(
+            navLinks.map((link) => link.textContent),
+        ).toEqual(["Courses", "Dashboard", "Profile & Settings"]);
+        await expect(
+            within(nav).queryByRole("link", { name: "Home" }),
+        ).not.toBeInTheDocument();
+
+        // The brand identity link remains — outside the nav list, still
+        // targeting the public landing as the legacy Navbar's did.
+        const brand = canvas.getByRole("link", { name: /OpenLearn AI/ });
+        await expect(brand).toHaveAttribute("href", "/");
+
+        // Expanded: visible text label + aria-current on the active item.
+        const dashboardLink = within(nav).getByRole("link", {
+            name: "Dashboard",
+        });
+        await expect(dashboardLink).toHaveAttribute("aria-current", "page");
+    },
+};
 
 export const SidebarCollapsed: Story = {
     args: { initialCollapsed: true },
@@ -211,6 +245,17 @@ export const MobileNavInteraction: Story = {
         await expect(
             within(dialog).getByRole("heading", { name: "Menu" }),
         ).toBeInTheDocument();
+
+        // Same final inventory as the desktop sidebar — one shared
+        // source of truth; no Home entry in the drawer either.
+        const drawerLinks = within(dialog).getAllByRole("link");
+        await expect(
+            drawerLinks.map((link) => link.textContent),
+        ).toEqual(["Courses", "Dashboard", "Profile & Settings"]);
+        await expect(
+            within(dialog).queryByRole("link", { name: "Home" }),
+        ).not.toBeInTheDocument();
+
         const coursesLink = within(dialog).getByRole("link", {
             name: "Courses",
         });

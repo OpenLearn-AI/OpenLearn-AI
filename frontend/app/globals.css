@@ -277,7 +277,9 @@
    --radius: 0.625rem;
 
    /* =======================================================
-     SIDEBAR — scaffold compatibility (zero consumers)
+     SIDEBAR — application shell surface tokens (adopted by
+     Batch 3.3; the active/current-item treatment and the
+     group's intended use are recorded in docs/design-tokens.md)
      ======================================================= */
 
    --sidebar: oklch(1 0 0);
