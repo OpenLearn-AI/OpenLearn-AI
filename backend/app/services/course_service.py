@@ -4,13 +4,20 @@ Plain SQLAlchemy accessors matching the style of ``profile_service``: small,
 explicit functions over an async session with straightforward commit/refresh.
 """
 
+import asyncio
 import uuid
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.course import Course
+from app.models.material import Material
+from app.pal.providers.vector_db.postgres_provider import PostgresVectorDBProvider
 from app.schemas.course import CourseCreate, CourseUpdate
+from app.services import storage
+
+logger = structlog.get_logger(__name__)
 
 
 async def list_courses(db: AsyncSession, owner_id: uuid.UUID) -> list[Course]:
@@ -69,5 +76,32 @@ async def replace_course(
 
 
 async def delete_course(db: AsyncSession, course: Course) -> None:
+    """Delete a course with its materials, stored files and vectors.
+
+    The rows cascade in the database, and the materials' vector records (no
+    foreign key to materials) are deleted in the same transaction. The stored
+    files are deleted from object storage after the commit; a storage failure
+    is logged and never fails the request (the course is already gone).
+    """
+    result = await db.execute(
+        select(Material.id, Material.s3_key).where(Material.course_id == course.id)
+    )
+    materials = result.all()
+
+    vectors = PostgresVectorDBProvider(db)
+    for material_id, _ in materials:
+        await vectors.delete(filters={"material_id": str(material_id)})
+
     await db.delete(course)
     await db.commit()
+
+    s3_keys = [s3_key for _, s3_key in materials]
+    if not s3_keys:
+        return
+    try:
+        failed = await asyncio.to_thread(storage.delete_material_objects, s3_keys)
+    except Exception:
+        logger.exception("course_objects_delete_failed", object_count=len(s3_keys))
+        return
+    if failed:
+        logger.warning("course_objects_delete_incomplete", failed_keys=failed)

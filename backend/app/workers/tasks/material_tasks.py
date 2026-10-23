@@ -19,6 +19,11 @@ never survives from one task's event loop into the next.
 W8 claiming model: the ``pending`` -> ``processing`` claim is a single atomic
 conditional UPDATE (``claim_pending_material``), so concurrent or duplicate
 deliveries of the same material can never claim it more than once.
+
+Week 9 automatic retry: a failed attempt is handed back as ``pending`` and
+re-enqueued with exponential backoff, up to ``max_retries`` (3) times; only
+the final failure is recorded as ``failed``. Automatic retries do not touch
+``retry_count`` (that is the manual budget).
 """
 
 import asyncio
@@ -26,6 +31,7 @@ import tempfile
 import uuid
 
 import structlog
+from celery.exceptions import Retry
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -33,7 +39,12 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import settings
-from app.models.material import FAILED_STATUS, READY_STATUS, Material
+from app.models.material import (
+    FAILED_STATUS,
+    PENDING_STATUS,
+    READY_STATUS,
+    Material,
+)
 from app.pal.factory import (
     get_embedding_provider,
     get_ocr_provider,
@@ -42,7 +53,9 @@ from app.pal.factory import (
 from app.services.document_pipeline import chunk_embed_and_persist, ingest_and_enrich
 from app.services.material_service import (
     claim_pending_material,
+    count_nonempty_material_pages,
     get_material_by_id,
+    replace_material_pages,
     transition_material_status,
 )
 from app.services.storage import download_material_to_temp
@@ -52,16 +65,27 @@ from app.workers.publishing import MATERIAL_PROCESSING_TASK_NAME
 logger = structlog.get_logger(__name__)
 
 
-@celery_app.task(name=MATERIAL_PROCESSING_TASK_NAME)
+#: Base delay (seconds) for automatic retries; doubles on each retry.
+AUTO_RETRY_BASE_DELAY_SECONDS = 60
+
+
+class _AutoRetryRequested(Exception):
+    """Raised by ``_handle_material`` when a non-final attempt failed."""
+
+
+@celery_app.task(bind=True, name=MATERIAL_PROCESSING_TASK_NAME)
 def process_material(
+    self,
     material_id: str,
     s3_key: str,
     course_id: str,
     owner_id: str,
 ) -> str | None:
     """Celery task entrypoint; wraps the async processing lifecycle."""
+    retries = self.request.retries
+    final_attempt = retries >= self.max_retries
 
-    async def _run() -> str | None:
+    async def _run(handler, **kwargs):
         engine = create_async_engine(settings.database_url)
         session_factory = async_sessionmaker(
             bind=engine,
@@ -69,17 +93,51 @@ def process_material(
             expire_on_commit=False,
         )
         try:
-            return await _handle_material(
-                material_id,
-                s3_key,
-                course_id,
-                owner_id,
-                session_factory=session_factory,
-            )
+            return await handler(session_factory=session_factory, **kwargs)
         finally:
             await engine.dispose()
 
-    return asyncio.run(_run())
+    try:
+        return asyncio.run(
+            _run(
+                _handle_material,
+                material_id=material_id,
+                s3_key=s3_key,
+                course_id=course_id,
+                owner_id=owner_id,
+                final_attempt=final_attempt,
+            )
+        )
+    except _AutoRetryRequested as exc:
+        try:
+            raise self.retry(
+                exc=exc.__cause__,
+                countdown=AUTO_RETRY_BASE_DELAY_SECONDS * (2**retries),
+            )
+        except Retry:
+            raise
+        except Exception:
+            # Re-enqueue failed: never leave the material stuck in pending.
+            logger.exception(
+                "material_auto_retry_enqueue_failed",
+                material_id=material_id,
+                s3_key=s3_key,
+            )
+            asyncio.run(
+                _run(_mark_pending_material_failed, material_id=material_id)
+            )
+            raise
+
+
+async def _mark_pending_material_failed(
+    material_id: str,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        material = await get_material_by_id(session, uuid.UUID(material_id))
+        if material is not None and material.status == PENDING_STATUS:
+            material.status = FAILED_STATUS
+            await session.commit()
 
 
 async def _handle_material(
@@ -88,6 +146,7 @@ async def _handle_material(
     course_id: str,
     owner_id: str,
     session_factory: async_sessionmaker[AsyncSession],
+    final_attempt: bool = True,
 ) -> str | None:
     """Execute the status lifecycle for one material; returns the final status.
 
@@ -107,6 +166,10 @@ async def _handle_material(
 
     ``session_factory`` is supplied by the caller (task-local in the Celery
     path); this function never creates engines or sessions of its own.
+
+    Week 9: when ``final_attempt`` is False a content failure hands the
+    material back as ``pending`` and raises ``_AutoRetryRequested`` so the
+    task re-enqueues itself; only the final attempt records ``failed``.
     """
     material_uuid = uuid.UUID(material_id)
 
@@ -138,19 +201,21 @@ async def _handle_material(
                 owner_id,
                 session=session,
             )
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "material_processing_failed",
                 material_id=material_id,
                 s3_key=s3_key,
+                final_attempt=final_attempt,
             )
+            next_status = FAILED_STATUS if final_attempt else PENDING_STATUS
             try:
                 await session.rollback()
                 material = await get_material_by_id(session, material_uuid)
                 if material is not None:
                     try:
                         await transition_material_status(
-                            session, material, FAILED_STATUS
+                            session, material, next_status
                         )
                         await session.commit()
                     except Exception:
@@ -165,6 +230,8 @@ async def _handle_material(
                     material_id=material_id,
                     s3_key=s3_key,
                 )
+            if not final_attempt:
+                raise _AutoRetryRequested() from exc
             raise
 
         await transition_material_status(session, material, READY_STATUS)
@@ -197,6 +264,12 @@ async def _process_material_content(
       atomically with the caller's ``ready`` transition, and the existing
       failure path (rollback → ``failed`` → re-raise) discards partial
       vector writes;
+    * Week 9 keep-more-pages rule: before any embedding or upsert, the new
+      run's non-empty page count is compared with the stored one. Fewer
+      pages -> the new output is discarded and the previous output kept.
+      Otherwise the material's old vectors and pages are deleted and the new
+      ones written on the same session (committed with ``ready``, rolled
+      back on failure). Empty pages are stored;
     * synchronous calls (storage download, Docling ingestion, chunking) run
       inline — the event loop is task-local (B1 §2.3 sync/async boundary);
     * ``course_id``/``owner_id`` stay part of the pinned positional seam
@@ -206,18 +279,43 @@ async def _process_material_content(
     material as ``failed`` and re-raises (pinned lifecycle unchanged).
     """
     with tempfile.TemporaryDirectory(prefix="material-processing-") as temp_dir:
-        local_path = download_material_to_temp(s3_key, temp_dir)
+        # Week 9 review (P-01): read with If-Match on the ETag recorded at
+        # registration, so an object replaced since then is not processed.
+        local_path = download_material_to_temp(
+            s3_key, temp_dir, expected_etag=material.s3_etag
+        )
 
         ocr_provider = get_ocr_provider()
         document = await ingest_and_enrich(local_path, ocr_provider=ocr_provider)
 
+        new_nonempty = sum(
+            1 for page in document.pages if page.text and page.text.strip()
+        )
+        old_nonempty = await count_nonempty_material_pages(session, material.id)
+        if new_nonempty < old_nonempty:
+            logger.info(
+                "material_reprocess_output_discarded",
+                material_id=str(material.id),
+                s3_key=s3_key,
+                new_nonempty_pages=new_nonempty,
+                old_nonempty_pages=old_nonempty,
+            )
+            return
+
         embedding_provider = get_embedding_provider()
         vector_db_provider = get_vector_db_provider(session=session)
+        await vector_db_provider.delete(filters={"material_id": str(material.id)})
         result = await chunk_embed_and_persist(
             document,
             material_id=str(material.id),
             embedding_provider=embedding_provider,
             vector_db_provider=vector_db_provider,
+        )
+
+        await replace_material_pages(
+            session,
+            material.id,
+            pages=[(page.page_number, page.text) for page in document.pages],
         )
 
         logger.info(

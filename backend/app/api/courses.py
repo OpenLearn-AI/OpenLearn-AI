@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Response, status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_owned_course
+from app.api.rate_limit import limit_writes
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
@@ -33,7 +34,11 @@ _COURSE_ERROR_RESPONSES = {
     "",
     response_model=CourseResponse,
     status_code=http_status.HTTP_201_CREATED,
-    responses=_COURSE_ERROR_RESPONSES,
+    responses={
+        **_COURSE_ERROR_RESPONSES,
+        429: {"description": "Too many requests (per-user write rate limit)"},
+    },
+    dependencies=[Depends(limit_writes)],
 )
 async def create_course_handler(
     payload: CourseCreate,

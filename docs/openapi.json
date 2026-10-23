@@ -145,19 +145,37 @@
       "MaterialAcceptedResponse": {
         "properties": {
           "job_id": {
-            "description": "Celery task id. Intended for log correlation only in W7; it is not queryable through the API.",
-            "title": "Job Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Celery task id for a freshly enqueued processing job. ``None`` when an existing material was reused (no new job). Intended for log correlation only in W7; it is not queryable through the API.",
+            "title": "Job Id"
           },
           "material_id": {
             "format": "uuid",
             "title": "Material Id",
             "type": "string"
+          },
+          "status": {
+            "description": "``pending`` for a new or retried material, otherwise the existing material's current status.",
+            "enum": [
+              "pending",
+              "processing",
+              "ready",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
           "material_id",
-          "job_id"
+          "status"
         ],
         "title": "MaterialAcceptedResponse",
         "type": "object"
@@ -184,6 +202,51 @@
           "s3_key"
         ],
         "title": "MaterialCreate",
+        "type": "object"
+      },
+      "MaterialPageResponse": {
+        "description": "One stored page of extracted text (1-based; text may be empty).",
+        "properties": {
+          "page_number": {
+            "description": "1-based page number within the processed document.",
+            "minimum": 1.0,
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "text": {
+            "description": "Extracted text of the page.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_number",
+          "text"
+        ],
+        "title": "MaterialPageResponse",
+        "type": "object"
+      },
+      "MaterialPagesResponse": {
+        "description": "A material's stored pages in ascending order; empty until processed.",
+        "properties": {
+          "material_id": {
+            "format": "uuid",
+            "title": "Material Id",
+            "type": "string"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/MaterialPageResponse"
+            },
+            "title": "Pages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "material_id",
+          "pages"
+        ],
+        "title": "MaterialPagesResponse",
         "type": "object"
       },
       "MaterialResponse": {
@@ -419,6 +482,7 @@
         "type": "object"
       },
       "UploadUrlResponse": {
+        "description": "Presigned POST upload target.\n\nThe client sends a ``multipart/form-data`` POST to ``upload_url`` with every\nentry of ``upload_fields`` as a form field, followed by the file as the\nlast field named ``file``. Storage rejects files larger than\n``max_size_bytes``.",
         "properties": {
           "course_id": {
             "format": "uuid",
@@ -429,6 +493,10 @@
             "title": "Expires In",
             "type": "integer"
           },
+          "max_size_bytes": {
+            "title": "Max Size Bytes",
+            "type": "integer"
+          },
           "s3_key": {
             "title": "S3 Key",
             "type": "string"
@@ -436,6 +504,13 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "upload_fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Upload Fields",
+            "type": "object"
           },
           "upload_url": {
             "title": "Upload Url",
@@ -447,6 +522,8 @@
           "title",
           "s3_key",
           "upload_url",
+          "upload_fields",
+          "max_size_bytes",
           "expires_in"
         ],
         "title": "UploadUrlResponse",
@@ -548,23 +625,6 @@
         "summary": "Health Check"
       }
     },
-    "/metrics": {
-      "get": {
-        "description": "Endpoint that serves Prometheus metrics.",
-        "operationId": "metrics_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Metrics"
-      }
-    },
     "/v1/courses": {
       "get": {
         "operationId": "list_courses_handler_v1_courses_get",
@@ -644,6 +704,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "Too many requests (per-user write rate limit)"
           }
         },
         "security": [
@@ -888,6 +951,7 @@
         ]
       },
       "post": {
+        "description": "Register an uploaded object for processing.\n\nWeek 9: a file whose content already exists in this course returns the\nexisting material (``job_id=None``, current status) and enqueues nothing,\nwhatever that material's status is.",
         "operationId": "register_material_handler_v1_courses__course_id__materials_post",
         "parameters": [
           {
@@ -932,7 +996,10 @@
             "description": "No local user for the authenticated identity, or course does not exist"
           },
           "409": {
-            "description": "Material already registered"
+            "description": "Material already registered, or the stored object changed while it was being registered"
+          },
+          "413": {
+            "description": "Stored object exceeds the maximum upload size"
           },
           "422": {
             "content": {
@@ -943,6 +1010,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "Too many requests (per-user write rate limit)"
           }
         },
         "security": [
@@ -1010,6 +1080,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "Too many requests (per-user write rate limit)"
           }
         },
         "security": [
@@ -1018,6 +1091,219 @@
           }
         ],
         "summary": "Create Upload Url Handler",
+        "tags": [
+          "materials"
+        ]
+      }
+    },
+    "/v1/materials/{material_id}/pages": {
+      "get": {
+        "description": "List a material's stored pages, ascending (Week 9). Empty until processed.\n\nPaginated: at most ``limit`` pages (default 100, max 500) starting after\n``offset`` pages; a shorter page than ``limit`` means the last page.",
+        "operationId": "get_material_pages_handler_v1_materials__material_id__pages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "material_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Material Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialPagesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated (missing or invalid bearer token)"
+          },
+          "403": {
+            "description": "Insufficient permissions (course ownership required)"
+          },
+          "404": {
+            "description": "Material does not exist"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Material Pages Handler",
+        "tags": [
+          "materials"
+        ]
+      }
+    },
+    "/v1/materials/{material_id}/pages/{page_number}": {
+      "get": {
+        "description": "Read one stored page of a material (Week 9).",
+        "operationId": "get_material_page_handler_v1_materials__material_id__pages__page_number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "material_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Material Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "page_number",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Page Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialPageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated (missing or invalid bearer token)"
+          },
+          "403": {
+            "description": "Insufficient permissions (course ownership required)"
+          },
+          "404": {
+            "description": "Material or page does not exist"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Material Page Handler",
+        "tags": [
+          "materials"
+        ]
+      }
+    },
+    "/v1/materials/{material_id}/process": {
+      "post": {
+        "description": "Manually retry processing of a ``ready``/``failed`` material (Week 9).\n\nCourse owner only; at most ``MATERIAL_RETRY_LIMIT`` manual retries. 409\nwhile already pending/processing and 409 when the budget is exhausted.",
+        "operationId": "process_material_handler_v1_materials__material_id__process_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "material_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Material Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialAcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated (missing or invalid bearer token)"
+          },
+          "403": {
+            "description": "Insufficient permissions (instructor role and course ownership required)"
+          },
+          "404": {
+            "description": "Material does not exist"
+          },
+          "409": {
+            "description": "Material is already queued or processing, or the manual retry budget is exhausted (3 manual retries consumed); nothing was enqueued"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Too many requests (per-user write rate limit)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Process Material Handler",
         "tags": [
           "materials"
         ]

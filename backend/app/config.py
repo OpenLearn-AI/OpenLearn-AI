@@ -8,20 +8,41 @@ REPO_ROOT = BASE_DIR.parent
 
 
 class Settings(BaseSettings):
+    # TODO(REMOVE BEFORE DEPLOYMENT): the defaults for ``environment``,
+    # ``debug``, ``database_url`` (dev password) and the ``keycloak_*`` http
+    # URLs below are local-development conveniences only. Before any
+    # deployment, delete these defaults so a missing environment variable
+    # fails at start-up instead of silently using a known password or an
+    # http issuer (review finding B-09).
     app_name: str = "OpenLearn AI"
     environment: str = "development"
     debug: bool = False
     cors_origins: str = "http://localhost:3000"
-    database_url: str = (
+    database_url: str = (  # TODO(REMOVE BEFORE DEPLOYMENT): dev password default
         "postgresql+asyncpg://openlearn:devpassword@localhost:5432/openlearn_dev"
     )
 
     # Keycloak / OIDC
+    # TODO(REMOVE BEFORE DEPLOYMENT): http dev defaults; require https URLs.
     keycloak_issuer: str = "http://localhost:8080/realms/openlearn"
     keycloak_jwks_url: str = (
         "http://localhost:8080/realms/openlearn/protocol/openid-connect/certs"
     )
     keycloak_audience: str = "openlearn-api"
+    # Frontend client that obtains the tokens; a token whose ``azp`` claim
+    # names another client is rejected (review finding B-14).
+    keycloak_client_id: str = "openlearn-frontend"
+
+    # Observability (review findings B-03, B-12). ``metrics_token`` protects
+    # GET /metrics: when set, the endpoint requires ``Authorization: Bearer
+    # <token>``; when empty it is exposed only outside production.
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.1
+    metrics_token: str = ""
+
+    # Per-user limit for the write endpoints (upload-url, register, process,
+    # create course), requests per minute. 0 disables the limit.
+    rate_limit_writes_per_minute: int = 30
 
     # PAL / AI Settings
     ai_ocr_provider: str = "mock"
@@ -88,7 +109,17 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = ""
     s3_bucket_name: str = "openlearn-materials"
     s3_region_name: str = "us-east-1"
-    s3_url_expiration_seconds: int = 3600
+    # Upload URL lifetime: short, because the URL can overwrite the object
+    # until it expires (review findings B-02 / P-01).
+    s3_url_expiration_seconds: int = 900
+    # Hard cap enforced by the presigned POST policy and re-checked at
+    # registration (review findings B-02 / P-02): 10 MiB.
+    max_upload_size_bytes: int = 10 * 1024 * 1024
+
+    # Materials stuck in pending/processing longer than this are marked
+    # failed by the periodic reaper (review finding B-07). Must stay above the
+    # Celery hard time limit (11 minutes) plus the automatic-retry backoff.
+    material_stuck_timeout_minutes: int = 30
 
     model_config = SettingsConfigDict(
         # Order matters: for keys defined in BOTH files the LATER file wins

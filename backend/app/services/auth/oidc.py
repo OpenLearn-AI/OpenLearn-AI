@@ -52,6 +52,13 @@ def decode_access_token(token: str) -> dict[str, Any]:
     if not payload.get("sub"):
         raise ValueError("Access token subject is missing.")
 
+    # Authorized party: a token issued to another client of the realm is not
+    # accepted (review finding B-14). ``azp`` is optional in OIDC, so only a
+    # present-and-different value is rejected.
+    azp = payload.get("azp")
+    if azp is not None and azp != settings.keycloak_client_id:
+        raise ValueError("Access token was issued to a different client.")
+
     return payload
 
 
