@@ -30,10 +30,17 @@ import { authKeys } from "../features/auth/keys";
  * mark), and the identity presentation (person name + first-name
  * initial via the demo props; the full-shell story pins the
  * established email fallback of the real `useUserName` hook, whose
- * Keycloak singleton is never initialized inside Storybook). The CSS
- * hover/focus opacity reveal itself is verified in the standalone
- * rendered checks with real pointer moves — the story runner's
- * synthetic events cannot drive CSS :hover.
+ * Keycloak singleton is never initialized inside Storybook).
+ *
+ * SIDE-02 (2026-10-25): the collapsed stories additionally pin the
+ * logo-to-toggle REPLACEMENT contract — at idle the mark is visible
+ * and the control is fully transparent; keyboard focus swaps the two
+ * in the mark's own cell (toggle opacity 1, logo opacity 0, computed
+ * styles — focus-driven states are exercised reliably by synthetic
+ * events). The real-pointer hover choreography and the hover-less
+ * (touch) permanent reveal are verified in the standalone rendered
+ * checks — the story runner's synthetic events cannot drive CSS
+ * :hover.
  *
  * Hermeticity: every story tree is wrapped in a QueryClientProvider
  * (LogoutButton reads the query client context). The full-shell story
@@ -142,8 +149,15 @@ export const SidebarExpanded: Story = {
         // targeting the public landing as the legacy Navbar's did.
         // SIDE-01: the product title is "OpenLearn" and the subtitle is
         // gone, so the accessible name is exactly the product name.
+        // SIDE-02: the mark is the supplied /logo.svg asset (an alt=""
+        // decorative image inside the brand link, so it is queried as
+        // an element, not by its presentation role).
         const brand = canvas.getByRole("link", { name: "OpenLearn" });
         await expect(brand).toHaveAttribute("href", "/");
+        await expect(brand.querySelector("img")).toHaveAttribute(
+            "src",
+            "/logo.svg",
+        );
         await expect(
             canvas.queryByText("Adaptive Learning Platform"),
         ).not.toBeInTheDocument();
@@ -217,16 +231,33 @@ export const SidebarCollapsed: Story = {
         });
         await expect(toggle).toHaveAttribute("aria-expanded", "false");
 
-        // Keyboard focus reveals it without any pointer involvement
-        // (group-focus-within — a focus-driven state, which synthetic
-        // events DO exercise).
+        // SIDE-02 replacement idle state: the logo is fully visible and
+        // the toggle fully transparent (computed opacity — a style the
+        // synthetic runner reads reliably), while both keep their
+        // document positions (opacity-only swap, zero layout shift).
+        await expect(getComputedStyle(brand).opacity).toBe("1");
+        await expect(getComputedStyle(toggle).opacity).toBe("0");
+
+        // Keyboard focus swaps the control into the logo's cell without
+        // any pointer involvement (SIDE-02): the toggle becomes fully
+        // visible, the logo yields (group-has focus state — synthetic
+        // events exercise focus-driven CSS reliably), and focus keeps a
+        // visible indicator via the button's own focus-visible ring.
         toggle.focus();
         await waitFor(() => {
             expect(toggle.matches(":focus")).toBe(true);
         });
+        await waitFor(() => {
+            expect(getComputedStyle(toggle).opacity).toBe("1");
+        });
+        await waitFor(() => {
+            expect(getComputedStyle(brand).opacity).toBe("0");
+        });
 
-        // The control remains operable while hidden: activating it
-        // expands the sidebar (the touch-device path).
+        // The control remains operable once revealed: activating it
+        // expands the sidebar (the touch-device path — on hover-less
+        // pointers the control is permanently visible in its own row,
+        // exactly the SIDE-01 hover-less behavior).
         await userEvent.click(toggle);
         await waitFor(() => {
             expect(
@@ -235,6 +266,19 @@ export const SidebarCollapsed: Story = {
         });
         await canvas.findByRole("button", { name: "Collapse sidebar" });
     },
+};
+
+export const SidebarCollapsedIdle: Story = {
+    // SIDE-02: the at-rest collapsed rail WITHOUT a play. The
+    // logo-to-toggle replacement is pointer-driven CSS (:hover), which
+    // the story runner's synthetic events cannot exercise, so the
+    // standalone rendered checks load THIS story and drive the swap
+    // with real pointer moves and focus. A play would auto-run on
+    // manual (non-runner) loads — the SidebarCollapsed play ends
+    // expanded by design — so the idle baseline must be play-free.
+    // Same explicit render as SidebarCollapsed (the stateful-demo
+    // convention: story args are applied after mount on manual loads).
+    render: () => <SidebarDemo initialCollapsed />,
 };
 
 export const SidebarNestedRouteActive: Story = {
@@ -264,7 +308,7 @@ export const SidebarCollapseInteraction: Story = {
 
         // Collapsed: labels become visually hidden but keep their
         // accessible names; the toggle now reads "Expand sidebar"
-        // (idle-hidden — operability while hidden is pinned by the
+        // (idle-hidden — the replacement swap contract is pinned by the
         // SidebarCollapsed story).
         await waitFor(() => {
             expect(
