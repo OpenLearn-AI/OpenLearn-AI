@@ -1,342 +1,187 @@
-import { BrandMark } from "@/components/brand/BrandMark";
-import { ProductIdentityVisual } from "@/components/brand/ProductIdentityVisual";
+import Image from "next/image";
+
 import { OidcEntryButton } from "@/components/auth/OidcEntryButton";
+import { BrandMark } from "@/components/brand/BrandMark";
+import { Reveal } from "@/components/landing/Reveal";
 
 /**
- * The public landing page (Batch 4.1; navbar + CTA placement corrected
- * by the follow-up).
+ * The public landing page (visual-direction redesign).
  *
- * This component is deliberately free of auth/data hooks: the page
- * wrapper (`app/page.tsx`) owns the small auth-aware redirect, and this
- * composition renders identically for visitors, during auth
- * initialization, and for authenticated users in the moment before
- * their redirect to `/dashboard` completes. That separation keeps the
- * page public at runtime (no `useMe` call — the pre-4.1 landing's
- * unconditional `useMe` bounced signed-out visitors to `/login` via the
- * global 401 recovery) and makes the whole surface hermetically
- * storyable. The navbar's auth actions initiate the existing Keycloak
- * flows DIRECTLY through `OidcEntryButton` (whose adapter import is
- * click-time dynamic), so the page never initializes Keycloak at rest.
+ * Deliberately short. It answers four questions and nothing else:
+ * what OpenLearn AI is, why it is useful, what the product actually
+ * looks like today, and how to enter. There are no feature grids,
+ * no testimonials, no invented metrics, and no long marketing copy;
+ * the single product screenshot does that storytelling.
  *
- * Content rules (owner-approved messaging, Batch 4.1 brief §3):
- *   - Only verified capabilities are presented as available; every
- *     forward-looking item carries an explicit "In development" or
- *     "Planned" chip and is non-interactive.
- *   - No screenshots (Q1): the hero is paired with the original
- *     Product Identity Visual.
- *   - No fabricated metrics, testimonials, logos, ratings, pricing, or
- *     policy claims — none of those exist in the repository.
- *   - Light Steel only: semantic tokens, no gradients, no
- *     glassmorphism, logical CSS properties throughout (RTL-ready), and
- *     no decorative motion (reduced-motion safe by construction).
+ * Content rules (continuing the Batch 4.1 honesty decisions):
+ *   - Only verified capabilities are presented as available; the
+ *     development/planned items are listed separately with their
+ *     honest status labels, in one compact place.
+ *   - The screenshot is captured from the real rendered
+ *     `/courses` page (how it was captured and refreshed is
+ *     recorded next to the asset, `frontend/public/CAPTURE.md`,
+ *     and in the file's own component comment below).
+ *   - No fabricated metrics, testimonials, logos, ratings, pricing,
+ *     or policy claims. Nothing invented.
  *
- * Auth-CTA placement (corrective follow-up §B.2): "Log in" and "Create
- * account" appear ONLY in the sticky top bar (§B.1) — the hero and the
- * closing section carry no duplicate authentication buttons, and the
- * footer repeats none either. The sticky bar keeps the entry points one
- * glance away everywhere on the page.
+ * Auth-CTA placement: "Log in" and "Create account" exist ONLY in
+ * the navbar (same rule the corrective follow-up fixed). The hero,
+ * the status panel, and the footer carry no authentication buttons;
+ * the footer repeats none either.
+ *
+ * Visual rules: the fixed-dark public palette only. Background depth
+ * comes from the documented dark-ambient token mixes (a restrained
+ * brass radial at the very top, a warm light wash at the bottom), a
+ * raised navbar "notch", and one elevated panel for the status list.
+ * Motion is limited to a one-shot hero entrance and a one-time
+ * scroll reveal, both suppressed under reduced motion.
  */
 
-const CAPABILITIES = [
-    {
-        title: "Organized courses",
-        body: "Create courses, keep them in one place, and edit them anytime. Your courses belong to your account.",
-    },
-    {
-        title: "A profile that sets the basics",
-        body: "Record your education, field of study, preferred language, and daily study time in a short guided setup.",
-    },
-    {
-        title: "Your sessions, your theme",
-        body: "Sign in securely through OpenLearn's single sign-on, and work in light or dark — whatever fits your study space.",
-    },
-] as const;
+const STATUS_TODAY =
+    "Today: your courses, guided profile setup, and secure sign in.";
 
-const STEPS = [
-    {
-        title: "Create an account",
-        body: "Register through OpenLearn's secure sign-on — no separate password to manage here.",
-    },
-    {
-        title: "Set up your profile",
-        body: "A short guided setup records the basics: education, field of study, language, and study time.",
-    },
-    {
-        title: "Add and organize your courses",
-        body: "Bring your courses together in one place and keep them up to date.",
-    },
-] as const;
+const STATUS_IN_DEVELOPMENT =
+    "In development: course material upload with automatic processing.";
 
-const FUTURE_ITEMS = [
-    {
-        label: "Material upload and automatic processing",
-        status: "In development",
-    },
-    {
-        label: "AI-assisted search, citations, and chat on your materials",
-        status: "Planned",
-    },
-    {
-        label: "Knowledge graphs, quizzes, and flashcards",
-        status: "Planned",
-    },
-] as const;
+const STATUS_PLANNED =
+    "Planned: AI assisted search and chat over your course materials; knowledge graphs, quizzes, and flashcards come later.";
 
 export function LandingPage() {
     return (
-        <div className="flex min-h-svh flex-col bg-background text-foreground">
-            {/* ── 1. Sticky top bar ─────────────────────────────────── */}
-            <header className="sticky top-0 z-40 border-b border-border bg-background">
-                <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-                    <BrandMark />
-                    <div className="flex items-center gap-2">
-                        <OidcEntryButton
-                            mode="login"
-                            variant="ghost"
-                        >
-                            Log in
-                        </OidcEntryButton>
-                        <OidcEntryButton mode="register">
-                            Create account
-                        </OidcEntryButton>
+        <div className="dark relative flex min-h-svh flex-col bg-background text-foreground">
+            {/* Ambient depth (dark ladder only): a restrained brass
+                radial at the very top of the page and a warm wash in
+                the lower register. Decorative only. */}
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(64%_58%_at_50%_0%,var(--ambient-brass-subtle),transparent_72%)]"
+            />
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-[420px] bg-[radial-gradient(80%_60%_at_50%_100%,var(--ambient-paper),transparent_74%)]"
+            />
+
+            {/* ── Notch navbar ─────────────────────────────────────
+                Notch-inspired top bar: an inset surface attached to
+                the top edge of the page with rounded lower corners,
+                so it reads as part of the viewport, not a generic
+                full-width SaaS header. The interpretation is kept
+                restrained: one clean island, no morphing, no glow.
+                The reference design ("Notch", notch.page) is used as
+                a composition reference for the shape and placement
+                only; branding is OpenLearn AI's own. */}
+            <header className="sticky top-0 z-40 w-full">
+                <div className="mx-auto w-full max-w-5xl px-2 sm:px-4">
+                    <div className="flex items-center justify-between gap-3 rounded-b-3xl border-x border-b border-border bg-card/95 px-3 py-2.5 shadow-xs sm:px-5">
+                        <BrandMark />
+                        <div className="flex items-center gap-1.5">
+                            <OidcEntryButton mode="login" variant="ghost">
+                                Log in
+                            </OidcEntryButton>
+                            <OidcEntryButton mode="register">
+                                Create account
+                            </OidcEntryButton>
+                        </div>
                     </div>
                 </div>
             </header>
 
-            <main className="mx-auto w-full max-w-6xl flex-1 px-4 sm:px-6">
-                {/* ── 2. Hero ────────────────────────────────────────── */}
-                <section
-                    aria-labelledby="landing-hero-heading"
-                    className="grid items-center gap-10 py-12 sm:py-16 lg:grid-cols-2 lg:gap-14 lg:py-20"
-                >
-                    <div className="space-y-6">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-                            OpenLearn AI — more organized, more interactive
-                            learning
-                        </p>
-                        <h1
-                            id="landing-hero-heading"
-                            className="text-4xl font-bold tracking-tight text-balance sm:text-5xl"
-                        >
-                            Bring your learning together. Make it more
-                            personal over time.
-                        </h1>
-                        <p className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                            One organized home for your courses — for students
-                            and instructors — with a learner profile that keeps
-                            the basics in one place. OpenLearn AI is being
-                            built to make learning more personal over time;
-                            today it keeps your courses and study setup
-                            organized.
-                        </p>
-                    </div>
-
-                    {/* The original Product Identity Visual (Q1). The
-                        composition is token-drawn SVG; it re-themes with
-                        Light/Dark automatically and carries no text, so
-                        RTL needs no mirroring. */}
-                    <div className="mx-auto w-full max-w-[320px] sm:max-w-[400px] lg:max-w-[460px]">
-                        <ProductIdentityVisual className="h-auto w-full" />
-                    </div>
-                </section>
-
-                {/* ── 3. How it works ───────────────────────────────── */}
-                <section
-                    aria-labelledby="landing-how-heading"
-                    className="border-t border-border py-12 sm:py-14"
-                >
-                    <div className="space-y-8">
-                        <div className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-                                How it works
+            <main className="relative w-full flex-1">
+                <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+                    {/* ── Hero + product preview ─────────────────────── */}
+                    <section
+                        aria-labelledby="landing-hero-heading"
+                        className="pt-14 sm:pt-20"
+                    >
+                        <div className="max-w-2xl">
+                            <p className="ol-enter text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                                Adaptive learning platform
                             </p>
-                            <h2
-                                id="landing-how-heading"
-                                className="text-2xl font-bold tracking-tight sm:text-3xl"
+                            <h1
+                                id="landing-hero-heading"
+                                className="ol-enter ol-enter-delay-1 mt-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl"
                             >
-                                Three steps to an organized start
-                            </h2>
-                        </div>
-                        <ol className="grid gap-4 sm:grid-cols-3">
-                            {STEPS.map((step, index) => (
-                                <li
-                                    key={step.title}
-                                    className="rounded-2xl border border-border bg-card p-5 shadow-xs"
-                                >
-                                    <p
-                                        aria-hidden="true"
-                                        className="text-sm font-bold text-primary"
-                                    >
-                                        {index + 1}
-                                    </p>
-                                    <h3 className="pt-1 text-base font-semibold text-card-foreground">
-                                        {step.title}
-                                    </h3>
-                                    <p className="pt-1 text-sm leading-relaxed text-muted-foreground">
-                                        {step.body}
-                                    </p>
-                                </li>
-                            ))}
-                        </ol>
-                    </div>
-                </section>
-
-                {/* ── 4. What you can do today ──────────────────────── */}
-                <section
-                    aria-labelledby="landing-today-heading"
-                    className="border-t border-border py-12 sm:py-14"
-                >
-                    <div className="space-y-8">
-                        <div className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-                                What you can do today
-                            </p>
-                            <h2
-                                id="landing-today-heading"
-                                className="text-2xl font-bold tracking-tight sm:text-3xl"
-                            >
-                                Current capabilities, honestly stated
-                            </h2>
-                            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                                Everything below is part of the product right
-                                now. Features that are still on the way are
-                                listed separately, and clearly labeled.
+                                Bring your learning together.
+                            </h1>
+                            <p className="ol-enter ol-enter-delay-2 mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+                                OpenLearn AI keeps your courses in one
+                                organized place and sets up a profile that
+                                fits how you study. Sign in once with secure
+                                single sign on.
                             </p>
                         </div>
-                        <div className="grid gap-4 md:grid-cols-3">
-                            {CAPABILITIES.map((capability) => (
-                                <div
-                                    key={capability.title}
-                                    className="rounded-2xl border border-border bg-card p-5 shadow-xs"
-                                >
-                                    <h3 className="text-base font-semibold text-card-foreground">
-                                        {capability.title}
-                                    </h3>
-                                    <p className="pt-1.5 text-sm leading-relaxed text-muted-foreground">
-                                        {capability.body}
-                                    </p>
+
+                        <Reveal className="ol-enter-delay-3 mt-12 sm:mt-16">
+                            <figure className="mx-auto max-w-5xl">
+                                <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+                                    <Image
+                                        src="/courses-preview.png"
+                                        alt="The OpenLearn AI courses workspace as it renders today, with the current course list"
+                                        width={2880}
+                                        height={1800}
+                                        sizes="(max-width: 640px) 100vw, 1024px"
+                                        className="h-auto w-full"
+                                    />
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                </section>
+                                <figcaption className="mt-3 text-center text-xs text-muted-foreground/80">
+                                    The courses workspace, exactly as the app
+                                    renders it today.
+                                </figcaption>
+                            </figure>
+                        </Reveal>
+                    </section>
 
-                {/* ── 5. For students / for instructors ─────────────── */}
-                <section
-                    aria-labelledby="landing-audience-heading"
-                    className="border-t border-border py-12 sm:py-14"
-                >
-                    <div className="space-y-8">
-                        <div className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-                                Who it serves
-                            </p>
-                            <h2
-                                id="landing-audience-heading"
-                                className="text-2xl font-bold tracking-tight sm:text-3xl"
-                            >
-                                Built for students and instructors
-                            </h2>
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="rounded-2xl border border-border bg-card p-6 shadow-xs">
-                                <h3 className="text-lg font-semibold text-card-foreground">
-                                    For students
-                                </h3>
-                                <p className="pt-2 text-sm leading-relaxed text-muted-foreground">
-                                    Keep every course you&apos;re following in
-                                    one place and set your study preferences —
-                                    your language, and the time you actually
-                                    have each day.
-                                </p>
-                            </div>
-                            <div className="rounded-2xl border border-border bg-card p-6 shadow-xs">
-                                <h3 className="text-lg font-semibold text-card-foreground">
-                                    For instructors
-                                </h3>
-                                <p className="pt-2 text-sm leading-relaxed text-muted-foreground">
-                                    Set up and organize the courses you teach,
-                                    with a workspace that grows with your
-                                    materials.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* ── 6. Where we're headed ─────────────────────────── */}
-                <section
-                    aria-labelledby="landing-future-heading"
-                    className="border-t border-border py-12 sm:py-14"
-                >
-                    <div className="space-y-6 rounded-2xl border border-border bg-card p-6 shadow-xs sm:p-8">
-                        <div className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-                                Where we&apos;re headed
-                            </p>
-                            <h2
-                                id="landing-future-heading"
-                                className="text-2xl font-bold tracking-tight"
-                            >
-                                What&apos;s next — clearly labeled
-                            </h2>
-                            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                                These capabilities are not part of the product
-                                yet. We list them so the direction is
-                                transparent, not to suggest they are available
-                                today.
-                            </p>
-                        </div>
-                        <ul className="space-y-2.5">
-                            {FUTURE_ITEMS.map((item) => (
-                                <li
-                                    key={item.label}
-                                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-secondary/50 px-3.5 py-2.5"
+                    {/* ── Honest status list ──────────────────────────
+                        The whole product status, in three lines. The
+                        labels (Today / In development / Planned) are the
+                        Batch 4.1 honesty vocabulary, condensed. */}
+                    <section
+                        aria-labelledby="landing-status-heading"
+                        className="pb-20 pt-14 sm:pt-16"
+                    >
+                        <Reveal>
+                            <div className="mx-auto max-w-3xl rounded-3xl border border-border bg-card p-6 shadow-xs sm:p-8">
+                                <h2
+                                    id="landing-status-heading"
+                                    className="text-sm font-semibold uppercase tracking-wider text-muted-foreground"
                                 >
-                                    <span className="text-sm text-card-foreground">
-                                        {item.label}
-                                    </span>
-                                    <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-semibold">
-                                        {item.status}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                        <p className="border-t border-border pt-5 text-sm italic leading-relaxed text-muted-foreground">
-                            Our long-term vision: &ldquo;Your learning journey
-                            should remember you&rdquo; — a platform that grows
-                            more personal the longer you use it. Personalization
-                            at that level is not part of the product today.
-                        </p>
-                    </div>
-                </section>
-
-                {/* ── 7. Closing statement ──────────────────────────── */}
-                <section
-                    aria-labelledby="landing-cta-heading"
-                    className="py-12 sm:py-14"
-                >
-                    <div className="flex flex-col items-start gap-1.5 rounded-2xl border border-border bg-card p-6 shadow-xs sm:p-8">
-                        <h2
-                            id="landing-cta-heading"
-                            className="text-xl font-bold tracking-tight sm:text-2xl"
-                        >
-                            Start with your courses. Grow from there.
-                        </h2>
-                        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                            Create an account, set up your profile, and bring
-                            your learning together — the account and log-in
-                            actions are in the bar above, wherever you are on
-                            this page.
-                        </p>
-                    </div>
-                </section>
+                                    Where the product stands
+                                </h2>
+                                <ul className="mt-5 space-y-4">
+                                    <li className="flex items-start gap-3 text-sm leading-relaxed sm:text-base">
+                                        <span
+                                            aria-hidden="true"
+                                            className="mt-2 size-2 shrink-0 rounded-full bg-primary"
+                                        />
+                                        <span className="text-foreground">
+                                            {STATUS_TODAY}
+                                        </span>
+                                    </li>
+                                    <li className="flex items-start gap-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+                                        <span
+                                            aria-hidden="true"
+                                            className="mt-2 size-2 shrink-0 rounded-full bg-muted-foreground/70"
+                                        />
+                                        <span>{STATUS_IN_DEVELOPMENT}</span>
+                                    </li>
+                                    <li className="flex items-start gap-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+                                        <span
+                                            aria-hidden="true"
+                                            className="mt-2 size-2 shrink-0 rounded-full bg-muted-foreground/40"
+                                        />
+                                        <span>{STATUS_PLANNED}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </Reveal>
+                    </section>
+                </div>
             </main>
 
-            {/* ── Footer ─────────────────────────────────────────────── */}
-            <footer className="border-t border-border bg-background">
+            {/* ── Footer ─────────────────────────────────────────── */}
+            <footer className="relative border-t border-border bg-background">
                 <div className="mx-auto w-full max-w-6xl px-4 py-6 text-sm text-muted-foreground sm:px-6">
-                    <p>OpenLearn AI — Adaptive Learning Platform</p>
+                    <p>OpenLearn AI · Adaptive Learning Platform</p>
                 </div>
             </footer>
         </div>

@@ -57,7 +57,10 @@ export const profileSchema = z.object({
     learning_style_vark: z
         .string()
         .min(1, "Learning style must not be empty")
-        .max(20, "Learning style must be 20 characters or less")
+        .max(
+            100,
+            "Learning style must be 100 characters or less",
+        )
         .nullable()
         .optional(),
 

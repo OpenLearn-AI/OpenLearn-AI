@@ -405,6 +405,51 @@ async def test_put_me_rejects_client_user_id(db_session, rsa_keypair, fake_jwks)
 
 
 @pytest.mark.asyncio
+async def test_put_me_accepts_full_comma_joined_vark_string(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    """Batch 4.2 contract: the free-text learning_style_vark accepts the
+    complete comma-joined VARK set (35 chars), which the previous
+    20-character bound rejected."""
+    private_key, _ = rsa_keypair
+
+    user = await _create_user(
+        db_session,
+        "profile-api-vark-subject",
+        "profile-vark@example.com",
+    )
+
+    token = _build_token(private_key, sub=user.keycloak_subject)
+    vark = "Visual,Aural,Read/Write,Kinesthetic"
+    assert len(vark) == 35
+    payload = _profile_payload(learning_style_vark=vark)
+
+    try:
+        async with _api(db_session, token) as (client, headers):
+            response = await client.put(
+                "/v1/users/me",
+                json=payload,
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+
+        body = response.json()
+        assert body["learning_style_vark"] == vark
+
+        assert await _count_profiles_for(db_session, user.id) == 1
+
+        stored = await get_profile_by_user_id(db_session, user.id)
+        assert stored is not None
+        assert stored.learning_style_vark == vark
+    finally:
+        await db_session.delete(user)
+        await db_session.commit()
+
+
+@pytest.mark.asyncio
 async def test_put_me_replaces_profile_completely(
     db_session,
     rsa_keypair,

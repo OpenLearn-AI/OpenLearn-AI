@@ -1,9 +1,9 @@
 # ADR-0010: Frontend Design Direction and Token Layer Ratification
 
-* **Status:** Accepted (2026-10-20) — Batch 3.1 design-decision record; implementation delivered as a patch for owner review. **Amended (2026-10-23) — the visual direction is superseded from indigo to Light Steel (Steel Blue accent) by owner decision (§2.1, §2.7–§2.9); the amended token layer is delivered as a patch for owner review.**
-* **Date:** 2026-10-20; amended 2026-10-23
+* **Status:** Accepted (2026-10-20) — Batch 3.1 design-decision record; implementation delivered as a patch for owner review. **Amended (2026-10-23) — the visual direction is superseded from indigo to Light Steel (Steel Blue accent) by owner decision (§2.1, §2.7–§2.9); the amended token layer is delivered as a patch for owner review.** **Re-amended (2026-10-24) — Batch 4.2 reline: the public experience is fixed dark and the accent identity is brass (§2.1.1); token names and the structural rules of this ADR are unchanged.**
+* **Date:** 2026-10-20; amended 2026-10-23; re-amended 2026-10-24
 * **Decision Owners:** Muhammad Seyam (Product Owner); the original decisions were derived by Batch 3.1 from already-accepted decisions (D9, D10), the Integrated Frontend Execution Roadmap v2.0 (§9, §14, §16, §17), and repository evidence. The 2026-10-23 amendment (Light Steel palette with Steel Blue accent, advisory borders with a strict focus ring, minimalist text-first semantic feedback, Arabic-typography deferral) was decided by the owner in the Light Steel review cycle and authorized for implementation by the owner's task directive.
-* **Scope:** Phase 3 / Batch 3.1 — design direction, token layer, design documentation, RTL logical-properties discipline, hub-slot reservation record; **amendment scope (2026-10-23): token VALUE migration in `frontend/app/globals.css` plus the design documentation and progress ledger — token names, the Tailwind 4 CSS-first model, the next-themes class strategy, and all component/page code unchanged**
+* **Scope:** Phase 3 / Batch 3.1 — design direction, token layer, design documentation, RTL logical-properties discipline, hub-slot reservation record; **amendment scope (2026-10-23): token VALUE migration in `frontend/app/globals.css` plus the design documentation and progress ledger — token names, the Tailwind 4 CSS-first model, the next-themes class strategy, and all component/page code unchanged. Re-amendment scope (2026-10-24, Batch 4.2): the same VALUE-migration discipline, plus the fixed-dark public experience and the public motion vocabulary — this batch's deliverable surface; token names, the Tailwind 4 CSS-first model, and the next-themes class strategy remain unchanged**
 * **Related:** ADR-0002 (documentation authority), the Modernization architecture baseline **D9** (token foundation, not final design) and **D10** (LTR/Arabic/RTL rails), `docs/design-tokens.md`, `frontend/app/globals.css`, the Integrated Frontend Execution Roadmap v1.1.docx (§9 hub-slot table, Batch 3.1/3.2/4.3/4.4 specifications), `GLM-batch-n-patch-lifecycle-rules.md`
 
 ## 1. Context
@@ -74,6 +74,40 @@ Token **names** are unchanged by this amendment; only **values** migrated
 The migration was authorized by the owner as the Batch 3.1 amendment; the original
 §2.1 (indigo retained with no palette replacement) is superseded and preserved in
 §4 for the historical record.
+
+### 2.1.1 Re-amendment: fixed dark + brass (Batch 4.2 reline, 2026-10-24)
+
+The Batch 4.2 owner directive retunes the ratified composition and resolves its
+one structural tension: a public marketing/auth experience whose character
+(read: click-through pulse) conflicts with Light Steel's page-and-workspace
+calm. The reline operates entirely under §2.3's rules — names frozen, values
+migrated:
+
+* **Accent identity: brass.** The steel-blue accent is replaced by brass —
+  `#E1B66C` as the dark-theme fill with warm ink `#17130E` on it, a
+  lighter step for hovers, and deep brass `#815C0A` for light-theme sidebar
+  emphasis; the light theme's `--primary` returns to warm ink (`#232019`,
+  fills read as print) with `--ring` brass on the warm paper ramp
+  (`#FAF9F5` page / white surfaces, border `#E5E1D8`, input `#B3AA9C`).
+  The dark ladder is unchanged from Batch 3.1's composition
+  (`#171A1E` → `#1F2328` → `#262B31`): the charcoal base was the amber
+  decision the reline keeps.
+* **The public experience is fixed dark.** The landing, onboarding, and
+  auth shells (and the Keycloak hosted pages, whose theme mirrors the dark
+  ladder statically) wrap themselves in `.dark` and ignore stored
+  preference; `defaultTheme="dark"` at the root; only `(app)` routes keep
+  the user-facing Light/Dark toggle (toggle content unchanged — §2.2 row 3
+  stands).
+* **A public motion vocabulary is sanctioned.** `ol-enter` (translation-only
+  entrances, staggered), `ol-draw` (SVG stroke drawing), and `ol-breathe`
+  (a slow non-content loop, decorative `aria-hidden` only) join the token
+  layer's behavioral CSS; the Batch 3.1 reduced-motion guard (§2.4) covers
+  them without restatement. Translation-only entrances are required: public
+  content may never be hidden pre-entry.
+* Semantic-feedback policy (§2.7), border hierarchy (§2.8), RTL discipline
+  (§2.5), typography (§2.9), spacing/radius/shadows/breakpoints, naming
+  rules, and the hub-slot reservation are all untouched. Charts realign to
+  the warm series (still zero consumers).
 
 ### 2.2 Token-group decisions
 

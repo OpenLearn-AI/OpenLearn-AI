@@ -18,7 +18,8 @@ import { useUpdateProfile } from "@/features/profile/api/useProfileMutation";
 
 /**
  * First-login profile setup wizard (Batch 4.1 — owner decisions Q2/Q3;
- * presentation refined by the corrective follow-up).
+ * presentation refined by the corrective follow-up and the Batch 4.2
+ * public-direction redesign).
  *
  * Contract rules (verified against `docs/openapi.json` — nothing
  * invented):
@@ -33,21 +34,29 @@ import { useUpdateProfile } from "@/features/profile/api/useProfileMutation";
  *     prefills the wizard (a user who revisits `/onboarding` edits
  *     rather than erases). No client-only completion flag exists or is
  *     created.
- *   - Every field is SINGLE-VALUED in the contract, so all choice
- *     controls are single-select. The tiles map only finite,
- *     contract-backed choices — the `preferred_language` enum, common
- *     integer presets for `daily_available_minutes` (the input stays
- *     for any value 1–1440), and the four VARK styles the product's
- *     own hint documents for the free-text `learning_style_vark`.
- *     Education level, major, and university remain text inputs (no
- *     trusted catalog exists; none is invented).
+ *   - `preferred_language` and the daily-minutes integer presets stay
+ *     single-select tiles (finite, contract-backed choices). Education
+ *     level has no trusted catalog, so the four education-stage tiles
+ *     are product-side entry aids, not contract enums: "Other" keeps
+ *     the honest free-text input. `learning_style_vark` is FREE TEXT
+ *     in the contract (owner-approved max length raise to 100 chars),
+ *     which is why it gets a genuine multi-select toggle group — joined
+ *     with commas, exactly what the product's own VARK hint documents.
+ *     Major and university remain text inputs (no trusted catalog
+ *     exists; none is invented).
  *
- * UX rules (Q3 + corrective follow-up §A.1): three steps with a clear
- * hierarchy — step position, title, one-line instruction, fields,
- * navigation. Backward navigation never loses entered values; per-step
- * Zod validation comes from the shared `profileSchema`; saving,
- * success, failure, and retry are explicit; no success claim before
- * the API confirms.
+ * Batch 4.2 redesign decisions (owner task §6):
+ *   - The interim review step was REMOVED: the final save shows a clear
+ *     pending/failure state instead, and every step is small enough to
+ *     see in one glance. Backward navigation never loses entered
+ *     values.
+ *   - Selecting a named education stage commits that value immediately;
+ *     "Other" reveals a free-text input. Switching away from "Other"
+ *     clears any stale custom value (a half-typed custom level is never
+ *     silently kept behind a named tile).
+ *   - Each step carries ONE concise sentence under its title (no
+ *     AI-summary flavor, no redundant restatements of the heading).
+ *   - No em dashes in any visible copy.
  *
  * Redirect safety: the CALLER owns navigation — the wizard reports the
  * confirmed save through its `onSaved` callback, and the onboarding
@@ -64,16 +73,23 @@ import { useUpdateProfile } from "@/features/profile/api/useProfileMutation";
 const STEPS = [
     {
         title: "About your studies",
-        instruction: "Where you are and what you study.",
+        instruction: "Tell us where you are in your education and what you study.",
     },
     {
         title: "Your study rhythm",
-        instruction: "Your daily study time and preferred language.",
+        instruction: "Tell us when you study and in which language.",
     },
     {
         title: "Optional details",
-        instruction: "Skip either field, review your answers, then save.",
+        instruction: "These fields are optional. Skip any of them and save directly.",
     },
+] as const;
+
+const EDUCATION_STAGE_OPTIONS = [
+    { value: "High school", label: "High school" },
+    { value: "Undergraduate", label: "Undergraduate" },
+    { value: "Postgraduate", label: "Postgraduate" },
+    { value: "Other", label: "Other" },
 ] as const;
 
 const MINUTES_PRESETS = [
@@ -152,8 +168,42 @@ export function ProfileSetupWizard({
         profile?.preferred_language === "ar" ? "ar" : "en",
     );
     const [university, setUniversity] = useState(profile?.university ?? "");
-    const [learningStyle, setLearningStyle] = useState(
-        profile?.learning_style_vark ?? "",
+
+    // Learning style: the contract field is free text, so an existing
+    // profile may hold tokens that are NOT one of the four VARK
+    // options. Known tokens back the toggle group; unknown tokens ride
+    // along and are submitted back unchanged, without inventing a tile
+    // for them.
+    const initialStyleTokens = (
+        profile?.learning_style_vark ?? ""
+    ).split(",");
+    const initialKnownStyles = initialStyleTokens.filter((token) =>
+        VARK_OPTIONS.some((option) => option.value === token),
+    );
+    const [preservedStyleTokens] = useState(
+        initialStyleTokens
+            .filter(
+                (token) =>
+                    !VARK_OPTIONS.some((option) => option.value === token),
+            )
+            .join(","),
+    );
+    const [learningStyles, setLearningStyles] = useState(initialKnownStyles);
+
+    // Which education-stage tile matches the prefilled value: a known
+    // stage maps to that tile; anything else (including the empty
+    // first-time value) starts unselected, and "Other" re-reveals the
+    // prefilled text.
+    const prefilledEducation = profile?.education_level ?? "";
+    const initialEducationStage = prefilledEducation
+        ? EDUCATION_STAGE_OPTIONS.some(
+              (option) => option.value === prefilledEducation,
+          )
+            ? prefilledEducation
+            : "Other"
+        : "";
+    const [educationStage, setEducationStage] = useState(
+        initialEducationStage,
     );
 
     const [step, setStep] = useState(0);
@@ -166,8 +216,10 @@ export function ProfileSetupWizard({
      * The full-replacement payload, assembled exactly as `ProfileForm`
      * assembles it: the two optional fields convert empty strings to
      * `null` (the API clears omitted/null optionals — sending an empty
-     * string would violate the 1-char minimum), and the minutes field
-     * becomes a real number.
+     * string would violate the 1-char minimum), the minutes field
+     * becomes a real number, and the multi-selected learning styles
+     * join into the comma format the field documents (unknown
+     * prefilled tokens ride along first, unchanged).
      */
     const buildPayload = (): ProfileFormValues => ({
         education_level: educationLevel,
@@ -175,8 +227,24 @@ export function ProfileSetupWizard({
         preferred_language: preferredLanguage,
         daily_available_minutes: Number(dailyAvailableMinutes),
         university: university || null,
-        learning_style_vark: learningStyle || null,
+        learning_style_vark:
+            [preservedStyleTokens, ...learningStyles]
+                .filter(Boolean)
+                .join(",") || null,
     });
+
+    const selectEducationStage = (stage: string) => {
+        setEducationStage(stage);
+        setFieldErrors((errors) => ({ ...errors, education_level: undefined }));
+        if (stage === "Other") {
+            // Reveal the free-text input empty: no stale custom value is
+            // kept behind the tiles.
+            setEducationLevel("");
+        } else {
+            // A named stage commits its value immediately.
+            setEducationLevel(stage);
+        }
+    };
 
     const goToStep = (next: number) => {
         setStep(next);
@@ -231,22 +299,14 @@ export function ProfileSetupWizard({
             ? mutationError.status === 401
                 ? "Your session has expired. Redirecting to sign in..."
                 : mutationError.status === 422
-                    ? "Please check your answers — one or more fields were not accepted."
-                    : "We couldn't save your profile. Your answers are preserved — try again."
-            : "We couldn't save your profile. Your answers are preserved — try again."
+                    ? "Please check your answers. One or more fields were not accepted."
+                    : "We couldn't save your profile. Your answers are preserved, so you can safely try again."
+            : "We couldn't save your profile. Your answers are preserved, so you can safely try again."
         : null;
 
-    const minutesValue = dailyAvailableMinutes;
-    const review = {
-        education_level: educationLevel,
-        major,
-        daily_available_minutes: minutesValue
-            ? `${minutesValue} minutes / day`
-            : "—",
-        preferred_language: preferredLanguage === "ar" ? "Arabic" : "English",
-        university: university || "Not provided",
-        learning_style_vark: learningStyle || "Not provided",
-    };
+    const learningStyleJoined =
+        [preservedStyleTokens, ...learningStyles].filter(Boolean).join(",") ||
+        "";
 
     return (
         <form onSubmit={handleSubmit} noValidate className="space-y-6">
@@ -275,7 +335,7 @@ export function ProfileSetupWizard({
                     </div>
                 </div>
                 <div className="space-y-1">
-                    <h2 className="text-xl font-bold tracking-tight text-card-foreground">
+                    <h2 className="text-xl font-bold tracking-tight text-foreground">
                         {STEPS[step].title}
                     </h2>
                     <p className="text-sm text-muted-foreground">
@@ -286,24 +346,40 @@ export function ProfileSetupWizard({
 
             {step === 0 && (
                 <div className="space-y-4">
-                    <Field
+                    {/* Education stage tiles: a product-side entry aid over
+                        the contract's free-text field. "Other" reveals the
+                        honest free-text input. */}
+                    <ChoiceTileGroup
+                        id="onboarding-education-stage"
                         label="Education Level"
-                        htmlFor="onboarding-education-level"
+                        options={EDUCATION_STAGE_OPTIONS}
+                        value={educationStage}
+                        onValueChange={selectEducationStage}
                         error={fieldErrors.education_level}
-                    >
-                        <Input
-                            id="onboarding-education-level"
-                            placeholder="e.g. High school, Undergraduate, Postgraduate"
-                            value={educationLevel}
-                            onChange={(event) =>
-                                setEducationLevel(event.target.value)
-                            }
-                            disabled={busy}
-                            aria-invalid={Boolean(
-                                fieldErrors.education_level,
-                            )}
-                        />
-                    </Field>
+                        disabled={busy}
+                        groupClassName="[&>button]:min-w-[calc(50%-0.5rem)] sm:[&>button]:flex-1"
+                    />
+                    {educationStage === "Other" && (
+                        <Field
+                            label="Your education level"
+                            htmlFor="onboarding-education-level"
+                            hint="Any level that fits, e.g. vocational training."
+                            error={fieldErrors.education_level}
+                        >
+                            <Input
+                                id="onboarding-education-level"
+                                placeholder="e.g. Vocational training"
+                                value={educationLevel}
+                                onChange={(event) =>
+                                    setEducationLevel(event.target.value)
+                                }
+                                disabled={busy}
+                                aria-invalid={Boolean(
+                                    fieldErrors.education_level,
+                                )}
+                            />
+                        </Field>
+                    )}
 
                     <Field
                         label="Major"
@@ -350,7 +426,7 @@ export function ProfileSetupWizard({
                             inputMode="numeric"
                             min={1}
                             max={1440}
-                            placeholder="Custom (1–1440)"
+                            placeholder="Custom value, 1 to 1440"
                             value={dailyAvailableMinutes}
                             onChange={(event) =>
                                 setDailyAvailableMinutes(event.target.value)
@@ -389,92 +465,51 @@ export function ProfileSetupWizard({
 
             {step === 2 && (
                 <div className="space-y-5">
-                    <div className="space-y-4">
-                        <Field
-                            label="University (optional)"
-                            htmlFor="onboarding-university"
-                            error={fieldErrors.university}
-                        >
-                            <Input
-                                id="onboarding-university"
-                                placeholder="e.g. Cairo University"
-                                value={university}
-                                onChange={(event) =>
-                                    setUniversity(event.target.value)
-                                }
-                                disabled={busy}
-                                aria-invalid={Boolean(
-                                    fieldErrors.university,
-                                )}
-                            />
-                        </Field>
-
-                        <ChoiceTileGroup
-                            id="onboarding-learning-style"
-                            label="Learning style (optional)"
-                            options={VARK_OPTIONS}
-                            value={learningStyle}
-                            onValueChange={setLearningStyle}
-                            disabled={busy}
-                            error={fieldErrors.learning_style_vark}
-                            groupClassName="[&>button]:min-w-[calc(50%-0.5rem)] sm:[&>button]:flex-1"
-                            action={
-                                learningStyle && !busy ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setLearningStyle("")}
-                                        className="rounded text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                                    >
-                                        Clear
-                                    </button>
-                                ) : undefined
-                            }
-                        />
-                    </div>
-
-                    {/* Review of the complete payload that will be sent —
-                        the same values the single PUT carries. */}
-                    <div
-                        aria-labelledby="onboarding-review-heading"
-                        className="rounded-xl border border-border bg-secondary/50 p-4"
+                    <Field
+                        label="University (optional)"
+                        htmlFor="onboarding-university"
+                        error={fieldErrors.university}
                     >
-                        <h3
-                            id="onboarding-review-heading"
-                            className="text-sm font-semibold text-card-foreground"
-                        >
-                            Review your answers
-                        </h3>
-                        <dl className="mt-2.5 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-                            {(
-                                [
-                                    ["Education Level", review.education_level],
-                                    ["Major", review.major],
-                                    [
-                                        "Daily study time",
-                                        review.daily_available_minutes,
-                                    ],
-                                    [
-                                        "Preferred language",
-                                        review.preferred_language,
-                                    ],
-                                    ["University", review.university],
-                                    ["Learning style", review.learning_style_vark],
-                                ] as const
-                            ).map(([label, value]) => (
-                                <div
-                                    key={label}
-                                    className="flex justify-between gap-3"
+                        <Input
+                            id="onboarding-university"
+                            placeholder="e.g. Cairo University"
+                            value={university}
+                            onChange={(event) =>
+                                setUniversity(event.target.value)
+                            }
+                            disabled={busy}
+                            aria-invalid={Boolean(
+                                fieldErrors.university,
+                            )}
+                        />
+                    </Field>
+
+                    {/* Learning style: the contract field is free text, so
+                        a genuine multi-select (toggle-group semantics) is
+                        the honest control; selections join with commas. */}
+                    <ChoiceTileGroup
+                        id="onboarding-learning-style"
+                        label="Learning style (optional)"
+                        options={VARK_OPTIONS}
+                        multiple
+                        value={learningStyles}
+                        onValueChange={setLearningStyles}
+                        disabled={busy}
+                        error={fieldErrors.learning_style_vark}
+                        hint="Pick every style that applies to you."
+                        groupClassName="[&>button]:min-w-[calc(50%-0.5rem)] sm:[&>button]:flex-1"
+                        action={
+                            learningStyleJoined && !busy ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setLearningStyles([])}
+                                    className="rounded text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
                                 >
-                                    <dt className="text-muted-foreground">
-                                        {label}
-                                    </dt>
-                                    <dd className="text-end font-medium text-card-foreground">
-                                        {value}
-                                    </dd>
-                                </div>
-                            ))}
-                        </dl>
-                    </div>
+                                    Clear
+                                </button>
+                            ) : undefined
+                        }
+                    />
                 </div>
             )}
 

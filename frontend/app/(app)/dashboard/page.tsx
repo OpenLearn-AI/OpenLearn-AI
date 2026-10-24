@@ -85,7 +85,7 @@ export default function DashboardPage() {
                         {coursesLoading
                             ? "Loading..."
                             : coursesError
-                              ? "—"
+                              ? "-"
                               : `${courseCount} ${courseCount === 1 ? "Course" : "Courses"}`}
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -106,7 +106,7 @@ export default function DashboardPage() {
                         {profileLoading
                             ? "Loading..."
                             : profileError
-                              ? "—"
+                              ? "-"
                               : profile === null
                                 ? "Not set up"
                                 : missingProfileFields === 0

@@ -177,9 +177,14 @@ test.describe("Onboarding gate and wizard", () => {
     await sharedPage.goto("/onboarding");
     await expect(sharedPage.getByText(/Step 1 of 3/)).toBeVisible();
 
-    // Fill all three steps.
+    // Fill all three steps. Education goes through the stage tiles
+    // (custom value -> "Other" free-text input).
+    const educationGroup = sharedPage.getByRole("radiogroup", {
+      name: "Education Level",
+    });
+    await educationGroup.getByRole("radio", { name: "Other" }).click();
     await sharedPage
-      .getByLabel("Education Level")
+      .getByLabel("Your education level")
       .fill(ONBOARDING_WIZARD_VALUES.educationLevel);
     await sharedPage.getByLabel("Major").fill(ONBOARDING_WIZARD_VALUES.major);
     await sharedPage.getByRole("button", { name: "Continue" }).click();
@@ -208,10 +213,21 @@ test.describe("Onboarding gate and wizard", () => {
     // retry takes.
     await sharedPage.unroute("**/v1/users/me");
 
-    // The entered values survived the failed save (no re-typing).
-    await expect(sharedPage.getByLabel("Education Level")).toHaveValue(
+    // The entered values survived the failed save (no re-typing) —
+    // checked two steps back: the "Other" stage is still selected and
+    // holds the typed value.
+    await sharedPage.getByRole("button", { name: "Back" }).click();
+    await sharedPage.getByRole("button", { name: "Back" }).click();
+    await expect(sharedPage.getByText(/Step 1 of 3/)).toBeVisible();
+    await expect(sharedPage.getByLabel("Your education level")).toHaveValue(
       ONBOARDING_WIZARD_VALUES.educationLevel,
     );
+    await expect(sharedPage.getByLabel("Major")).toHaveValue(
+      ONBOARDING_WIZARD_VALUES.major,
+    );
+    await sharedPage.getByRole("button", { name: "Continue" }).click();
+    await sharedPage.getByRole("button", { name: "Continue" }).click();
+    await expect(sharedPage.getByText(/Step 3 of 3/)).toBeVisible();
     await sharedPage.getByRole("button", { name: "Save profile" }).click();
 
     // The confirmed save routes back into the application.
@@ -239,6 +255,11 @@ test.describe("Onboarding gate and wizard", () => {
       sharedPage,
       ONBOARDING_WIZARD_VALUES,
       /\/courses$/,
+      // Drop the 404 interception BEFORE the final save: the confirmed
+      // PUT and the gate's profile revalidation on the landing route
+      // must hit the real API, or the still-intercepted GET races the
+      // save and bounces the browser back to /onboarding.
+      { beforeSave: () => sharedPage.unroute("**/v1/users/me") },
     );
     await expect(
       sharedPage.getByRole("heading", { name: /Courses & Learning Hub/i }),

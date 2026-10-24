@@ -110,7 +110,7 @@ export function AppSidebar({
                         )}
                         {collapsed && (
                             <span className="sr-only">
-                                OpenLearn AI — Adaptive Learning Platform
+                                OpenLearn AI - Adaptive Learning Platform
                             </span>
                         )}
                     </span>

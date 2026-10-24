@@ -23,11 +23,16 @@ import { expect, type Page } from "@playwright/test";
  * UI with deterministic values — no auth state is mocked anywhere in
  * this file.
  *
- * The revised wizard presents finite, contract-backed choices as
+ * Batch 4.2: education level is entered through stage tiles (a named
+ * stage commits directly; a custom value goes through the uncovered
+ * "Other" free-text input). The finite, contract-backed choices remain
  * single-select tiles: the minute presets map onto the integer
- * `daily_available_minutes` (any 1–1440 value still goes through the
+ * `daily_available_minutes` (any 1-1440 value still goes through the
  * custom input), and the `preferred_language` enum maps to
- * English/العربية tiles.
+ * English/العربية tiles. The optional VARK learning-style field uses a
+ * genuine multi-select toggle group (the contract field is free text);
+ * the shared helper leaves it untouched, and the interim review step
+ * no longer exists.
  */
 
 /** Deterministic values the shared helper writes into the wizard. */
@@ -71,10 +76,31 @@ export async function completeOnboardingWizard(
         preferredLanguage: string;
     } = ONBOARDING_WIZARD_VALUES,
     expectLanding: RegExp = /\/dashboard/,
+    options: {
+        /** Hook the instant before the final save — e.g. to drop a
+            `GET /v1/users/me` interception so the confirmed save and
+            the race against the onboarding gate hit the real API. */
+        beforeSave?: (page: Page) => Promise<void>;
+    } = {},
 ): Promise<void> {
-    // Step 1 — About your studies.
+    // Step 1 — About your studies. Education level is entered through
+    // the stage tiles: a canonical stage commits its value directly;
+    // any custom value goes through the honest "Other" free-text input.
     await expect(page.getByText(/Step 1 of 3/)).toBeVisible();
-    await page.getByLabel("Education Level").fill(values.educationLevel);
+    const canonicalStages = ["High school", "Undergraduate", "Postgraduate"];
+    const educationGroup = page.getByRole("radiogroup", {
+        name: "Education Level",
+    });
+    if (canonicalStages.includes(values.educationLevel)) {
+        await educationGroup
+            .getByRole("radio", { name: values.educationLevel })
+            .click();
+    } else {
+        await educationGroup.getByRole("radio", { name: "Other" }).click();
+        await page
+            .getByLabel("Your education level")
+            .fill(values.educationLevel);
+    }
     await page.getByLabel("Major").fill(values.major);
     await page.getByRole("button", { name: "Continue" }).click();
 
@@ -99,10 +125,12 @@ export async function completeOnboardingWizard(
 
     await page.getByRole("button", { name: "Continue" }).click();
 
-    // Step 3 — Optional details & review. The shared helper skips the
-    // two optional fields (they may remain empty per the profile
-    // contract) and saves the accumulated payload with ONE PUT.
+    // Step 3 — Optional details. The shared helper skips the two
+    // optional fields (they may remain empty per the profile contract)
+    // and saves the accumulated payload with ONE PUT; the interim
+    // review step was removed in the Batch 4.2 redesign.
     await expect(page.getByText(/Step 3 of 3/)).toBeVisible();
+    await options.beforeSave?.(page);
     await page.getByRole("button", { name: "Save profile" }).click();
 
     // The wizard navigates only after the API confirms the save; the

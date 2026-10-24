@@ -21,12 +21,15 @@
  *     exist on these pages, so almost none of it applied. This file
  *     targets the verified class set only.
  *
- * PALETTE: the Light Steel token VALUES (same hex sources as
+ * PALETTE: the Ink & Brass DARK token values (same hex sources as
  * frontend/app/globals.css and docs/design-tokens.md), mirrored as plain
  * custom properties — a Keycloak theme cannot consume the application's
  * Tailwind layer. Names are prefixed `--ol-` to avoid colliding with
- * PatternFly/Keycloak variables. Dark values follow the application's
- * dark theme (Light Steel dark ladder) under `prefers-color-scheme`.
+ * PatternFly/Keycloak variables. Like the rest of the public
+ * experience, the hosted pages are FIXED dark (Batch 4.2): there is no
+ * light variant and no prefers-color-scheme switch — this is the
+ * application's dark ladder (#171A1E page / #1F2328 card) with the
+ * brass accent (#E1B66C) carrying fills and focus.
  *
  * TYPOGRAPHY: the application loads Geist via next/font (build-time
  * download; no font files exist in the repository to ship, and Keycloak
@@ -45,44 +48,44 @@
  * wrapped in a prefers-reduced-motion guard.
  */
 
-/* ── Palette (mirrors of the application's Light Steel tokens) ───── */
+/* ── Palette (fixed-dark mirrors of the Ink & Brass tokens) ────────── */
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* --primary (light) — Steel Blue accent */
-  --ol-primary: #3b6ea5;
-  /* --primary-foreground (light) */
-  --ol-primary-foreground: #f8f9fa;
+  /* --primary (dark) — brass fill accent */
+  --ol-primary: #e1b66c;
+  /* --primary-foreground (dark) — warm dark ink on brass */
+  --ol-primary-foreground: #17130e;
   /* hover step of --primary (the app composites primary/80; plain CSS
-     uses this derived darker step instead) */
-  --ol-primary-hover: #35618f;
-  /* --background (light) */
-  --ol-bg: #f8f9fa;
-  /* --card (light) */
-  --ol-card: #ffffff;
-  /* --foreground (light) */
-  --ol-fg: #212529;
-  /* --muted-foreground (light) */
-  --ol-muted-fg: #495057;
-  /* --border (light) */
-  --ol-border: #dee2e6;
-  /* --input (light) — the visible control edge */
-  --ol-input: #adb5bd;
-  /* --ring (light) */
-  --ol-ring: #3b6ea5;
-  /* focus ring tint (primary at ~35% over the page background) */
-  --ol-ring-tint: rgb(59 110 165 / 35%);
-  /* --error (light) */
-  --ol-error: #bc392b;
+     uses this derived lighter step instead) */
+  --ol-primary-hover: #e9bf85;
+  /* --background (dark) — charcoal ladder anchor */
+  --ol-bg: #171a1e;
+  /* --card (dark) */
+  --ol-card: #1f2328;
+  /* --foreground (dark) — capped at #e9ecef, never pure white */
+  --ol-fg: #e9ecef;
+  /* --muted-foreground (dark) */
+  --ol-muted-fg: #adb5bd;
+  /* --border (dark) — alpha-over-surface convention */
+  --ol-border: rgb(255 255 255 / 10%);
+  /* --input (dark) — the visible control edge */
+  --ol-input: rgb(255 255 255 / 15%);
+  /* --ring (dark) — brass */
+  --ol-ring: #e1b66c;
+  /* focus ring tint (brass at ~35% over the page background) */
+  --ol-ring-tint: rgb(225 182 108 / 35%);
+  /* --error (dark) */
+  --ol-error: #ff8787;
   /* quiet error surface tint for alerts */
-  --ol-error-bg: #fdf3f2;
-  /* --success (light) */
-  --ol-success: #2f7d46;
-  /* --warning (light) */
-  --ol-warning: #b45309;
-  /* --info (light) */
-  --ol-info: #2a7a9b;
+  --ol-error-bg: rgb(255 135 135 / 8%);
+  /* --success (dark) */
+  --ol-success: #69db7c;
+  /* --warning (dark) */
+  --ol-warning: #ffc078;
+  /* --info (dark) */
+  --ol-info: #74c0fc;
 
   --ol-font-sans:
     system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
@@ -94,51 +97,30 @@
   --pf-c-form-control--Height: 44px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-
-    /* --primary (dark) */
-    --ol-primary: #6e9cc9;
-    /* --primary-foreground (dark) */
-    --ol-primary-foreground: #15181c;
-    /* lighter hover step for the dark primary */
-    --ol-primary-hover: #7ea9d2;
-    /* --background (dark) */
-    --ol-bg: #171a1e;
-    /* --card (dark) */
-    --ol-card: #1f2328;
-    /* --foreground (dark) */
-    --ol-fg: #e9ecef;
-    /* --muted-foreground (dark) */
-    --ol-muted-fg: #adb5bd;
-    /* --border (dark) — alpha-over-surface convention kept */
-    --ol-border: rgb(255 255 255 / 10%);
-    /* --input (dark) */
-    --ol-input: rgb(255 255 255 / 15%);
-    /* --ring (dark) */
-    --ol-ring: #6e9cc9;
-    --ol-ring-tint: rgb(110 156 201 / 40%);
-    /* --error (dark) */
-    --ol-error: #ff8787;
-    --ol-error-bg: rgb(255 135 135 / 8%);
-    /* --success (dark) */
-    --ol-success: #69db7c;
-    /* --warning (dark) */
-    --ol-warning: #ffc078;
-    /* --info (dark) */
-    --ol-info: #74c0fc;
-  }
-}
-
 /* ── Page canvas ─────────────────────────────────────────────────────
    The parent login.css resets PatternFly's .login-pf photo background,
    but then paints body with its own keycloak-bg.png; PF3 also paints
-   .login-pf. Both are replaced by the flat Light Steel page color. */
+   .login-pf. Both are replaced by the flat charcoal page with the same
+   brass/paper ambient the application's public surfaces use — kept
+   restrained because these pages are utility surfaces, not marketing. */
 
 .login-pf,
 .login-pf body {
   background: var(--ol-bg);
+}
+
+.login-pf body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 60% 45% at 22% 12%,
+      rgb(225 182 108 / 8%),
+      transparent 70%
+    );
 }
 
 .login-pf body {
@@ -147,18 +129,22 @@
   font-size: 15px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
+  /* Registration and other long pages: center WITHOUT the
+     justify-content dropout — a centered flex column whose content is
+     taller than the viewport makes the top unreachable by scroll (the
+     reported registration clipping). margin-block:auto on the page
+     container centers short pages and degrades to normal flow for
+     tall ones. */
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  overflow-x: hidden;
 }
-
-/* ── Page container ────────────────────────────────────────────────── */
 
 .login-pf-page {
   width: 100%;
   max-width: 512px;
   margin-inline: auto;
+  margin-block: auto;
   padding: 40px 16px 48px;
 }
 

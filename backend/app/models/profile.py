@@ -48,8 +48,10 @@ class Profile(Base):
         nullable=False,
     )
 
+    # Free text; Batch 4.2 widens 20 -> 100 so a comma-joined VARK
+    # multi-select fits outright ("Visual,Aural,Read/Write,Kinesthetic").
     learning_style_vark: Mapped[str | None] = mapped_column(
-        String(20),
+        String(100),
         nullable=True,
     )
 

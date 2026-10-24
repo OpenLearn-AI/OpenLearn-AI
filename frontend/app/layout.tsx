@@ -49,7 +49,7 @@ export default function RootLayout({ children }: LayoutProps) {
       <body className="min-h-full flex flex-col bg-background text-foreground transition-colors">
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="dark"
           enableSystem={false}
           disableTransitionOnChange
         >

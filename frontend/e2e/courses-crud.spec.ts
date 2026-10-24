@@ -163,8 +163,13 @@ test.describe("Course CRUD smoke flow", () => {
     // "Yes, delete it" / "Cancel".
     await sharedPage.getByRole("button", { name: "Delete Course" }).click();
 
+    // The dialog's accessible name resolves to its AlertDialogTitle ("Delete
+    // this course?"), not the component's `aria-label` — Base UI wires the
+    // popup `aria-labelledby` to the Title and labeledby outranks a direct
+    // `aria-label` in accessible-name computation, so the /Delete course:/i
+    // selector never matched.
     const dialog = sharedPage.getByRole("alertdialog", {
-      name: /Delete course:/i,
+      name: "Delete this course?",
     });
     await expect(dialog).toBeVisible();
     await expect(

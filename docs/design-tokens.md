@@ -24,6 +24,12 @@ Light Steel — Steel Blue accent on the Light Steel neutral ramp — with a min
 text-first semantic-feedback policy and advisory borders with a strict focus ring;
 Arabic typography is explicitly deferred to a separately scoped sub-batch.** The
 amendment migrated token VALUES only: every token name below is unchanged.
+**Batch 4.2 (2026-10-24, owner-directed reline) migrated the token VALUES again to
+the Ink & Brass direction** — warm paper light theme with ink text and brass
+accents; charcoal dark theme with the brass accent and warm dark ink — and made
+the public experience FIXED dark. Token names, the Tailwind 4 CSS-first model,
+the next-themes class strategy, spacing, radius, shadow, breakpoints, and the
+typography stack are all unchanged (see §18 and ADR-0010 §2.1-2.2 amendments).
 Downstream batches reference tokens, never raw values: token names are stable, and
 every literal color value lives only in `frontend/app/globals.css`.
 
@@ -97,7 +103,7 @@ AA-verified in the ledger validation matrix):
 | ------- | --------- | --------- |
 | `--success` | `#2F7D46` | `#69DB7C` |
 | `--warning` | `#B45309` (derived — see note) | `#FFC078` |
-| `--error` | `#BE3B2E` | `#FF8787` |
+| `--error` | `#BC392B` | `#FF8787` |
 | `--info` | `#2A7A9B` | `#74C0FC` |
 
 The light `--warning` is the one derived value: with tinted panels rejected, one
@@ -134,10 +140,12 @@ semantic hues (steel blue, green, amber, violet, terracotta). They currently hav
 beyond the current roadmap horizon (plan W34+). The tokens exist so that the
 first real chart consumes the palette instead of inventing hex values. They
 are reserved, not deprecated — do not repurpose them for non-chart UI. The set
-was realigned to the Light Steel series in the 2026-10-23 amendment (zero
-consumers, zero render change); the amber step (`#D69E2E` light / `#E5B85C` dark)
-sits below 3:1 on light surfaces and is recorded as advisory — per WCAG 1.4.1
-charts must pair color with labels or shapes regardless.
+was realigned to Light Steel in the 2026-10-23 amendment and again to the
+warm Ink & Brass series in the Batch 4.2 reline (zero consumers, zero
+render change) — brass, moss, terracotta, plum, and taupe, warm-leaning
+in both themes; the light brass step sits below 3:1 on paper and is
+recorded as advisory — per WCAG 1.4.1 charts must pair color with
+labels or shapes regardless.
 
 ### Sidebar Colors
 
@@ -157,11 +165,13 @@ follow-up (2026-10-23).** The initial Batch 3.3 active item rendered
 `sidebar-foreground` text on a `sidebar-accent` surface — technically
 AA-compliant but visually weak, because resting items carry the same
 foreground color and the accent tint is neutral. The pinned treatment
-is a Steel Blue pair on the existing semantic tokens:
+is a brass pair on the existing semantic tokens (Steel Blue values were
+migrated to brass in the Batch 4.2 reline — light `sidebar-primary` is
+the deep brass step, dark is the brass accent):
 
 * **Surface + text/icon:** `bg-sidebar-primary/10` with
-  `text-sidebar-primary` — verified **4.66:1 (light)** and **4.98:1
-  (dark)** against the composited tint (AA 1.4.3 normal text ≥ 4.5:1;
+  `text-sidebar-primary` — verified above AA 1.4.3's 4.5:1 bar in BOTH
+  themes against the composited tint (normal text ≥ 4.5:1;
   the 16px icons and the indicator bar are non-text graphics and clear
   1.4.11's 3:1 with margin). `/10` is the deepest alpha that passes in
   BOTH themes with one utility (`/15` fails light at 4.35:1), so no
@@ -190,16 +200,20 @@ names and values are unchanged.
 
 ### Brand composition surfaces (Batch 4.1)
 
-The landing page's **Product Identity Visual**
-(`frontend/components/brand/ProductIdentityVisual.tsx`) is a token-drawn
-SVG composition — two arcs, two dots, and an open center — and is the
-first composed graphic built entirely from the semantic layer: strokes
-and fills use `stroke-primary` / `fill-primary` with the same alpha
-steps (`/35`–`/70`) the interactive layer uses for tints. No new tokens,
-no hardcoded colors, no raster assets; Light and Dark themes resolve it
+The onboarding page's **Journey Visual**
+(`frontend/components/onboarding/OnboardingJourneyVisual.tsx`) is a
+token-drawn SVG composition — arcs, dots, and a breathing core built
+entirely from the semantic layer: strokes and fills use
+`stroke-primary` / `fill-primary` with the same alpha steps
+(`/35`–`/70`) the interactive layer uses for tints. No new tokens, no
+hardcoded colors, no raster assets; theme switching resolves it
 automatically because every color is a token reference. It is
-decorative (`aria-hidden`), static (no motion), and text-free (no RTL
-mirroring needed).
+decorative (`aria-hidden`), text-free (no RTL mirroring needed), and
+animates only with the public motion vocabulary (§9) under the shared
+reduced-motion guard. The landing page carries a REAL screenshot of the
+product's `/courses` surface (`public/courses-preview.png`, its
+provenance documented in `public/CAPTURE.md`) — the landing shows no
+imagery the product cannot render.
 
 The Keycloak login theme
 (`infra/keycloak/themes/openlearn/login/`) mirrors the same token VALUES
@@ -208,7 +222,14 @@ to avoid colliding with Keycloak/PatternFly variables) — a Keycloak
 theme is rendered by the Keycloak server and cannot consume the
 Tailwind layer, so the mirror — with each property commented to its
 application token — is the documented bridge between the two surfaces.
-The application's own token layer remains the single source of truth.
+Like the application's public routes, the hosted pages are FIXED dark:
+the mirror declares the dark ladder statically (no light values, no
+`prefers-color-scheme` switch). Note for capture/refresh environments:
+Keycloak persists gzipped renditions of theme resources under
+`/opt/keycloak/data/tmp/kc-gzip-cache/`; clear that directory after
+theme edits or browsers keep receiving stale bytes (full details in
+`public/CAPTURE.md`). The application's own token layer remains the
+single source of truth.
 
 ---
 
@@ -400,6 +421,17 @@ What is in use:
 * `animate-spin` on the loading indicator.
 * Theme switching disables color transitions via next-themes'
   `disableTransitionOnChange`.
+* **Public motion vocabulary (Batch 4.2)** — the public surfaces
+  (landing, onboarding, auth shells) use three named patterns declared
+  once in `frontend/app/globals.css`:
+  `ol-enter` (rising translation entrance with staggered
+  `ol-enter-delay-1..3`), `ol-draw` (an SVG stroke draws in via
+  `stroke-dashoffset` and `--ol-draw-length`), and `ol-breathe` (a
+  slow, subtle looping radius pulse reserved for the decorative
+  identity visual). Entrances reveal through TRANSLATION only — never
+  opacity/visibility — so content is never hidden from accessibility
+  tools or mid-animation screenshots, and every loop is slow, subtle,
+  and confined to non-content decoration.
 
 Reduced motion: a global `prefers-reduced-motion: reduce` guard lives in the
 base layer of `frontend/app/globals.css`. It collapses transition and
@@ -414,7 +446,11 @@ Rules for downstream batches:
   reason; prefer the defaults.
 * Any new animated pattern must degrade acceptably under the reduced-motion
   guard and must not carry information that is unavailable in static form.
-* No ambient/looping decoration (pulsing backgrounds, floating gradients).
+* No ambient/looping decoration in AUTHENTICATED content surfaces; the
+  single sanctioned exception is the onboarding identity visual's
+  `ol-breathe` (§9 list above, decorative, `aria-hidden`).
+* Reveal animations must not rely on opacity/visibility to hide content
+  before entry — translation-only entrances are the documented pattern.
 
 ---
 
@@ -429,7 +465,7 @@ focus ring carry the affordance.
 
 | Layer            | Convention                                              |
 | ---------------- | ------------------------------------------------------- |
-| Hairline borders | `border` (1px) with `border-border` on surfaces, dividers (`border-b`), and input edges (`border-input`) — advisory ratios: light `#DEE2E6` 1.30:1 vs card, `#ADB5BD` input 2.07:1; dark keeps the alpha-over-surface convention (10% / 15% white) |
+| Hairline borders | `border` (1px) with `border-border` on surfaces, dividers (`border-b`), and input edges (`border-input`) — advisory ratios: light `#E5E1D8` 1.30:1 vs card, `#B3AA9C` input 2.30:1; dark keeps the alpha-over-surface convention (10% / 15% white) |
 | Card outline     | `ring-1 ring-foreground/10` on the Card primitive (soft, theme-adaptive outline) |
 | Focus ring       | `ring-3 ring-ring/50` — the interaction-state geometry from §8; the strict, 1.4.11-passing part is the full-opacity `border-ring` edge |
 | Icon-slot padding| see §11 — direction-sensitive, uses logical properties after the 3.2 restyle |
@@ -498,33 +534,44 @@ It is defined with full light/dark parity and documented so that
 
 ---
 
-## 13. Light Theme
+## 13. Light Theme (Ink & Brass, Batch 4.2)
 
-The default theme is the light theme.
+The application default theme is the light theme for AUTHENTICATED
+surfaces; the PUBLIC experience is fixed dark (§14, Batch 4.2).
 
 Light mode uses:
 
-* A near-white application background (`#F8F9FA`, the Light Steel ramp top)
-* White surfaces
-* **Steel Blue** as the primary brand color (`#3B6EA5`)
-* Neutral secondary and muted surfaces (the Light Steel cool-grey ramp)
-* Semantic success, warning, error, and info colors as text-grade values
+* A warm paper application background (`#FAF9F5`) with white content
+  surfaces — the neutral ramp is warm-leaning (hue ≈ 79–95)
+* **Warm ink** as the primary action color (`#232019`) — light-theme
+  primary fills stay ink, reading as print, not candy
+* **Brass accents**: the focus/indicator layer (`--ring`, brass) and
+  the sidebar emphasis (`--sidebar-primary`, deep brass `#815C0A`)
+* Semantic success, warning, error, and info colors as text-grade
+  values
 
-The primary color is Steel Blue (ADR-0010 as amended 2026-10-23).
+The primary color is warm ink; brass is the accent identity
+(ADR-0010 as amended 2026-10-23 and by the Batch 4.2 reline).
 
 ---
 
-## 14. Dark Theme
+## 14. Dark Theme (fixed-dark public experience)
 
-Dark mode is activated using the `.dark` class.
+Dark mode is activated using the `.dark` class, and is the DEFAULT
+root theme (`defaultTheme="dark"`) as well as the FIXED theme of every
+public surface (landing, onboarding, auth shells, Keycloak): those
+route groups wrap themselves in `.dark` and stay dark regardless of
+stored preference. Only authenticated `(app)` routes still respond to
+the Light/Dark toggle.
 
 Dark mode provides:
 
 * Dark application backgrounds — a deliberate surface ladder (`#171A1E` page →
   `#1F2328` card → `#262B31` popover), not an inversion of the light theme
 * Dark elevated surfaces
-* Adjusted primary colors for visibility (the lighter steel tone `#6E9CC9` with
-  dark ink — mirroring the light theme's filled-primary pattern)
+* **Brass** as the primary fill (`#E1B66C`) with warm dark ink
+  (`#17130E`) on it — brass carries fills, focus (`--ring`), and the
+  sidebar emphasis in the dark theme
 * Softer borders (alpha-over-surface)
 * High-contrast foreground colors (capped at `#E9ECEF`, never pure white)
 * Semantic colors as the owner-approved text-grade pastels for dark backgrounds
@@ -674,3 +721,13 @@ padding on Button; Badge removed with S5), the destructive-foreground alias
 was completed, and the alert-dialog primitive was added
 (`components/ui/dialog.tsx`). See the Batch 3.2 ledger entry for the full
 validation matrix.
+
+**Batch 4.2 (2026-10-24) — Ink & Brass reline (owner-directed).** The public
+experience (landing, onboarding, auth shells, Keycloak hosted pages) is now
+FIXED dark; `defaultTheme="dark"` at the root; only `(app)` routes keep the
+Light/Dark toggle. Token values migrated in `frontend/app/globals.css` to the
+warm paper + ink + brass direction (§13/§14); the public motion
+vocabulary (`ol-enter`/`ol-draw`/`ol-breathe`, §9) was added with the shared
+reduced-motion guard already covering it. The Keycloak login theme mirrors the
+dark ladder statically (§2 brand-composition note). Storybook was re-verified
+after the reline; the wizard and landing specs are the driving tests.

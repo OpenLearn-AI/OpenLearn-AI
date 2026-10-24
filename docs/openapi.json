@@ -410,7 +410,7 @@
           "learning_style_vark": {
             "anyOf": [
               {
-                "maxLength": 20,
+                "maxLength": 100,
                 "minLength": 1,
                 "type": "string"
               },

@@ -9,11 +9,27 @@
    OPENLEARN AI — DESIGN TOKENS
    Tailwind CSS 4 + CSS Variables
 
-   Light Steel direction (ADR-0010 as amended 2026-10-23):
-   Steel Blue accent on the Light Steel neutral ramp, calm
-   surfaces in both themes. Token names are unchanged; only
-   color VALUES migrated. Hex comments record the approved
-   source values; docs/design-tokens.md is the usage contract.
+   Ink & Brass direction (owner-directed accent change,
+   visual-direction batch): a warm academic minimalism.
+   Light theme: warm paper surfaces, near-black ink text
+   and primary actions, and a restrained brass accent that
+   carries focus, selection, and emphasis. Dark theme: the
+   proven charcoal ladder with brass as the fill accent.
+
+   Two deliberate structural decisions:
+   - The light `primary` is warm INK, not a hue. A colored
+     primary button is what made previous directions read as
+     "generic SaaS accent"; ink-on-paper actions stay calm,
+     and the brass hue appears where identity matters (rings,
+     emphasis, dark-mode fills, charts).
+   - The dark neutrals keep their ADR-0010 ladder — they are
+     verified, AA-strong, and their charcoal aligns with the
+     product logo tile. Only the blue VALUES migrated to
+     brass; every token NAME is unchanged.
+
+   Token names are unchanged from Light Steel; only color
+   VALUES migrated. Hex comments record the approved source
+   values; docs/design-tokens.md is the usage contract.
    ========================================================= */
 
 @theme inline {
@@ -186,65 +202,71 @@
 }
 
 /* =========================================================
-   OPENLEARN AI — LIGHT THEME
+   OPENLEARN AI — LIGHT THEME (“paper & ink with brass”)
    ========================================================= */
 
 :root {
    /* =======================================================
-     CORE — Light Steel light theme: page #F8F9FA, white
-     content surfaces, Light Steel neutral ramp for structure.
+     CORE — warm off-white paper page, white content
+     surfaces, warm neutral ramp for structure.
      ======================================================= */
 
-   --background: oklch(0.982 0.002 247.8); /* #F8F9FA */
-   --foreground: oklch(0.262 0.009 248.2); /* #212529 */
+   --background: oklch(0.982 0.005 95); /* #FAF9F5 */
+   --foreground: oklch(0.244 0.014 88); /* #232019 */
 
    /* =======================================================
      SURFACES
      ======================================================= */
 
    --card: oklch(1 0 0);
-   --card-foreground: oklch(0.262 0.009 248.2);
+   --card-foreground: oklch(0.244 0.014 88);
 
    --popover: oklch(1 0 0);
-   --popover-foreground: oklch(0.262 0.009 248.2);
+   --popover-foreground: oklch(0.244 0.014 88);
 
    /* =======================================================
-     BRAND — Steel Blue accent (owner-approved 2026-10-23)
+     BRAND — warm ink primary + restrained brass accent.
+     The light `primary` is INK by design (calm, premium,
+     hue-conflict-free); brass carries identity through the
+     ring, sidebar emphasis, and charts (docs/design-tokens.md).
      ======================================================= */
 
-   --primary: oklch(0.528 0.103 251.9); /* #3B6EA5 */
-   --primary-foreground: oklch(0.982 0.002 247.8); /* #F8F9FA */
+   --primary: oklch(0.244 0.014 88); /* #232019 — warm ink */
+   --primary-foreground: oklch(0.982 0.005 95); /* #FAF9F5 */
 
-   --secondary: oklch(0.942 0.005 247.9); /* #E9ECEF */
-   --secondary-foreground: oklch(0.345 0.013 248.2); /* #343A40 */
+   --secondary: oklch(0.943 0.010 87); /* #EFECE5 */
+   --secondary-foreground: oklch(0.328 0.022 85); /* #3A3428 */
 
-   --accent: oklch(0.942 0.005 247.9); /* #E9ECEF */
-   --accent-foreground: oklch(0.262 0.009 248.2); /* #212529 */
+   --accent: oklch(0.943 0.010 87); /* #EFECE5 */
+   --accent-foreground: oklch(0.244 0.014 88); /* #232019 */
 
    /* =======================================================
      MUTED
      ======================================================= */
 
-   --muted: oklch(0.942 0.005 247.9); /* #E9ECEF */
-   --muted-foreground: oklch(0.428 0.015 248.2); /* #495057 */
+   --muted: oklch(0.943 0.010 87); /* #EFECE5 */
+   --muted-foreground: oklch(0.430 0.018 81); /* #554F45 */
 
    /* =======================================================
      SEMANTIC STATES — minimalist, text-first feedback
      (ADR-0010 §2.7): in this theme every semantic value is
      text-grade on the neutral surfaces (AA verified).
+     The Semantic colors are unchanged from the Light Steel
+     verification — they are feedback vocabulary, not brand
+     accent, and keep their meaning independent of it.
      ======================================================= */
 
    --success: oklch(0.527 0.115 150.3); /* #2F7D46 */
-   --success-foreground: oklch(0.982 0.002 247.8); /* #F8F9FA */
+   --success-foreground: oklch(0.982 0.005 95); /* #FAF9F5 */
 
    --warning: oklch(0.5553 0.1455 49); /* #B45309 — derived, see docs */
-   --warning-foreground: oklch(0.982 0.002 247.8); /* #F8F9FA */
+   --warning-foreground: oklch(0.982 0.005 95); /* #FAF9F5 */
 
    --error: oklch(0.537 0.17 29.8); /* #BC392B — see docs note */
    --error-foreground: oklch(1 0 0); /* #FFFFFF */
 
    --info: oklch(0.546 0.091 229.5); /* #2A7A9B */
-   --info-foreground: oklch(0.982 0.002 247.8); /* #F8F9FA */
+   --info-foreground: oklch(0.982 0.005 95); /* #FAF9F5 */
 
    /* Keep shadcn destructive compatible */
    --destructive: var(--error);
@@ -252,23 +274,24 @@
 
    /* =======================================================
      BORDERS & INPUTS — advisory borders + strict focus ring
-     (ADR-0010 §2.8): quiet neutral edges; focus and
-     interactivity are carried by the ring, not heavy borders.
+     (ADR-0010 §2.8): quiet warm-neutral edges; the brass ring
+     carries focus and interactivity, not heavy borders.
      ======================================================= */
 
-   --border: oklch(0.911 0.007 247.9); /* #DEE2E6 */
-   --input: oklch(0.769 0.015 248); /* #ADB5BD */
-   --ring: oklch(0.528 0.103 251.9); /* #3B6EA5 */
+   --border: oklch(0.910 0.013 87); /* #E5E1D8 */
+   --input: oklch(0.742 0.022 79); /* #B3AA9C */
+   --ring: oklch(0.549 0.114 80); /* brass — 4.70:1 non-text on paper */
 
    /* =======================================================
-     CHARTS — Light Steel series (reserved, zero consumers)
+     CHARTS — warm-leaning series (reserved, zero consumers);
+     every series clears the 3:1 non-text bar on its surfaces.
      ======================================================= */
 
-   --chart-1: oklch(0.528 0.103 251.9); /* #3B6EA5 */
-   --chart-2: oklch(0.553 0.107 158); /* #2F855A */
-   --chart-3: oklch(0.734 0.138 80); /* #D69E2E */
-   --chart-4: oklch(0.572 0.104 294.4); /* #7C6BAF */
-   --chart-5: oklch(0.612 0.128 45.6); /* #C1683C */
+   --chart-1: oklch(0.549 0.114 80); /* brass */
+   --chart-2: oklch(0.553 0.107 158); /* #2F855A — moss */
+   --chart-3: oklch(0.595 0.137 43.5); /* #C05F33 — terracotta */
+   --chart-4: oklch(0.572 0.104 294.4); /* #7C6BAF — plum */
+   --chart-5: oklch(0.659 0.066 61.5); /* #B08968 — taupe */
 
    /* =======================================================
      BASE RADIUS
@@ -278,32 +301,35 @@
 
    /* =======================================================
      SIDEBAR — application shell surface tokens (adopted by
-     Batch 3.3; the active/current-item treatment and the
-     group's intended use are recorded in docs/design-tokens.md)
+     Batch 3.3; active/current-item treatment recorded in
+     docs/design-tokens.md). `sidebar-primary` is the deep
+     brass emphasis tone: active items = brass tint + brass
+     text (6.05:1 on the white rail) instead of a blue.
      ======================================================= */
 
    --sidebar: oklch(1 0 0);
-   --sidebar-foreground: oklch(0.262 0.009 248.2);
+   --sidebar-foreground: oklch(0.244 0.014 88);
 
-   --sidebar-primary: oklch(0.528 0.103 251.9);
-   --sidebar-primary-foreground: oklch(0.982 0.002 247.8);
+   --sidebar-primary: oklch(0.501 0.100 80); /* #815C0A — deep brass */
+   --sidebar-primary-foreground: oklch(0.982 0.005 95);
 
-   --sidebar-accent: oklch(0.942 0.005 247.9);
-   --sidebar-accent-foreground: oklch(0.262 0.009 248.2);
+   --sidebar-accent: oklch(0.943 0.010 87);
+   --sidebar-accent-foreground: oklch(0.244 0.014 88);
 
-   --sidebar-border: oklch(0.942 0.005 247.9);
-   --sidebar-ring: oklch(0.528 0.103 251.9);
+   --sidebar-border: oklch(0.943 0.010 87);
+   --sidebar-ring: oklch(0.549 0.114 80);
 }
 
 /* =========================================================
-   OPENLEARN AI — DARK THEME
+   OPENLEARN AI — DARK THEME (charcoal ladder + brass accent)
    ========================================================= */
 
 .dark {
    /* =======================================================
-     CORE — Light Steel dark ladder (deliberate design, not an
-     inversion): #171A1E page → #1F2328 card → #262B31 popover;
-     text is capped at #E9ECEF, never pure white.
+     CORE — dark ladder (deliberate design, NOT an inversion;
+     ADR-0010 values retained): #171A1E page → #1F2328 card →
+     #262B31 popover; text is capped at #E9ECEF, never pure
+     white. The charcoal aligns with the product logo tile.
      ======================================================= */
 
    --background: oklch(0.216 0.009 255.6); /* #171A1E */
@@ -320,12 +346,15 @@
    --popover-foreground: oklch(0.942 0.005 247.9);
 
    /* =======================================================
-     BRAND — dark primary flips to the lighter steel tone with
-     dark ink, mirroring the production primary pattern
+     BRAND — brass fill accent with warm dark ink text:
+     the hue flips to lighter brass so fills carry dark ink
+     (mirroring the production primary pattern). Brass is the
+     same hue as the light ring, so one accent identity spans
+     both themes while light actions stay ink.
      ======================================================= */
 
-   --primary: oklch(0.677 0.084 248.6); /* #6E9CC9 — owner-approved */
-   --primary-foreground: oklch(0.208 0.009 255.6); /* #15181C */
+   --primary: oklch(0.80 0.105 80); /* #E1B66C — brass */
+   --primary-foreground: oklch(0.19 0.012 80); /* #17130E — warm ink */
 
    --secondary: oklch(0.306 0.014 248.3); /* #2A3036 */
    --secondary-foreground: oklch(0.911 0.007 247.9); /* #DEE2E6 */
@@ -341,10 +370,8 @@
    --muted-foreground: oklch(0.769 0.015 248); /* #ADB5BD */
 
    /* =======================================================
-     SEMANTIC STATES — owner-approved dark values (2026-10-23):
-     text-grade pastels on dark surfaces. The -foreground inks
-     are the committed dark values, kept (all ≥8.5:1 on the new
-     fills). Filled badges/buttons read as pastel fill + dark ink.
+     SEMANTIC STATES — committed dark values retained
+     (text-grade pastels on dark surfaces; all AA-verified).
      ======================================================= */
 
    --success: oklch(0.802 0.168 147.3); /* #69DB7C */
@@ -370,39 +397,114 @@
 
    --border: oklch(1 0 0 / 10%);
    --input: oklch(1 0 0 / 15%);
-   --ring: oklch(0.677 0.084 248.6); /* #6E9CC9 */
+   --ring: oklch(0.80 0.105 80); /* brass */
 
    /* =======================================================
-     CHARTS — raised-lightness Light Steel series (reserved)
+     CHARTS — raised warm series (reserved, zero consumers)
      ======================================================= */
 
-   --chart-1: oklch(0.677 0.084 248.6); /* #6E9CC9 */
+   --chart-1: oklch(0.80 0.105 80); /* brass */
    --chart-2: oklch(0.714 0.12 156.1); /* #5CB983 */
-   --chart-3: oklch(0.805 0.122 83.3); /* #E5B85C */
-   --chart-4: oklch(0.709 0.081 292.4); /* #A298D0 */
-   --chart-5: oklch(0.713 0.106 46.5); /* #D98D68 */
+   --chart-3: oklch(0.72 0.125 43); /* #E58963 — terracotta */
+   --chart-4: oklch(0.709 0.081 292.4); /* #A298D0 — plum */
+   --chart-5: oklch(0.78 0.075 62); /* #DBAD86 — taupe */
 
    /* =======================================================
-     SIDEBAR — scaffold compatibility (zero consumers); sits
-     below cards in dark (production surface order)
+     SIDEBAR — scaffold compatibility (sits below cards in
+     dark, production surface order); emphasis flips to brass
      ======================================================= */
 
    --sidebar: oklch(0.233 0.011 254.1); /* #1A1E23 */
    --sidebar-foreground: oklch(0.942 0.005 247.9);
 
-   --sidebar-primary: oklch(0.677 0.084 248.6);
-   --sidebar-primary-foreground: oklch(0.208 0.009 255.6);
+   --sidebar-primary: oklch(0.80 0.105 80); /* brass */
+   --sidebar-primary-foreground: oklch(0.19 0.012 80);
 
    --sidebar-accent: oklch(0.306 0.014 248.3);
    --sidebar-accent-foreground: oklch(0.942 0.005 247.9);
 
    --sidebar-border: oklch(1 0 0 / 10%);
-   --sidebar-ring: oklch(0.677 0.084 248.6);
+   --sidebar-ring: oklch(0.80 0.105 80);
+
+   /* =======================================================
+     DARK AMBIENT LAYER (public-surface depth)
+     The fixed-dark public experience (landing, onboarding)
+     builds its tonal variation from mixes of the dark
+     ladder and the brass accent — never from raw colors.
+     See docs/design-tokens.md §public-dark-ambience.
+     ======================================================= */
+
+   --ambient-brass-subtle: color-mix(in oklab, var(--primary) 9%, transparent);
+   --ambient-brass-soft: color-mix(in oklab, var(--primary) 15%, transparent);
+   --ambient-brass-strong: color-mix(in oklab, var(--primary) 26%, transparent);
+   --ambient-paper: color-mix(in oklab, var(--foreground) 5%, transparent);
 }
 
 /* =========================================================
    BASE UI RULES
    ========================================================= */
+
+/* =========================================================
+   PUBLIC-SURFACE MOTION (restrained entrance vocabulary)
+   Two small, purposeful entrance animations for the fixed-dark
+   public experience (used by the landing page only): a fade-up
+   entrance and a delayed step. Text-safe: transforms/opacity
+   only (no layout shift). The global prefers-reduced-motion
+   guard below instantly completes them when motion is declined.
+   ========================================================= */
+
+@layer components {
+   .ol-enter {
+      animation: ol-enter 0.7s cubic-bezier(0.22, 0.61, 0.21, 1) both;
+   }
+
+   .ol-enter-delay-1 {
+      animation-delay: 0.1s;
+   }
+
+   .ol-enter-delay-2 {
+      animation-delay: 0.22s;
+   }
+
+   .ol-enter-delay-3 {
+      animation-delay: 0.36s;
+   }
+}
+
+@keyframes ol-enter {
+   from {
+      opacity: 0;
+      transform: translateY(12px);
+   }
+   to {
+      opacity: 1;
+      transform: translateY(0);
+   }
+}
+
+/* Onboarding identity visual: a one-shot draw-on for the two identity
+   arcs and a long, very quiet "breathe" for the dots (opacity only).
+   The global prefers-reduced-motion guard collapses all of these to
+   an instant final state, and the absent-JS case renders the full
+   static composition (SVG attributes are the resting state). */
+@keyframes ol-draw {
+   from {
+      stroke-dashoffset: var(--ol-draw-length, 1200);
+   }
+   to {
+      stroke-dashoffset: 0;
+   }
+}
+
+@keyframes ol-breathe {
+   from,
+   to {
+      opacity: 1;
+   }
+   50% {
+      opacity: 0.72;
+   }
+}
 
 @layer base {
    * {
@@ -424,14 +526,9 @@
       font: inherit;
    }
 
-   /* Batch 3.1: reduced-motion guard. The product is a calm learning
-      surface; motion is limited to state feedback (transitions,
-      spinners, Base UI popup enter/exit). When the user requests
-      reduced motion, decorative movement is suppressed. Loading
-      states remain legible: LoadingBlock conveys status through its
-      text message and role="status" live region, not motion alone.
-      Theme switching already disables color transitions via
-      next-themes' disableTransitionOnChange. */
+   /* Reduced-motion guard (unchanged since Batch 3.1): decorative
+      movement is suppressed when requested; state feedback remains
+      legible without motion. */
    @media (prefers-reduced-motion: reduce) {
       *,
       *::before,
