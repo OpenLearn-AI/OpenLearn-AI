@@ -10,7 +10,7 @@ import { AppShell } from "../components/shell/AppShell";
 import { authKeys } from "../features/auth/keys";
 
 /**
- * Application-shell stories (Batch 3.3 + follow-up).
+ * Application-shell stories (Batch 3.3 + follow-up + SIDE-01).
  *
  * The sidebar and mobile navigation are presentational and receive
  * their data via props, so the stories exercise the real component
@@ -22,6 +22,19 @@ import { authKeys } from "../features/auth/keys";
  * IA decision: the public landing `/` is not a protected-navigation
  * destination; the brand identity link remains, outside the nav list).
  *
+ * SIDE-01 (2026-10-24): the collapsed stories pin the expand control's
+ * accessibility contract (in the a11y tree and operable while visually
+ * hidden, state-descriptive aria-expanded, keyboard-focusable) plus
+ * the reduced 56px collapsed rail against the unchanged 224px expanded
+ * width, the "OpenLearn" branding (subtitle removed, `public/logo.svg`
+ * mark), and the identity presentation (person name + first-name
+ * initial via the demo props; the full-shell story pins the
+ * established email fallback of the real `useUserName` hook, whose
+ * Keycloak singleton is never initialized inside Storybook). The CSS
+ * hover/focus opacity reveal itself is verified in the standalone
+ * rendered checks with real pointer moves — the story runner's
+ * synthetic events cannot drive CSS :hover.
+ *
  * Hermeticity: every story tree is wrapped in a QueryClientProvider
  * (LogoutButton reads the query client context). The full-shell story
  * pre-seeds the `authKeys.me()` cache with a schema-valid user and
@@ -31,8 +44,8 @@ import { authKeys } from "../features/auth/keys";
  */
 
 const user = {
-    name: "instructor@example.com",
-    initial: "I",
+    name: "Sara Hassan",
+    initial: "S",
     me: {
         id: "00000000-0000-4000-8000-000000000001",
         email: "instructor@example.com",
@@ -127,19 +140,101 @@ export const SidebarExpanded: Story = {
 
         // The brand identity link remains — outside the nav list, still
         // targeting the public landing as the legacy Navbar's did.
-        const brand = canvas.getByRole("link", { name: /OpenLearn AI/ });
+        // SIDE-01: the product title is "OpenLearn" and the subtitle is
+        // gone, so the accessible name is exactly the product name.
+        const brand = canvas.getByRole("link", { name: "OpenLearn" });
         await expect(brand).toHaveAttribute("href", "/");
+        await expect(
+            canvas.queryByText("Adaptive Learning Platform"),
+        ).not.toBeInTheDocument();
+
+        // Expanded identity (SIDE-01): person name from the demo props,
+        // with the first-name initial avatar.
+        await expect(canvas.getByText("Sara Hassan")).toBeVisible();
+
+        // Expanded width is unchanged: 224px.
+        const aside = canvasElement.querySelector("aside");
+        await expect(aside).not.toBeNull();
+        await waitFor(() => {
+            expect(getComputedStyle(aside!).width).toBe("224px");
+        });
 
         // Expanded: visible text label + aria-current on the active item.
         const dashboardLink = within(nav).getByRole("link", {
             name: "Dashboard",
         });
         await expect(dashboardLink).toHaveAttribute("aria-current", "page");
+
+        // The expanded collapse control stays always visible and
+        // visually separate from the logo (SIDE-01 kept the expanded
+        // presentation unchanged).
+        const collapse = canvas.getByRole("button", {
+            name: "Collapse sidebar",
+        });
+        await expect(getComputedStyle(collapse).opacity).toBe("1");
     },
 };
 
 export const SidebarCollapsed: Story = {
-    args: { initialCollapsed: true },
+    // Explicit render (the ChoiceTileGroup stateful-demo convention):
+    // the stateful wrapper's useState must capture `initialCollapsed`
+    // on the FIRST render, and manual (non-test-runner) loads apply
+    // story args after mount — so the collapsed state is rendered
+    // directly instead of relying on args propagation.
+    render: () => <SidebarDemo initialCollapsed />,
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+
+        // SIDE-01 collapsed rail: 56px (reduced from 64px).
+        const aside = canvasElement.querySelector("aside");
+        await expect(aside).not.toBeNull();
+        await waitFor(() => {
+            expect(getComputedStyle(aside!).width).toBe("56px");
+        });
+
+        // Identity (SIDE-01): the first-name initial is the visible
+        // avatar; the full name is carried by visually-hidden text; no
+        // email appears in the collapsed identity area.
+        const avatar = canvas.getByText("S", { selector: "span" });
+        await expect(avatar).toHaveAttribute("aria-hidden", "true");
+        await expect(
+            canvas.getByText("Sara Hassan", { selector: ".sr-only" }),
+        ).toBeInTheDocument();
+        await expect(
+            canvas.queryByText(/instructor@example\.com/),
+        ).not.toBeInTheDocument();
+
+        // The expand control is reachable by role and name while idle
+        // (visually hidden — the opacity reveal is verified with real
+        // pointer moves in the rendered checks; the story runner's
+        // synthetic events cannot drive CSS :hover). It stays in the
+        // accessibility tree, correctly named, and state-descriptive.
+        const brand = canvas.getByRole("link", { name: "OpenLearn" });
+        await expect(brand).toHaveAttribute("href", "/");
+
+        const toggle = canvas.getByRole("button", {
+            name: "Expand sidebar",
+        });
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+        // Keyboard focus reveals it without any pointer involvement
+        // (group-focus-within — a focus-driven state, which synthetic
+        // events DO exercise).
+        toggle.focus();
+        await waitFor(() => {
+            expect(toggle.matches(":focus")).toBe(true);
+        });
+
+        // The control remains operable while hidden: activating it
+        // expands the sidebar (the touch-device path).
+        await userEvent.click(toggle);
+        await waitFor(() => {
+            expect(
+                canvas.queryByRole("button", { name: "Expand sidebar" }),
+            ).not.toBeInTheDocument();
+        });
+        await canvas.findByRole("button", { name: "Collapse sidebar" });
+    },
 };
 
 export const SidebarNestedRouteActive: Story = {
@@ -168,7 +263,9 @@ export const SidebarCollapseInteraction: Story = {
         await userEvent.click(collapse);
 
         // Collapsed: labels become visually hidden but keep their
-        // accessible names; the toggle now reads "Expand sidebar".
+        // accessible names; the toggle now reads "Expand sidebar"
+        // (idle-hidden — operability while hidden is pinned by the
+        // SidebarCollapsed story).
         await waitFor(() => {
             expect(
                 canvas.queryByRole("button", { name: "Collapse sidebar" }),
@@ -314,6 +411,12 @@ export const MobileNavInteraction: Story = {
  * QueryClient provider, the me-query cache pre-seeded with a valid
  * user (staleTime: Infinity — nothing is fetched at test time), and
  * the framework's next/navigation mock for the pathname.
+ *
+ * SIDE-01: the seeded `Me` has only an email, and the Keycloak
+ * singleton is never initialized inside Storybook, so the identity
+ * label exercises the hook's established fallback chain (email) —
+ * the same behavior the production shell keeps when a session has no
+ * name claims.
  */
 export const ShellDesktop: Story = {
     render: () => {
@@ -335,5 +438,14 @@ export const ShellDesktop: Story = {
             appDirectory: true,
             navigation: { pathname: "/dashboard" },
         },
+    },
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+
+        // Established fallback (SIDE-01): no name claims available →
+        // the identity label is the seeded email, the initial its
+        // first letter — never undefined/null/empty.
+        await canvas.findByText("instructor@example.com");
+        await expect(canvas.getByText("I")).toBeInTheDocument();
     },
 };

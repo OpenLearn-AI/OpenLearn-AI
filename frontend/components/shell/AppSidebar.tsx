@@ -20,18 +20,31 @@ import { NAV_LINKS, isActiveRoute } from "./nav-config";
  * Two explicit states driven by the `collapsed` prop (state lives in
  * `AppShell` so it survives client-side navigation):
  *
- * - Expanded: brand identity with the adjacent collapse control, icon
- *   + text label per item, a visible current-route treatment, and an
- *   account region (identity, theme toggle, logout).
- * - Collapsed: icons only (identity mark + collapse control stacked at
- *   the top). Text labels become `sr-only` so every icon-only control
- *   keeps its accessible name without relying on the tooltip; tooltips
- *   reinforce the name visually on hover AND keyboard focus (Base UI
- *   behavior) at an inline-end placement that flips automatically in
- *   RTL.
+ * - Expanded (224px): the "OpenLearn" brand identity with the
+ *   adjacent collapse control, icon + text label per item, a visible
+ *   current-route treatment, and an account region (identity, theme
+ *   toggle, logout).
+ * - Collapsed (56px, SIDE-01 — reduced from 64px; the smallest
+ *   standard step that keeps every icon, the 36px brand mark, the
+ *   avatar, and the toggle at their original sizes with usable hit
+ *   targets): icons only, with the brand mark at the top. Text labels
+ *   become `sr-only` so every icon-only control keeps its accessible
+ *   name without relying on the tooltip; tooltips reinforce the name
+ *   visually on hover AND keyboard focus (Base UI behavior) at an
+ *   inline-end placement that flips automatically in RTL.
  *
- * The current route is marked by `aria-current="page"` plus a Steel
- * Blue tint + text treatment (`bg-sidebar-primary/10` +
+ * Collapsed toggle interaction (SIDE-01): the expand control is
+ * visually hidden at idle and revealed when the pointer hovers the
+ * brand region at the top of the sidebar (a CSS `group-hover`
+ * reveal — no JavaScript position tracking), when it receives
+ * keyboard focus (`group-focus-within`, so keyboard users can always
+ * reach and see it), and on hover-less (touch) pointer devices where
+ * a hover-only discovery mechanism would be unusable. The reveal is
+ * opacity-only over the control's reserved space, so the logo and
+ * the surrounding layout never shift.
+ *
+ * The current route is marked by `aria-current="page"` plus a brass
+ * tint + text treatment (`bg-sidebar-primary/10` +
  * `text-sidebar-primary`, AA-verified in both themes) AND an
  * inline-start indicator bar in `sidebar-primary` — never color alone
  * (WCAG 1.4.1). All spacing/edges use logical utilities (`ps-`,
@@ -39,10 +52,9 @@ import { NAV_LINKS, isActiveRoute } from "./nav-config";
  * `sidebar-*` token group only.
  *
  * The collapse/expand control lives in the upper region, adjacent to
- * the product identity: at the inline end of the identity's title row
- * when expanded (the 224px width cannot hold the two-line identity and
- * the control on one row without wrapping the identity), stacked
- * directly beneath the mark when collapsed.
+ * the product identity: at the inline end of the identity row when
+ * expanded (visually separate from the logo — unchanged), and in the
+ * hover-revealed position directly beneath the mark when collapsed.
  */
 export function AppSidebar({
     collapsed,
@@ -63,24 +75,20 @@ export function AppSidebar({
             data-collapsed={collapsed || undefined}
             className={cn(
                 "sticky top-0 hidden h-svh shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] md:flex",
-                collapsed ? "w-16" : "w-56",
+                collapsed ? "w-14" : "w-56",
             )}
         >
-            {/* Top region — product identity (existing brand assets/name)
-                with the collapse/expand control adjacent to it. At the
-                224px expanded width a single row cannot hold the
-                two-line identity AND the control without wrapping the
-                identity, so the identity keeps its own rows (title row
-                carries the control at its inline end; the tagline spans
-                the full width below) and the collapsed rail stacks the
-                mark and the control. Truncation guards exist only as a
-                safety net for extreme font metrics — with Geist Sans
-                nothing is truncated at either width. */}
+            {/* Top region — product identity (brand mark + "OpenLearn")
+                with the collapse/expand control adjacent to it. The
+                expanded width keeps the control at the title row's
+                inline end; the collapsed rail stacks the mark and the
+                hover-revealed control. The collapsed branch is the
+                hover/focus group that reveals that control. */}
             <div
                 className={cn(
                     "relative shrink-0 border-b border-sidebar-border",
                     collapsed
-                        ? "flex flex-col items-center gap-1 px-2 py-2"
+                        ? "group flex flex-col items-center gap-1 px-2 py-2"
                         : "px-3 py-2.5",
                 )}
             >
@@ -95,36 +103,39 @@ export function AppSidebar({
                         )}
                     >
                         <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10">
+                            {/* SIDE-01: the supplied `public/logo.svg`
+                                brand asset (vector — crisp at any size;
+                                `unoptimized` serves the SVG as-is, no
+                                optimizer involvement) at its natural
+                                aspect ratio (`object-contain`, no
+                                crop/distortion). The link's accessible
+                                name comes from the visible (or
+                                visually-hidden) product name. */}
                             <Image
-                                src="/logo.png"
-                                alt="OpenLearn AI Logo"
+                                src="/logo.svg"
+                                alt=""
                                 width={36}
                                 height={36}
-                                className="size-full object-cover"
+                                className="size-full object-contain"
+                                unoptimized
                             />
                         </span>
                         {!collapsed && (
                             <span className="block min-w-0 truncate text-base font-bold text-sidebar-foreground">
-                                OpenLearn AI
+                                OpenLearn
                             </span>
                         )}
                         {collapsed && (
-                            <span className="sr-only">
-                                OpenLearn AI - Adaptive Learning Platform
-                            </span>
+                            <span className="sr-only">OpenLearn</span>
                         )}
                     </span>
-                    {!collapsed && (
-                        <span className="block truncate text-xs text-muted-foreground">
-                            Adaptive Learning Platform
-                        </span>
-                    )}
                 </Link>
 
                 {collapsed ? (
                     <SidebarCollapseToggle
                         collapsed={collapsed}
                         onToggleCollapsed={onToggleCollapsed}
+                        className="opacity-0 transition-opacity duration-200 [@media(hover:none)]:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
                     />
                 ) : (
                     <div className="absolute end-1.5 top-2.5">
@@ -211,11 +222,24 @@ export function AppSidebar({
             </nav>
 
             {/* Bottom account region — visually/semantically distinct from
-                the primary navigation area */}
-            <div className="shrink-0 border-t border-sidebar-border p-3">
-                {/* User identity. Collapsed, the name is carried by
-                    visually-hidden text (never the tooltip alone); the
-                    tooltip is a sighted-user reinforcement on hover. */}
+                the primary navigation area. Collapsed, the horizontal
+                padding tightens by one step (px-2) so the 36px avatar
+                keeps its exact size and centering inside the 56px rail. */}
+            <div
+                className={cn(
+                    "shrink-0 border-t border-sidebar-border p-3",
+                    collapsed && "px-2",
+                )}
+            >
+                {/* User identity (SIDE-01): the expanded label is the
+                    person's first and last name; the collapsed avatar
+                    shows the first-name initial. Both are derived by
+                    the shared `useUserName` hook from the session's
+                    real name claims, with the established
+                    email → "User" fallback. Collapsed, the name is
+                    carried by visually-hidden text (never the tooltip
+                    alone); the tooltip is a sighted-user reinforcement
+                    on hover. */}
                 {collapsed ? (
                     <Tooltip>
                         <TooltipTrigger
@@ -292,15 +316,20 @@ export function AppSidebar({
  * Its current state is exposed twice: `aria-expanded` reflects the
  * sidebar's expansion (true = expanded), and the accessible name
  * states the action the next press performs ("Collapse sidebar" /
- * "Expand sidebar"). In the collapsed sidebar it is icon-only and
- * gets a reinforcing tooltip like every other icon-only control.
+ * "Expand sidebar"). In the collapsed sidebar it is icon-only, gets a
+ * reinforcing tooltip like every other icon-only control, and is
+ * hidden at idle behind an opacity transition owned by the caller —
+ * it stays in the accessibility tree and operable at all times, and
+ * its reserved space means the reveal never shifts the layout.
  */
 function SidebarCollapseToggle({
     collapsed,
     onToggleCollapsed,
+    className,
 }: {
     collapsed: boolean;
     onToggleCollapsed: () => void;
+    className?: string;
 }) {
     const button = (
         <button
@@ -309,7 +338,10 @@ function SidebarCollapseToggle({
             aria-expanded={!collapsed}
             aria-controls="app-sidebar"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/75 outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/75 outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+                className,
+            )}
         >
             {collapsed ? (
                 <PanelLeftOpen

@@ -87,6 +87,23 @@ export async function getKeycloak(): Promise<Keycloak | null> {
     }
 }
 
+/**
+ * Passive read accessor for the already-initialized Keycloak singleton
+ * (SIDE-01 identity presentation).
+ *
+ * Returns the instance ONLY when initialization has already completed
+ * with an authenticated session — never triggers initialization, never
+ * performs I/O, and changes no authentication behavior. In the app the
+ * `AuthGuard` renders the shell only after `AuthProvider`'s init has
+ * resolved, so consumers mounting inside the shell can read the
+ * session's ID-token claims synchronously; everywhere else (SSR,
+ * stories, tests, unauthenticated states) it returns `null` and the
+ * consumer falls back to its established identity source.
+ */
+export function getInitializedKeycloak(): Keycloak | null {
+    return keycloak !== null && keycloak.authenticated ? keycloak : null;
+}
+
 export async function getAccessToken(): Promise<string | null> {
     const instance = await getKeycloak();
 
