@@ -2,7 +2,7 @@
 
 <br>
 
-<img src="docs/assets/OpenLearn-AI-logo-1.png" alt="OpenLearn AI" height="140">
+<img src="docs/assets/OpenLearn-AI-logo-2.png" alt="OpenLearn AI" height="140">
 
 <br>
 <br>
