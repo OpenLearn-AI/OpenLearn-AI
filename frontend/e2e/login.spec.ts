@@ -16,7 +16,18 @@ import { performKeycloakLogin } from "./helpers";
  *      every Keycloak version since ~10.x.
  *   3. Wait for the redirect back to our origin at `/dashboard`.
  *   4. Assert meaningful dashboard content is present (the "Welcome Back!"
- *      heading + the UserInfo block rendering the test user's email).
+ *      heading + the account colophon rendering the test user's roles).
+ *
+ * Batch 4.2: the dashboard's Email section was intentionally removed
+ * (owner correction D — the email already lives on /profile, and the
+ * former UserInfo card was deleted with it). The assertion that used
+ * to prove "/auth/me succeeded" via the UserInfo `Email:` line now
+ * proves it via the account colophon's roles row, which renders from
+ * the SAME /auth/me data. The "Welcome Back!" heading pin is unchanged
+ * and survives the greeting personalization (Playwright's name match
+ * is substring-based, so "Welcome Back! <FirstName>" still matches;
+ * the bootstrap E2E users carry no name claims, so the plain greeting
+ * — the graceful no-name fallback — is what renders in this suite).
  *
  * Batch 4.1: the post-login wait is onboarding-aware (shared helper).
  * A fresh user without a profile is routed to the `/onboarding` wizard
@@ -62,16 +73,20 @@ test.describe("Login smoke flow", () => {
     // 1–4. Real OIDC login; onboarding-aware settle on /dashboard.
     await performKeycloakLogin(page, E2E_USERNAME!, E2E_PASSWORD!);
 
-    // 5. Assert meaningful dashboard content. The dashboard hero is
-    //    "Welcome Back!" (app/(app)/dashboard/page.tsx) and the UserInfo
-    //    block renders the test user's email after /auth/me resolves.
+    // 5. Assert meaningful dashboard content. The dashboard's running
+    //    head is "Welcome Back!" (app/(app)/dashboard/page.tsx) — the
+    //    pinned greeting, personalized with the first name when the
+    //    session carries one (substring pin; the E2E users have no
+    //    name claims, so the plain greeting renders here).
     await expect(
       page.getByRole("heading", { name: "Welcome Back!" }),
     ).toBeVisible();
 
-    // The UserInfo component renders `<span>Email:</span> {data.email}`.
-    // Asserting the email is present proves /auth/me succeeded with the
-    // authenticated user's session — not merely that the route loaded.
-    await expect(page.getByText(/Email:/)).toBeVisible();
+    // The account colophon renders `Role:`/`Roles:` + the session's
+    // real roles from /auth/me (Batch 4.2: this replaced the removed
+    // UserInfo `Email:` line — same proof, same data source: asserting
+    // it is present proves /auth/me succeeded with the authenticated
+    // user's session, not merely that the route loaded).
+    await expect(page.getByText(/Roles?:/)).toBeVisible();
   });
 });

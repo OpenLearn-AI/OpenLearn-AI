@@ -25,9 +25,12 @@ import { Reveal } from "@/components/landing/Reveal";
  *     or policy claims. Nothing invented.
  *
  * Auth-CTA placement: "Log in" and "Create account" exist ONLY in
- * the navbar (same rule the corrective follow-up fixed). The hero,
- * the status panel, and the footer carry no authentication buttons;
- * the footer repeats none either.
+ * the navbar (same rule the corrective follow-up fixed). The hero
+ * and the status panel carry no authentication buttons. The former
+ * footer ("OpenLearn AI · Adaptive Learning Platform") was removed
+ * entirely in Batch 4.2 correction C — the owner does not want a
+ * persistent branding bar anywhere in the application — and it was
+ * not replaced with another one.
  *
  * Visual rules: the fixed-dark public palette only. Background depth
  * comes from the documented dark-ambient token mixes (a restrained
@@ -177,13 +180,6 @@ export function LandingPage() {
                     </section>
                 </div>
             </main>
-
-            {/* ── Footer ─────────────────────────────────────────── */}
-            <footer className="relative border-t border-border bg-background">
-                <div className="mx-auto w-full max-w-6xl px-4 py-6 text-sm text-muted-foreground sm:px-6">
-                    <p>OpenLearn AI · Adaptive Learning Platform</p>
-                </div>
-            </footer>
         </div>
     );
 }

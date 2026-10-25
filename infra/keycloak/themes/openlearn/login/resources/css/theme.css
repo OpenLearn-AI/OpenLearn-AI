@@ -148,12 +148,19 @@
   padding: 40px 16px 48px;
 }
 
-/* ── Brand row (logo tile + wordmark) ────────────────────────────────
+/* ── Brand row (logo mark + wordmark) ────────────────────────────────
    The template renders msg("loginTitleHtml") as the row's text; the
-   theme puts the product logo tile before it via ::before. The tile is
-   the same logo.png the application's BrandMark renders (36px rounded
-   square); here it is 40px to carry the slightly larger auth-page
-   composition. */
+   theme puts the product logo mark before it via ::before. The mark
+   is the CURRENT approved brand asset — the same transparent
+   `public/logo.svg` the application renders (frontend/public/logo.svg,
+   inlined byte-for-byte here at resources/img/logo.svg so the hosted
+   pages and the app share ONE logo source). It is a 249×220
+   transparent vector (two stroked arcs + two dots), so it is drawn
+   with `contain` at its natural aspect inside the 40px cell — no
+   crop, no distortion, no painted tile behind it (the app's
+   BrandMark/AppSidebar presentation, Batch 4.2 correction A). The
+   legacy opaque 1024×1024 logo.png this rule used to draw was
+   removed with the swap. */
 
 #kc-header {
   float: none;
@@ -179,8 +186,7 @@
   flex: none;
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  background: url("../img/logo.png") center / cover no-repeat;
+  background: url("../img/logo.svg") center / contain no-repeat;
 }
 
 /* ── The auth card ─────────────────────────────────────────────────── */
@@ -695,7 +701,6 @@ a:focus-visible {
   #kc-header-wrapper::before {
     width: 34px;
     height: 34px;
-    border-radius: 9px;
   }
 
   .login-pf-page .card-pf {

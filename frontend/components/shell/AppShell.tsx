@@ -19,8 +19,14 @@ import { MobileNav } from "./MobileNav";
  *   region (identity, ThemeToggle, Logout, collapse control).
  * - Mobile (<md): a compact top bar (brand, ThemeToggle, menu
  *   trigger) and a modal off-canvas navigation drawer.
- * - A content column whose width reflows with the sidebar state, and
- *   the shared footer.
+ * - A content column whose width reflows with the sidebar state.
+ *
+ * Batch 4.2 correction C: the shared bottom footer ("OpenLearn AI
+ * Adaptive Learning Platform") is REMOVED — the owner does not
+ * want a persistent branding bar anywhere. The content column now
+ * ends with the page content; no replacement branding element was
+ * added, and nothing else in the shell (skip link, sidebar, mobile
+ * nav, main-content focus behavior) changed.
  *
  * Responsibility boundaries: the shell owns navigation and account
  * placement only — page content keeps its own layout and containers.
@@ -79,10 +85,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                 >
                     {children}
                 </div>
-
-                <footer className="border-t border-border bg-card py-6 text-center text-xs text-muted-foreground">
-                    <p>OpenLearn AI Adaptive Learning Platform</p>
-                </footer>
             </div>
         </div>
     );

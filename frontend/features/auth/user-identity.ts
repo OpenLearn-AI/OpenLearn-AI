@@ -12,6 +12,15 @@
  * The avatar initial is always the composed display value's first
  * character — the first name's first letter whenever a first name
  * exists, never `undefined`, `null`, or an empty label.
+ *
+ * Batch 4.2 adds `firstName`: the person's first name ALONE (the
+ * trimmed `given_name` claim), for the personalized dashboard
+ * greeting. It is "" when no first name exists — it NEVER falls back
+ * to an identifier (email, username) or to the composed display
+ * name, so the greeting can keep its plain "Welcome Back!" wording
+ * whenever a first name is genuinely unavailable (the owner's
+ * correction D: no full name where the first name satisfies it, no
+ * awkward empty-name rendering).
  */
 
 /** A display name with its avatar initial, derived from one source. */
@@ -20,6 +29,9 @@ export interface UserDisplayIdentity {
     name: string;
     /** Single-character avatar initial derived from `name`. */
     initial: string;
+    /** The person's first name alone; "" when absent (never an
+     * identifier fallback and never the full composed name). */
+    firstName: string;
 }
 
 /**
@@ -45,5 +57,5 @@ export function composeUserDisplayName(fields: {
     const name = personName || email || "User";
     const initial = name.charAt(0).toUpperCase();
 
-    return { name, initial };
+    return { name, initial, firstName: given };
 }

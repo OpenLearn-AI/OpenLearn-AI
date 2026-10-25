@@ -51,6 +51,17 @@ import { NAV_LINKS, isActiveRoute } from "./nav-config";
  * visible in its own row beneath the mark — the exact SIDE-01
  * hover-less behavior, unchanged.
  *
+ * Batch 4.2 correction B: the collapsed top region no longer
+ * reserves SIDE-01's empty second row on hover-capable pointer
+ * devices — the logo row is the region's only row there, removing
+ * the dead band that used to sit beneath the mark (the owner's
+ * "useless gap below the logo"). The slot still exists for
+ * hover-less (touch) devices, where it is the toggle's permanent
+ * visible row and carries real content; the rule is a structural
+ * media query on the slot itself (the same [@media(hover:…)]
+ * vocabulary the toggle already uses), not a negative margin or a
+ * one-off override. The expanded sidebar is untouched.
+ *
  * The current route is marked by `aria-current="page"` plus a brass
  * tint + text treatment (`bg-sidebar-primary/10` +
  * `text-sidebar-primary`, AA-verified in both themes) AND an
@@ -162,13 +173,19 @@ export function AppSidebar({
                 </Link>
 
                 {collapsed && (
-                    // The second row of the SIDE-01 geometry, preserved:
-                    // on hover-less (touch) devices it is the toggle's
-                    // permanent visible slot; on pointer devices it stays
-                    // empty at idle exactly as the SIDE-01 rail did, so
-                    // the region's height and everything below it are
-                    // identical in both modalities and both states.
-                    <div aria-hidden="true" className="size-9" />
+                    // The toggle's dedicated row, needed ONLY where the
+                    // SIDE-02 in-cell replacement cannot work: on
+                    // hover-less (touch) devices the control lives here,
+                    // permanently visible (the SIDE-01 behavior). On
+                    // hover-capable pointer devices the slot collapses
+                    // entirely (Batch 4.2 correction B) — the control
+                    // overlays the logo's own cell and the region ends
+                    // at the logo row, so no empty band sits beneath
+                    // the mark and the nav starts immediately below.
+                    <div
+                        aria-hidden="true"
+                        className="size-9 [@media(hover:hover)]:hidden"
+                    />
                 )}
 
                 {collapsed ? (

@@ -42,6 +42,13 @@ import { authKeys } from "../features/auth/keys";
  * checks — the story runner's synthetic events cannot drive CSS
  * :hover.
  *
+ * Batch 4.2 correction B (2026-10-25): the collapsed brand region no
+ * longer reserves SIDE-01's empty second row on hover-capable pointer
+ * devices — the runner's browser IS hover-capable, so the slot's
+ * display is pinned to none right here (the touch-device row remains
+ * a rendered-verification concern). Correction C: the full-shell
+ * story pins the removed bottom footer's absence.
+ *
  * Hermeticity: every story tree is wrapped in a QueryClientProvider
  * (LogoutButton reads the query client context). The full-shell story
  * pre-seeds the `authKeys.me()` cache with a schema-valid user and
@@ -237,6 +244,27 @@ export const SidebarCollapsed: Story = {
         // document positions (opacity-only swap, zero layout shift).
         await expect(getComputedStyle(brand).opacity).toBe("1");
         await expect(getComputedStyle(toggle).opacity).toBe("0");
+
+        // Batch 4.2 correction B: the brand region's second row — the
+        // SIDE-01 empty spacer on pointer devices (the toggle's row
+        // exists only on hover-less/touch devices) — is collapsed here,
+        // because this runner's browser is hover-capable. The region
+        // therefore ends at the logo row: no dead band beneath the
+        // mark, and the nav below starts immediately after it.
+        const spacer = canvasElement.querySelector(
+            "aside .group > div[aria-hidden='true']",
+        );
+        await expect(spacer).not.toBeNull();
+        await expect(getComputedStyle(spacer!).display).toBe("none");
+        const brandRegion = canvasElement.querySelector("aside .group");
+        await expect(brandRegion).not.toBeNull();
+        const logoCell = brand!.querySelector("span");
+        await expect(logoCell).not.toBeNull();
+        await waitFor(() => {
+            // 8px padding-top + 36px logo row + 8px padding-bottom +
+            // the region's bottom border — and nothing else.
+            expect(brandRegion!.getBoundingClientRect().height).toBeLessThan(56);
+        });
 
         // Keyboard focus swaps the control into the logo's cell without
         // any pointer involvement (SIDE-02): the toggle becomes fully
@@ -491,5 +519,18 @@ export const ShellDesktop: Story = {
         // first letter — never undefined/null/empty.
         await canvas.findByText("instructor@example.com");
         await expect(canvas.getByText("I")).toBeInTheDocument();
+
+        // Batch 4.2 correction C: the shared bottom footer is REMOVED
+        // — its exact branding text and any <footer> element no longer
+        // render in the shell (the owner does not want the bar
+        // anywhere, and no replacement branding was added). NOTE: the
+        // mobile top bar's brand tagline ("Adaptive Learning Platform"
+        // under "OpenLearn AI") is navigation branding, NOT the bottom
+        // bar, and stays — so the absence pin uses the footer's exact
+        // one-element text.
+        await expect(
+            canvas.queryByText("OpenLearn AI Adaptive Learning Platform"),
+        ).toBeNull();
+        await expect(canvas.queryByRole("contentinfo")).toBeNull();
     },
 };

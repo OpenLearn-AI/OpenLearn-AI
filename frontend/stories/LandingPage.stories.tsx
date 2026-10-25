@@ -65,8 +65,8 @@ export const FullPage: Story = {
             await expect(header).toContainElement(action);
         }
 
-        // No leftover auth CTAs anywhere else on the page (hero,
-        // status panel, or footer).
+        // No leftover auth CTAs anywhere else on the page (hero or
+        // status panel — the former footer no longer exists either).
         await expect(
             canvas.queryByRole("button", { name: "Sign in with OpenLearn AI" }),
         ).toBeNull();
@@ -121,10 +121,16 @@ export const FullPage: Story = {
             expect(banned.test(canvasElement.innerText)).toBe(false);
         }
 
-        // The footer carries no auth CTAs and no long marketing copy
-        // (one short identity line only).
+        // Batch 4.2 correction C: the bottom branding bar is REMOVED
+        // everywhere (the owner does not want it anywhere in the
+        // application, and no replacement branding bar was added) —
+        // pinned here as an absence, along with the footer element
+        // itself.
         await expect(
-            canvas.getByText("OpenLearn AI · Adaptive Learning Platform"),
-        ).toBeVisible();
+            canvas.queryByText("OpenLearn AI · Adaptive Learning Platform"),
+        ).toBeNull();
+        await expect(
+            canvas.queryByRole("contentinfo"),
+        ).toBeNull();
     },
 };
