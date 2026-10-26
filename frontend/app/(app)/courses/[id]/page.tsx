@@ -25,13 +25,15 @@ import { ApiError } from "@/lib/api";
  * (Description 4 / Materials 8 with a vertical hairline at ≥48rem
  * of content width; stacked with horizontal rules below).
  *
- * Future hub slots (extracted text, retrieval search, chunks,
- * citations, the AI assistant, enrollment) are DOCUMENTED
- * reservations only — recorded in the Batch 4.3 batch note and
- * ADR-0010's Section 9 table — and are deliberately NOT rendered:
- * no placeholder panels, no coming-soon copy, no disabled buttons,
- * no fake features (roadmap: "reservation is documentation, never
- * rendered UI").
+ * Future hub slots (retrieval search, chunks, citations, the AI
+ * assistant, enrollment) remain DOCUMENTED reservations only —
+ * recorded in the Batch 4.3 batch note and ADR-0010's Section 9
+ * table — and are deliberately NOT rendered: no placeholder panels,
+ * no coming-soon copy, no disabled buttons, no fake features
+ * (roadmap: "reservation is documentation, never rendered UI").
+ * The former "extracted text" reservation became a DELIVERED
+ * capability in Batch 4.5 — realized as a lazy viewer inside the
+ * materials region's ready rows, not a separate hub slot.
  *
  * Role-aware presentation (roadmap Section 4/8): the management
  * actions (Edit, Delete) and the upload affordance inside the

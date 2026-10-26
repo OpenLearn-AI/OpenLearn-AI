@@ -1,12 +1,16 @@
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch, ApiError } from "@/lib/api";
 import { useMe } from "@/features/auth/api/useMe";
 import { materialKeys } from "@/features/materials/keys";
 import {
+    materialAcceptedResponseSchema,
+    materialPagesResponseSchema,
     materialResponseSchema,
     materialStatusResponseSchema,
     type Material,
+    type MaterialAcceptedResponse,
+    type MaterialPagesResponse,
     type MaterialStatusResponse,
 } from "@/features/materials/schemas";
 import { isTerminalMaterialStatus } from "@/features/materials/flow";
@@ -109,6 +113,127 @@ export function useMaterialStatus(
             }
 
             return MATERIAL_STATUS_POLL_INTERVAL_MS;
+        },
+    });
+}
+
+/* -------------------------------------------------------------------------
+ * Batch 4.5 — the Week 9 operations: the extracted-text page list and
+ * the reprocess request. Both consume the tracked contract through the
+ * same `apiFetch` boundary, Zod validation, and key conventions as the
+ * 4.3 queries above.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * The extracted-text viewer's page-list window size. The contract's
+ * own default (`limit` 1–500, default 100); a demo-scale document
+ * fits one window, and a full window is the only honest signal that
+ * more pages may follow (see `mayHaveMorePages`).
+ */
+export const MATERIAL_PAGES_QUERY_LIMIT = 100;
+
+/**
+ * Query options for one window of a material's stored pages
+ * (`GET /v1/materials/{material_id}/pages?limit&offset`, Week 9).
+ *
+ * Each window is its own cache entry — keyed by the material's pages
+ * branch plus the window's offset — so "Load more pages" never
+ * refetches earlier windows, and a reprocess invalidates the whole
+ * branch by prefix.
+ */
+export function materialPagesOptions(materialId: string, offset = 0) {
+    return queryOptions({
+        queryKey: [...materialKeys.pages(materialId), offset],
+        queryFn: () =>
+            apiFetch<MaterialPagesResponse>(
+                `/v1/materials/${materialId}/pages` +
+                    `?limit=${MATERIAL_PAGES_QUERY_LIMIT}&offset=${offset}`,
+                { schema: materialPagesResponseSchema },
+            ),
+    });
+}
+
+/**
+ * The viewer's page-list windows (Batch 4.5). The viewer component
+ * mounts ONLY when its disclosure is open on a `ready` material —
+ * that mount IS the lazy gate ("do not fetch page content until the
+ * user opens the viewer") — and each window query is additionally
+ * gated on the session resolving (`me.isSuccess`, the established
+ * `useMaterials` convention).
+ */
+export function useMaterialPages(materialId: string, windowCount: number) {
+    const me = useMe();
+
+    return useQueries({
+        queries: Array.from(
+            { length: Math.max(1, windowCount) },
+            (_, index) => ({
+                ...materialPagesOptions(
+                    materialId,
+                    index * MATERIAL_PAGES_QUERY_LIMIT,
+                ),
+                enabled: Boolean(materialId) && me.isSuccess,
+            }),
+        ),
+    });
+}
+
+/**
+ * The reprocess request (`POST /v1/materials/{material_id}/process`,
+ * Week 9) for a terminal (`ready`/`failed`) material, made by the
+ * course owner + instructor the backend authorizes.
+ *
+ * On the 202 acceptance:
+ * - `job_id` is logged ONCE for correlation and never queried (the
+ *   registration rule, unchanged);
+ * - the per-material status cache is seeded with the response's own
+ *   `{material_id, status}` so the EXISTING status poll resumes from
+ *   the server's answer (the 4.1 onboarding seeding precedent) — no
+ *   second polling system, no interval change;
+ * - the course's materials list is invalidated (the row returns to
+ *   `pending` through the list, the single rendering source);
+ * - the material's cached page windows are invalidated — a re-run
+ *   may change the stored text under the keep-more-pages rule.
+ *
+ * Callers own the UI states: `isPending` drives the disabled
+ * "Requesting…" control; errors map through
+ * `describeMaterialProcessError` (the two documented 409 classes and
+ * the 429 pass the backend's own user-readable detail).
+ */
+export function useProcessMaterial(courseId: string, materialId: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: () =>
+            apiFetch<MaterialAcceptedResponse>(
+                `/v1/materials/${materialId}/process`,
+                { method: "POST", schema: materialAcceptedResponseSchema },
+            ),
+        onSuccess: (accepted) => {
+            // Correlation log: identifiers only, once (never a query
+            // key or poll target — the registration convention).
+            console.info("[materials] reprocess accepted", {
+                materialId: accepted.material_id,
+                jobId: accepted.job_id,
+                status: accepted.status,
+            });
+
+            // Seed the existing status poll with the server's own
+            // answer so it resumes honestly from the accepted state.
+            queryClient.setQueryData<MaterialStatusResponse>(
+                materialKeys.status(materialId),
+                {
+                    material_id: accepted.material_id,
+                    status: accepted.status,
+                },
+            );
+
+            void queryClient.invalidateQueries({
+                queryKey: materialKeys.list(courseId),
+            });
+            void queryClient.invalidateQueries({
+                queryKey: materialKeys.pages(materialId),
+            });
         },
     });
 }

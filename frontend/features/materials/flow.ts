@@ -3,12 +3,15 @@ import type { MaterialStatus } from "./schemas";
 
 /**
  * Pure helpers for the material upload flow and status presentation
- * (Batch 4.3). No React, no fetch, no imports beyond the error type —
- * the same module-isolation pattern as `user-identity.ts`, so every
- * rule here is unit-testable without a session or a network.
+ * (Batch 4.3), plus the extracted-text viewer and reprocess copy/
+ * error mappings (Batch 4.5). No React, no fetch, no imports beyond
+ * the error type — the same module-isolation pattern as
+ * `user-identity.ts`, so every rule here is unit-testable without a
+ * session or a network.
  *
  * The flow these helpers serve (the existing contract ONLY — roadmap
- * §10, Table 12):
+ * §10, Table 12; the Week 9 additions landed in the tracked contract
+ * for Batch 4.5):
  * 1. `POST /v1/courses/{id}/materials/upload-url` with
  *    `{filename, title}` → the presigned POST target.
  * 2. The browser uploads the file DIRECTLY to storage: a
@@ -20,6 +23,11 @@ import type { MaterialStatus } from "./schemas";
  *    202 `{material_id, status, job_id}`. `job_id` is logged for
  *    correlation and NEVER queried (the status endpoint keys on
  *    material_id).
+ * 4. (Batch 4.5) `GET /v1/materials/{id}/pages?limit&offset` → the
+ *    extracted-text viewer's paginated page list.
+ * 5. (Batch 4.5) `POST /v1/materials/{id}/process` → 202 acceptance
+ *    for a reprocess request; the documented 409s and 429 map to the
+ *    honest copy below.
  */
 
 /** ready and failed are the contract's terminal states — once seen,
@@ -131,4 +139,136 @@ export function describeMaterialFlowError(error: unknown): string {
     }
 
     return "The upload could not be completed.";
+}
+
+/* -------------------------------------------------------------------------
+ * Batch 4.5 — the extracted-text viewer and the reprocess control.
+ *
+ * Both surfaces consume the Week 9 operations that landed in the
+ * tracked contract (`GET /v1/materials/{id}/pages`,
+ * `POST /v1/materials/{id}/process`). The helpers below keep the
+ * same honesty rules as the upload flow: only the contract's own
+ * vocabulary, no invented totals, retry counts, phases, or ETAs.
+ * ---------------------------------------------------------------------- */
+
+/** The viewer's empty page-list copy — the endpoint honestly returns
+ * `pages: []` until a material has been processed (and a re-run may
+ * legitimately leave none). */
+export const MATERIAL_NO_PAGES_COPY =
+    "No extracted text stored for this material yet.";
+
+/** A page the pipeline stored without extractable text (for example
+ * a purely graphical page) — represented, never papered over. */
+export const MATERIAL_EMPTY_PAGE_COPY =
+    "This page has no extractable text.";
+
+/** The reprocess 202 acceptance — the request's own words; the
+ * material's live status continues to come from the list/poll. */
+export const MATERIAL_PROCESS_ACCEPTED_COPY =
+    "Processing is queued — its status appears in the list.";
+
+/** The reprocess control's in-flight label (duplicate-submit
+ * protection is the disabled state itself). */
+export const MATERIAL_PROCESS_REQUESTING_LABEL = "Requesting…";
+
+/** The page-block label the viewer renders — "Page 1", "Page 2", …,
+ * numbered exactly as the contract numbers them (1-based). */
+export function materialPageLabel(pageNumber: number): string {
+    return `Page ${pageNumber}`;
+}
+
+/**
+ * Pagination honesty for the page list: the contract provides NO
+ * total count, and documents that "a shorter page than `limit` means
+ * the last page". A "Load more pages" affordance is therefore offered
+ * ONLY when a window came back full — a full window MAY have more
+ * after it; a short one cannot. No total is ever displayed.
+ */
+export function mayHaveMorePages(
+    returnedCount: number,
+    limit: number,
+): boolean {
+    return returnedCount >= limit;
+}
+
+/**
+ * Map a reprocess error to honest, user-facing copy
+ * (`POST /v1/materials/{id}/process`).
+ *
+ * The two documented 409 classes are surfaced through the backend's
+ * own already-user-readable detail (already queued/underway; the
+ * manual retry budget exhausted, "N of 3 manual retries consumed") —
+ * the ONLY honest source of retry-budget information, since
+ * `MaterialResponse` exposes no `retry_count` and none is predicted.
+ * The 429 carries the per-user write-rate-limit copy.
+ */
+export function describeMaterialProcessError(error: unknown): string {
+    if (error instanceof ApiError) {
+        switch (error.status) {
+            case 0:
+                return (
+                    error.message ||
+                    "The request could not reach the server."
+                );
+            case 401:
+                return "Your session has expired. Redirecting to sign in...";
+            case 403:
+                return "You do not have permission to manage materials in this course.";
+            case 404:
+                return "The material was not found. Refresh the list to see its current state.";
+            case 409:
+                return error.message ||
+                    "Processing could not be started. Refresh the list to see the material's current state.";
+            case 422:
+                return "The submitted values are invalid.";
+            case 429:
+                return "Too many requests — wait a moment and try again.";
+            default:
+                return error.message || "Processing could not be started.";
+        }
+    }
+
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return "Processing could not be started.";
+}
+
+/**
+ * Map a page-list read error to honest, user-facing copy
+ * (`GET /v1/materials/{id}/pages`). Same conventions as the other
+ * mappings: 401 hands off to the global recovery, 403/404 are stated
+ * plainly without internal details, anything else keeps the API's
+ * own message when one exists.
+ */
+export function describeMaterialPagesError(error: unknown): string {
+    if (error instanceof ApiError) {
+        switch (error.status) {
+            case 0:
+                return (
+                    error.message ||
+                    "The request could not reach the server."
+                );
+            case 401:
+                return "Your session has expired. Redirecting to sign in...";
+            case 403:
+                return "You do not have permission to read this material.";
+            case 404:
+                return "The material was not found. Refresh the list to see its current state.";
+            case 422:
+                return "The submitted values are invalid.";
+            default:
+                return (
+                    error.message ||
+                    "The extracted text could not be loaded."
+                );
+        }
+    }
+
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return "The extracted text could not be loaded.";
 }

@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 /**
- * Material domain schemas (Batch 4.3) — Zod as the single source of
- * truth, cross-checked against `docs/openapi.json` (the CI-guarded
- * backend contract) and `backend/app/schemas/material.py`:
+ * Material domain schemas (Batch 4.3; extracted-text reads added in
+ * Batch 4.5) — Zod as the single source of truth, cross-checked
+ * against `docs/openapi.json` (the CI-guarded backend contract) and
+ * `backend/app/schemas/material.py`:
  *
  * - `materialResponseSchema` — `GET /v1/courses/{id}/materials` rows:
  *   `{id, course_id, s3_key, title, status, uploaded_by, created_at}`.
@@ -22,6 +23,16 @@ import { z } from "zod";
  *   and its current status, whatever that status is.
  * - `materialStatusResponseSchema` — `GET /v1/materials/{id}/status`:
  *   `{material_id, status}`.
+ * - `materialPageResponseSchema` / `materialPagesResponseSchema`
+ *   (Batch 4.5) — the Week 9 extracted-text reads:
+ *   `GET /v1/materials/{id}/pages` returns
+ *   `{material_id, pages[]}` where each page is
+ *   `{page_number, text}` — 1-based, and `text` may legitimately be
+ *   empty (a page with no extractable text). The list is empty until
+ *   the material has been processed, and paginated by
+ *   `limit` (1–500, default 100) / `offset`; a page of results
+ *   shorter than `limit` is the last one (the contract provides no
+ *   total count — none may be invented).
  *
  * The material `status` is the four-value contract literal
  * (pending | processing | ready | failed) — the frontend's entire
@@ -99,4 +110,24 @@ export const materialStatusResponseSchema = z.object({
 
 export type MaterialStatusResponse = z.infer<
     typeof materialStatusResponseSchema
+>;
+
+/** One stored page of extracted text (Week 9): 1-based `page_number`,
+ * `text` possibly empty — the viewer renders that absence honestly. */
+export const materialPageResponseSchema = z.object({
+    page_number: z.number().int().min(1),
+    text: z.string(),
+});
+
+export type MaterialPage = z.infer<typeof materialPageResponseSchema>;
+
+/** The paginated page-list response — `{material_id, pages[]}`,
+ * ascending; empty until the material has been processed. */
+export const materialPagesResponseSchema = z.object({
+    material_id: uuidString,
+    pages: z.array(materialPageResponseSchema),
+});
+
+export type MaterialPagesResponse = z.infer<
+    typeof materialPagesResponseSchema
 >;

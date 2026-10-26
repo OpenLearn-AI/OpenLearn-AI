@@ -225,10 +225,13 @@ export const OwnerHub: Story = {
         ).toBeVisible();
 
         // The NO-PLACEHOLDER rule (roadmap Section 9): the future
-        // hub slots render NOTHING.
+        // hub slots render NOTHING. (Batch 4.5 note: "extracted
+        // text" left this list — it is no longer a reserved future
+        // slot but a DELIVERED capability: the ready row's viewer
+        // disclosure. The remaining entries are all still future
+        // capabilities with no contract.)
         for (const forbidden of [
             /coming soon/i,
-            /extracted text/i,
             /knowledge base/i,
             /chat/i,
             /enroll/i,

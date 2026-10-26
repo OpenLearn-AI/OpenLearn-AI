@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { UploadCloud } from "lucide-react";
+import { ChevronDown, UploadCloud } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -13,14 +13,22 @@ import { LoadingBlock } from "@/components/state/LoadingBlock";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useMaterialStatus, useMaterials } from "@/features/materials/api/useMaterials";
+import { MaterialTextViewer } from "@/components/courses/MaterialTextViewer";
+import {
+    useMaterialStatus,
+    useMaterials,
+    useProcessMaterial,
+} from "@/features/materials/api/useMaterials";
 import { materialKeys } from "@/features/materials/keys";
 import {
     buildUploadFormData,
     describeMaterialFlowError,
+    describeMaterialProcessError,
     formatByteSize,
     isTerminalMaterialStatus,
     MATERIAL_FAILED_COPY,
+    MATERIAL_PROCESS_ACCEPTED_COPY,
+    MATERIAL_PROCESS_REQUESTING_LABEL,
     MATERIAL_STATUS_LABELS,
 } from "@/features/materials/flow";
 import {
@@ -34,7 +42,8 @@ import {
 } from "@/features/materials/schemas";
 
 /**
- * The course-detail materials surface (Batch 4.3) — the roadmap's
+ * The course-detail materials surface (Batch 4.3; the extracted-text
+ * viewer and reprocess control added in Batch 4.5) — the roadmap's
  * "course-detail-scoped materials component".
  *
  * Consumes the EXISTING contract only (roadmap §10 / Table 12; the
@@ -54,24 +63,34 @@ import {
  *    correlation and NEVER queried (the status endpoint keys on
  *    material_id); a `null` job_id means Week 9 dedup returned the
  *    EXISTING material — presented honestly as such.
+ * 4. (Batch 4.5) `GET /v1/materials/{id}/pages` — the extracted-text
+ *    viewer on READY rows (see `MaterialTextViewer`).
+ * 5. (Batch 4.5) `POST /v1/materials/{id}/process` — the reprocess
+ *    control on terminal (`failed` AND `ready`) rows for the owning
+ *    instructor (see `MaterialProcessControl`).
  *
- * Registration acceptance is NEVER presented as processing
+ * Registration/reprocess acceptance is NEVER presented as processing
  * completion: the 202 is acknowledged in its own words, and the
  * material's live status (`pending`/`processing`) comes from the
  * list and the per-material status poll, which stops at the
  * terminal states (`ready`/`failed`).
  *
- * Role-awareness: the upload affordance renders ONLY where the
- * existing authorization model allows it (the owning instructor —
- * the caller derives this from `me` + `course.owner_id`); hiding the
- * control is presentation, never the authorization boundary (the
- * backend enforces instructor role + course ownership on every step).
+ * Role-awareness: the upload AND reprocess affordances render ONLY
+ * where the existing authorization model allows them (the owning
+ * instructor — the caller derives this from `me` +
+ * `course.owner_id`); the extracted-text viewer renders for any hub
+ * visitor on a `ready` row (the page read is already owner-scoped;
+ * the backend's `require_owned_course` on the pages endpoint remains
+ * the boundary). Hiding a control is presentation, never the
+ * authorization boundary (the backend enforces instructor role +
+ * course ownership on every step).
  *
  * Honesty rules (roadmap Table 9): no progress percentages, no
- * phase names, no ETA, no fake AI reasoning, no retry/reprocess
- * control (no retry endpoint is in this batch's scope), and the
- * failed state names the plausible cause CLASS without claiming to
- * know which one occurred.
+ * phase names, no ETA, no fake AI reasoning, no retry-budget
+ * prediction (`MaterialResponse` exposes no `retry_count` — the
+ * budget is only ever surfaced through the backend's own documented
+ * 409 detail), and the failed state names the plausible cause CLASS
+ * without claiming to know which one occurred.
  */
 
 /** The flat, hairline presentation for the state kit inside this
@@ -145,6 +164,7 @@ export function CourseMaterials({
                             key={material.id}
                             material={material}
                             courseId={courseId}
+                            canManage={canUpload}
                         />
                     ))}
                 </ol>
@@ -416,6 +436,79 @@ function MaterialUploadForm({ courseId }: { courseId: string }) {
     );
 }
 
+/** The reprocess request's user-facing feedback (Batch 4.5): either
+ * the 202 acceptance (its own words — never a fabricated processing
+ * state) or a mapped error message (the two documented 409 classes
+ * and the 429 carry the backend's own user-readable detail). */
+export type MaterialProcessFeedback =
+    | { kind: "accepted" }
+    | { kind: "error"; message: string };
+
+/**
+ * The reprocess control (Batch 4.5) — a purely presentational piece
+ * of a terminal material row: the "Reprocess" action plus its
+ * feedback message. The owning row drives it with the mutation's
+ * state (`useProcessMaterial` owns the request and the cache
+ * effects); keeping the presentation separate keeps `MaterialRow`
+ * focused and makes every state — including the documented
+ * retry-budget-exhausted 409 — renderable as an honest, hermetic
+ * story.
+ *
+ * The control is disabled and reads "Requesting…" while the request
+ * is in flight (duplicate-submit protection); acceptance is a
+ * `role=status` note, errors a `role=alert` — the same live-region
+ * grammar as the upload form.
+ */
+export function MaterialProcessControl({
+    visible,
+    pending,
+    feedback,
+    onRequest,
+}: {
+    /** The owning instructor + a terminal (`ready`|`failed`) status. */
+    visible: boolean;
+    /** The reprocess request is in flight. */
+    pending: boolean;
+    feedback: MaterialProcessFeedback | null;
+    onRequest: () => void;
+}) {
+    if (!visible && feedback === null) {
+        return null;
+    }
+
+    return (
+        <>
+            {visible ? (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={pending}
+                    onClick={onRequest}
+                >
+                    {pending
+                        ? MATERIAL_PROCESS_REQUESTING_LABEL
+                        : "Reprocess"}
+                </Button>
+            ) : null}
+
+            {feedback?.kind === "accepted" ? (
+                <p
+                    role="status"
+                    aria-live="polite"
+                    className="font-mono text-[0.8125rem] text-muted-foreground"
+                >
+                    {MATERIAL_PROCESS_ACCEPTED_COPY}
+                </p>
+            ) : feedback?.kind === "error" ? (
+                <p role="alert" className="text-sm text-destructive">
+                    {feedback.message}
+                </p>
+            ) : null}
+        </>
+    );
+}
+
 /**
  * One materials-list row. Rows in a non-terminal state own their
  * per-material status poll (`GET /v1/materials/{id}/status`, keyed on
@@ -424,15 +517,25 @@ function MaterialUploadForm({ courseId }: { courseId: string }) {
  * cache so the list stays the single rendering source. Unmounting
  * the row (or changing course) removes the query observer and the
  * interval with it.
+ *
+ * Batch 4.5 adds the terminal-row action area: the extracted-text
+ * viewer disclosure on `ready` rows (lazy — the viewer, and its
+ * page-list queries, exist only while open on a ready material) and
+ * the reprocess control for the owning instructor on `failed` AND
+ * `ready` rows.
  */
 function MaterialRow({
     material,
     courseId,
+    canManage,
 }: {
     material: Material;
     courseId: string;
+    canManage: boolean;
 }) {
     const queryClient = useQueryClient();
+
+    const [viewerOpen, setViewerOpen] = useState(false);
 
     const statusQuery = useMaterialStatus(
         material.id,
@@ -441,6 +544,54 @@ function MaterialRow({
 
     const polledStatus = statusQuery.data?.status;
     const liveStatus: MaterialStatus = polledStatus ?? material.status;
+
+    const processMutation = useProcessMaterial(courseId, material.id);
+
+    // The request feedback, plus the state needed to derive its
+    // visibility WITHOUT a state-clearing effect: the acceptance note
+    // speaks while the pipeline visibly runs (non-terminal) and
+    // yields to the outcome the moment a terminal state lands; an
+    // error speaks while the material still sits in the state the
+    // request was made from (the 409/429 classes never change the
+    // status, so they persist until the next request — exactly as
+    // they should).
+    const [processFeedback, setProcessFeedback] = useState<
+        | { kind: "accepted" }
+        | { kind: "error"; message: string; status: MaterialStatus }
+        | null
+    >(null);
+
+    const visibleFeedback: MaterialProcessFeedback | null = (() => {
+        if (processFeedback === null) {
+            return null;
+        }
+        if (processFeedback.kind === "accepted") {
+            return isTerminalMaterialStatus(liveStatus)
+                ? null
+                : processFeedback;
+        }
+        return liveStatus === processFeedback.status
+            ? processFeedback
+            : null;
+    })();
+
+    async function handleReprocess(): Promise<void> {
+        if (processMutation.isPending) {
+            return;
+        }
+
+        setProcessFeedback(null);
+        try {
+            await processMutation.mutateAsync();
+            setProcessFeedback({ kind: "accepted" });
+        } catch (cause) {
+            setProcessFeedback({
+                kind: "error",
+                message: describeMaterialProcessError(cause),
+                status: liveStatus,
+            });
+        }
+    }
 
     useEffect(() => {
         if (polledStatus && polledStatus !== material.status) {
@@ -457,6 +608,12 @@ function MaterialRow({
             );
         }
     }, [polledStatus, material.id, material.status, courseId, queryClient]);
+
+    const viewerRegionId = `material-${material.id}-extracted-text`;
+    const canReprocess =
+        canManage && isTerminalMaterialStatus(liveStatus);
+    const showActions =
+        liveStatus === "ready" || canReprocess || visibleFeedback !== null;
 
     return (
         <li className="border-t border-border py-3.5 transition-colors duration-150 first:border-t-0 hover:border-foreground">
@@ -476,6 +633,50 @@ function MaterialRow({
                 <p className="mt-1.5 max-w-[60ch] text-[0.8125rem] leading-[1.6] text-muted-foreground">
                     {MATERIAL_FAILED_COPY}
                 </p>
+            ) : null}
+
+            {showActions ? (
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
+                    {liveStatus === "ready" ? (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-expanded={viewerOpen}
+                            aria-controls={viewerRegionId}
+                            onClick={() => setViewerOpen((open) => !open)}
+                        >
+                            <ChevronDown
+                                aria-hidden="true"
+                                className={cn(
+                                    "size-3.5 transition-transform duration-150",
+                                    viewerOpen && "rotate-180",
+                                )}
+                                data-icon="inline-start"
+                            />
+                            Extracted text
+                        </Button>
+                    ) : null}
+                    <MaterialProcessControl
+                        visible={canReprocess}
+                        pending={processMutation.isPending}
+                        feedback={visibleFeedback}
+                        onRequest={() => void handleReprocess()}
+                    />
+                </div>
+            ) : null}
+
+            {/* The viewer exists ONLY while open on a ready material —
+                the lazy gate itself. A reprocess that moves the
+                material back into the pipeline unmounts it (extracted
+                text is never rendered for queued/processing/failed
+                materials); if it becomes ready again, it remounts
+                fresh (a reprocess invalidated the cached pages). */}
+            {viewerOpen && liveStatus === "ready" ? (
+                <MaterialTextViewer
+                    material={material}
+                    regionId={viewerRegionId}
+                />
             ) : null}
         </li>
     );
