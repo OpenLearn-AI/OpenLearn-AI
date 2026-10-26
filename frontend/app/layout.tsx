@@ -30,7 +30,10 @@ export const metadata: Metadata = {
   title: "OpenLearn AI",
   description: "AI-powered learning platform",
   icons: {
-    icon: "/logo.png",
+    // Batch 4.2 correction A9: the favicon referenced the removed
+    // `/logo.png` (a 404 since the owner's asset cleanup); the
+    // authoritative brand asset is the supplied `public/logo.svg`.
+    icon: { url: "/logo.svg", type: "image/svg+xml" },
   },
 };
 

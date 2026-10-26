@@ -22,6 +22,15 @@ import { BookOpen, LayoutDashboard, UserRound } from "lucide-react";
  * reinforcement next to a text label and carry no information the
  * label does not.
  *
+ * Batch 4.2 corrections (owner, 2026-10-25): `Dashboard` is the FIRST
+ * primary-navigation entry — it is the authenticated landing page
+ * (the post-login default), so the navigation reads in journey
+ * order: Dashboard first, `Courses` immediately after it (the
+ * hub/list surface), then Profile & Settings. One shared source of
+ * truth, so the desktop sidebar and the mobile drawer reorder
+ * together and cannot drift; destinations, labels, icons, and the
+ * active-route matcher are untouched.
+ *
  * Role-awareness (roadmap Sections 4 and 8): navigation stays
  * role-simple — the same links are shown to every signed-in user.
  * The backend authorizes; the shell does not gate, and no admin or
@@ -29,8 +38,8 @@ import { BookOpen, LayoutDashboard, UserRound } from "lucide-react";
  * enforced backend capability; Section 4 of the roadmap).
  */
 export const NAV_LINKS = [
-    { href: "/courses", label: "Courses", icon: BookOpen },
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/courses", label: "Courses", icon: BookOpen },
     { href: "/profile", label: "Profile & Settings", icon: UserRound },
 ] as const;
 

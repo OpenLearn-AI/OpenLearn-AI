@@ -111,7 +111,18 @@ export const Default: Story = {
 
         // The search field has a REAL accessible name (the
         // visually-hidden label) — not a placeholder-only control.
-        await canvas.findByRole("searchbox", { name: "Search courses" });
+        const search = await canvas.findByRole("searchbox", {
+            name: "Search courses",
+        });
+
+        // Correction A7: the field announces itself as a search
+        // control at rest — a "Search courses…" placeholder (and the
+        // quiet aria-hidden magnifier pinned in the rendered checks)
+        // beside the accessible name.
+        await expect(search).toHaveAttribute(
+            "placeholder",
+            "Search courses…",
+        );
 
         // The live count line states the total at rest.
         await expect(canvas.getByText("3 courses")).toBeVisible();

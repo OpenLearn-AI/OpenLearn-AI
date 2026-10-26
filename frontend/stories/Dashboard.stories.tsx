@@ -19,12 +19,16 @@ import type { Profile } from "../features/profile/schemas";
  * initialization inside Storybook; the same hermeticity pattern as
  * the AppShell full-shell story).
  *
- * Batch 4.2 correction D pins: the Email section is GONE (asserted as
- * an absence — no `Email:` text anywhere on the page) and the
- * greeting renders the pinned "Welcome Back!" alone when no name
- * claims exist (Storybook never initializes Keycloak, so `firstName`
- * is always "" here — the personalized variant is pinned by the
- * composition unit tests in `useUserName.test.ts`).
+ * Batch 4.2 corrections (A3/A4): the greeting is composed as
+ * "Welcome back, <Name>!" (exclamation after the name) — pinned
+ * here in its no-name fallback "Welcome back!" because Storybook
+ * never initializes Keycloak (the personalized variant is pinned by
+ * the `composeWelcomeGreeting` unit tests); the Email section is
+ * GONE (asserted as an absence — no `Email:` text anywhere on the
+ * page), the redundant "Courses" region kicker and the spatially
+ * inaccurate "The courses you own. Browse them below." helper are
+ * REMOVED, and the recent entries' titles are the links to their
+ * hubs (A2).
  */
 
 // Story-only fixture data — isolated, not imported into production code.
@@ -126,23 +130,35 @@ export const Default: Story = {
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
 
-        // The pinned greeting renders alone when no name claims exist
-        // (the story's Keycloak-free environment) — correction D's
-        // graceful fallback.
+        // Correction A3: the greeting reads "Welcome back, <Name>!" —
+        // the no-name fallback renders the plain "Welcome back!"
+        // (the story's Keycloak-free environment), with the
+        // exclamation in place and no dangling comma.
         await expect(
-            canvas.getByRole("heading", { name: "Welcome Back!" }),
+            canvas.getByRole("heading", { name: "Welcome back!" }),
         ).toBeVisible();
 
         // Correction D: the Email section is REMOVED — no `Email:`
         // text renders anywhere on the dashboard.
         await expect(canvas.queryByText(/Email:/)).toBeNull();
 
-        // The three region kickers fix the h1→h3 skip (h2 level now).
-        for (const kicker of ["Courses", "Profile", "Recently created"]) {
+        // Correction A4: the redundant "Courses" region kicker is
+        // REMOVED (the count numeral + unit already say what the
+        // region is) and the spatially inaccurate helper copy is
+        // gone — the remaining kickers are Profile and Recently
+        // created (the h1→h2→h3 sequence is preserved; the courses
+        // region intentionally carries no heading).
+        for (const kicker of ["Profile", "Recently created"]) {
             await expect(
                 canvas.getByRole("heading", { level: 2, name: kicker }),
             ).toBeVisible();
         }
+        await expect(
+            canvas.queryByRole("heading", { level: 2, name: "Courses" }),
+        ).toBeNull();
+        await expect(
+            canvas.queryByText("The courses you own. Browse them below."),
+        ).toBeNull();
 
         // The count numeral IS the link to /courses, in the locked
         // wording (singular/plural handled).
@@ -156,11 +172,21 @@ export const Default: Story = {
         await expect(profileLink).toHaveAttribute("href", "/profile");
 
         // The four most-recent courses render as h3 entries (the API's
-        // DESC order is the fixture order).
+        // DESC order is the fixture order), and (A2) each entry's
+        // title is now the link to its hub.
         for (const course of courses) {
-            await expect(
-                canvas.getByRole("heading", { level: 3, name: course.title }),
-            ).toBeVisible();
+            const title = canvas.getByRole("heading", {
+                level: 3,
+                name: course.title,
+            });
+            await expect(title).toBeVisible();
+            const titleLink = within(title).getByRole("link", {
+                name: course.title,
+            });
+            await expect(titleLink).toHaveAttribute(
+                "href",
+                `/courses/${course.id}`,
+            );
         }
 
         // The account colophon renders the session's real roles (from

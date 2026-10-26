@@ -15,19 +15,22 @@ import { performKeycloakLogin } from "./helpers";
  *      not by this repo, but they are the documented selectors across
  *      every Keycloak version since ~10.x.
  *   3. Wait for the redirect back to our origin at `/dashboard`.
- *   4. Assert meaningful dashboard content is present (the "Welcome Back!"
- *      heading + the account colophon rendering the test user's roles).
+ *   4. Assert meaningful dashboard content is present (the
+ *      "Welcome back!" heading + the account colophon rendering the
+ *      test user's roles).
  *
  * Batch 4.2: the dashboard's Email section was intentionally removed
  * (owner correction D — the email already lives on /profile, and the
  * former UserInfo card was deleted with it). The assertion that used
  * to prove "/auth/me succeeded" via the UserInfo `Email:` line now
  * proves it via the account colophon's roles row, which renders from
- * the SAME /auth/me data. The "Welcome Back!" heading pin is unchanged
- * and survives the greeting personalization (Playwright's name match
- * is substring-based, so "Welcome Back! <FirstName>" still matches;
- * the bootstrap E2E users carry no name claims, so the plain greeting
- * — the graceful no-name fallback — is what renders in this suite).
+ * the SAME /auth/me data. The greeting heading pin (Batch 4.2
+ * corrections, A3: "Welcome back, <Name>!" with the exclamation
+ * after the name) uses the no-name fallback wording "Welcome back!"
+ * — the E2E bootstrap users are provisioned without name claims, so
+ * the plain greeting renders here; any user WITH a first name in
+ * their Keycloak profile sees "Welcome back, <Name>!" instead
+ * (pinned by the composeWelcomeGreeting unit tests).
  *
  * Batch 4.1: the post-login wait is onboarding-aware (shared helper).
  * A fresh user without a profile is routed to the `/onboarding` wizard
@@ -74,12 +77,13 @@ test.describe("Login smoke flow", () => {
     await performKeycloakLogin(page, E2E_USERNAME!, E2E_PASSWORD!);
 
     // 5. Assert meaningful dashboard content. The dashboard's running
-    //    head is "Welcome Back!" (app/(app)/dashboard/page.tsx) — the
-    //    pinned greeting, personalized with the first name when the
-    //    session carries one (substring pin; the E2E users have no
-    //    name claims, so the plain greeting renders here).
+    //    head is the composed greeting (app/(app)/dashboard/page.tsx) —
+    //    "Welcome back, <Name>!" when the session carries a first name,
+    //    the plain "Welcome back!" when it does not. The E2E users
+    //    have no name claims, so the plain greeting renders here
+    //    (the personalized variant is pinned by the unit tests).
     await expect(
-      page.getByRole("heading", { name: "Welcome Back!" }),
+      page.getByRole("heading", { name: "Welcome back!" }),
     ).toBeVisible();
 
     // The account colophon renders `Role:`/`Roles:` + the session's

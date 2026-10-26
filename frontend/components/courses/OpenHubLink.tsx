@@ -21,6 +21,21 @@ export const courseLinkClass =
     "text-sm text-inherit no-underline underline-offset-[3px] hover:underline hover:decoration-ring focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring";
 
 /**
+ * The entry-TITLE link grammar (Batch 4.2 corrections, A2/A8): the
+ * same quiet vocabulary as `courseLinkClass`, at the title's
+ * inherited size and weight — the ruled entry's title IS the link to
+ * the course hub, so the largest, most natural target carries the
+ * primary navigation without adding any container or chrome.
+ *
+ * The courses surfaces render user-authored titles and descriptions
+ * as plain text inside these links (no rich links), and the title
+ * keeps its heading role — `<h2>/<h3>` wrapping the link preserves
+ * both the document outline and the accessible name.
+ */
+export const entryTitleLinkClass =
+    "text-inherit no-underline underline-offset-[3px] hover:underline hover:decoration-ring focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring";
+
+/**
  * The "Open Hub →" course-entry action — the pinned link name the
  * courses-crud E2E spec clicks (`getByRole("link", { name: "Open Hub →" })`).
  *

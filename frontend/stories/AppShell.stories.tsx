@@ -145,9 +145,12 @@ export const SidebarExpanded: Story = {
             { timeout: 5000 },
         );
         const navLinks = within(nav).getAllByRole("link");
+        // Batch 4.2 correction A1: Dashboard is the FIRST entry — the
+        // authenticated landing page — with Courses immediately
+        // after it.
         await expect(
             navLinks.map((link) => link.textContent),
-        ).toEqual(["Courses", "Dashboard", "Profile & Settings"]);
+        ).toEqual(["Dashboard", "Courses", "Profile & Settings"]);
         await expect(
             within(nav).queryByRole("link", { name: "Home" }),
         ).not.toBeInTheDocument();
@@ -417,10 +420,11 @@ export const MobileNavInteraction: Story = {
 
         // Same final inventory as the desktop sidebar — one shared
         // source of truth; no Home entry in the drawer either.
+        // (Batch 4.2 correction A1: Dashboard first, Courses second.)
         const drawerLinks = within(dialog).getAllByRole("link");
         await expect(
             drawerLinks.map((link) => link.textContent),
-        ).toEqual(["Courses", "Dashboard", "Profile & Settings"]);
+        ).toEqual(["Dashboard", "Courses", "Profile & Settings"]);
         await expect(
             within(dialog).queryByRole("link", { name: "Home" }),
         ).not.toBeInTheDocument();
@@ -430,9 +434,15 @@ export const MobileNavInteraction: Story = {
         });
         await expect(coursesLink).toHaveAttribute("aria-current", "page");
 
-        // Account actions are present in the drawer.
+        // Account actions are present in the drawer — logout, and
+        // (correction A9) the theme toggle lives INSIDE the expanded
+        // menu, next to the logout control, as the same accessible
+        // button the desktop sidebar's account region renders.
         await expect(
             within(dialog).getByRole("button", { name: "Logout" }),
+        ).toBeInTheDocument();
+        await expect(
+            within(dialog).getByRole("button", { name: "Toggle theme" }),
         ).toBeInTheDocument();
 
         // Explicit close affordance closes the drawer.
@@ -523,13 +533,17 @@ export const ShellDesktop: Story = {
         // Batch 4.2 correction C: the shared bottom footer is REMOVED
         // — its exact branding text and any <footer> element no longer
         // render in the shell (the owner does not want the bar
-        // anywhere, and no replacement branding was added). NOTE: the
-        // mobile top bar's brand tagline ("Adaptive Learning Platform"
-        // under "OpenLearn AI") is navigation branding, NOT the bottom
-        // bar, and stays — so the absence pin uses the footer's exact
-        // one-element text.
+        // anywhere, and no replacement branding was added).
+        // Correction A9 extends the removal: the mobile header's
+        // "Adaptive Learning Platform" tagline (and its wordmark) is
+        // gone too — the top bar is the identity mark and the menu
+        // trigger only, so the tagline text is absent from the whole
+        // shell.
         await expect(
             canvas.queryByText("OpenLearn AI Adaptive Learning Platform"),
+        ).toBeNull();
+        await expect(
+            canvas.queryByText(/Adaptive Learning Platform/),
         ).toBeNull();
         await expect(canvas.queryByRole("contentinfo")).toBeNull();
     },

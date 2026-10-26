@@ -81,8 +81,12 @@ test.describe("Onboarding gate and wizard", () => {
     await sharedPage.goto("/dashboard");
 
     await expect(sharedPage).toHaveURL(/\/dashboard$/);
+    // Batch 4.2 corrections (A3): the greeting composes as
+    // "Welcome back, <Name>!"; the E2E users carry no name claims, so
+    // the plain fallback renders (the pin is substring-based and
+    // case-insensitive either way).
     await expect(
-      sharedPage.getByRole("heading", { name: "Welcome Back!" }),
+      sharedPage.getByRole("heading", { name: "Welcome back!" }),
     ).toBeVisible();
   });
 
@@ -232,8 +236,12 @@ test.describe("Onboarding gate and wizard", () => {
 
     // The confirmed save routes back into the application.
     await sharedPage.waitForURL(/\/dashboard/, { timeout: 30_000 });
+    // Batch 4.2 corrections (A3): the greeting composes as
+    // "Welcome back, <Name>!"; the E2E users carry no name claims, so
+    // the plain fallback renders (the pin is substring-based and
+    // case-insensitive either way).
     await expect(
-      sharedPage.getByRole("heading", { name: "Welcome Back!" }),
+      sharedPage.getByRole("heading", { name: "Welcome back!" }),
     ).toBeVisible();
   });
 

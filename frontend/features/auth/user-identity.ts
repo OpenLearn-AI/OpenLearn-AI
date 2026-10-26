@@ -59,3 +59,51 @@ export function composeUserDisplayName(fields: {
 
     return { name, initial, firstName: given };
 }
+
+/** The personalized welcome greeting (Batch 4.2 corrections, A3):
+ * the composed text plus the isolated name segment the heading
+ * renders with `dir="auto"` (empty when no first name exists). */
+export interface WelcomeGreeting {
+    /** The full greeting text — the heading's accessible name. */
+    text: string;
+    /** The name as presented (casing normalized); "" when absent. */
+    name: string;
+}
+
+/**
+ * Present a first name for the greeting — display casing only, never
+ * a change to the stored account data.
+ *
+ * Keycloak profiles commonly carry an all-lowercase given name
+ * (`muhammad`); the greeting presents it as a name ("Muhammad").
+ * Cased scripts without a capitalization concept (e.g. Arabic) pass
+ * through unchanged — `toUpperCase` is a no-op on them.
+ */
+export function presentFirstName(firstName: string): string {
+    const trimmed = firstName.trim();
+    if (trimmed === "") {
+        return "";
+    }
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+/**
+ * Compose the dashboard greeting (Batch 4.2 corrections, A3).
+ *
+ * Structure: "Welcome back, <Name>!" — the exclamation mark follows
+ * the name; without a first name the plain "Welcome back!" renders
+ * alone (no dangling comma, no empty-name gap). The name is the
+ * authenticated user's available first name (`firstName` — never an
+ * identifier fallback, never the composed full name), with display
+ * casing applied; the composition stays in this pure module so the
+ * punctuation contract is unit-testable without a session.
+ */
+export function composeWelcomeGreeting(
+    firstName: string,
+): WelcomeGreeting {
+    const name = presentFirstName(firstName);
+
+    return name === ""
+        ? { text: "Welcome back!", name: "" }
+        : { text: `Welcome back, ${name}!`, name };
+}

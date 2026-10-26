@@ -84,7 +84,6 @@ export function DeleteCourseButton({
                 render={
                     <Button
                         variant="destructive"
-                        size="sm"
                         disabled={deleteCourse.isPending}
                     >
                         Delete Course

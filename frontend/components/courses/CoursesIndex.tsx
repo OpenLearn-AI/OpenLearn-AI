@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Search } from "lucide-react";
 
 import { CourseCard } from "@/components/CourseCard";
 import { EmptyState } from "@/components/state/EmptyState";
@@ -23,18 +24,26 @@ import { useCourses } from "@/features/courses/api/useCourses";
  *   filtering, "Loading…" / "—" / "No courses yet" otherwise) and the
  *   bottom-hairline search field with a REAL accessible name (a
  *   visually-hidden label — fixing the previous placeholder-only
- *   defect);
+ *   defect). Batch 4.2 correction A7: the field now also carries a
+ *   quiet magnifier icon inside its leading edge and a "Search
+ *   courses…" placeholder, so the control reads as a search box at
+ *   a glance (sighted, touch, and zoomed-in users) without adding
+ *   noise to the hairline page — the icon is `aria-hidden`
+ *   decoration and NEVER replaces the field's accessible name,
+ *   which stays the visually-hidden "Search courses" label;
  * - the entry field: a ruled 3/2/1-column grid (3 columns from 72rem
  *   of CONTENT width, 2 from 44rem, 1 below — container queries, so
- *   the density follows the content column, not the viewport);
+ *   the density follows the content column, not the viewport),
+ *   `min-w-0` on every entry so long titles wrap instead of blowing
+ *   out the tracks (correction A8);
  * - the four list states in the real kit grammar (LoadingBlock
  *   `role=status`, ErrorState `role=alert` + retry, EmptyState with
  *   the link-only CTA on a truly empty list, and the no-results
  *   message while filtering), flattened page-level via the kit's
  *   `className` so every other kit consumer is untouched.
  *
- * The page around it (title, subtitle, the "+ Create New Course"
- * primary action) lives in `app/(app)/courses/page.tsx`.
+ * The page around it (title, the "+ Create New Course" primary
+ * action) lives in `app/(app)/courses/page.tsx`.
  */
 
 /** The flat, hairline presentation applied to the state kit at this
@@ -87,20 +96,28 @@ export function CoursesIndex() {
                 >
                     {countLine}
                 </p>
-                <div className="min-w-[14rem] max-w-[18rem] flex-[0_1_18rem]">
+                <div className="relative min-w-[14rem] max-w-[18rem] flex-[0_1_18rem]">
                     <label htmlFor="courses-search" className="sr-only">
                         Search courses
                     </label>
+                    {/* A7: the quiet magnifier marks the field as a
+                        search control at rest. Decoration only —
+                        `aria-hidden`, and the accessible name remains
+                        the visually-hidden label above. */}
+                    <Search
+                        aria-hidden="true"
+                        className="pointer-events-none absolute start-0 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                    />
                     <Input
                         id="courses-search"
                         type="search"
-                        placeholder="Title or description"
+                        placeholder="Search courses…"
                         autoComplete="off"
                         value={searchQuery}
                         onChange={(event) =>
                             setSearchQuery(event.target.value)
                         }
-                        className="h-auto rounded-none border-0 border-b border-input bg-transparent px-0 py-2 text-[0.9375rem] shadow-none focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring md:text-[0.9375rem] dark:bg-transparent"
+                        className="h-auto rounded-none border-0 border-b border-input bg-transparent px-0 py-2 ps-6 text-[0.9375rem] shadow-none focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring md:text-[0.9375rem] dark:bg-transparent"
                     />
                 </div>
             </div>
@@ -126,7 +143,7 @@ export function CoursesIndex() {
             ) : filteredCourses.length > 0 ? (
                 <ol className="mt-10 grid gap-x-8 gap-y-10 @min-[44rem]:grid-cols-2 @min-[72rem]:grid-cols-3">
                     {filteredCourses.map((course) => (
-                        <li key={course.id}>
+                        <li key={course.id} className="min-w-0">
                             <CourseCard course={course} />
                         </li>
                     ))}

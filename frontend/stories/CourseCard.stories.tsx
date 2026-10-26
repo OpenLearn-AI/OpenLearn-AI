@@ -52,6 +52,11 @@ const longTitleCourse: Course = {
  * with their pinned accessible names and real routes, the mono ISO
  * date, and the RETIRED chrome: no "Course" pill and no
  * "No description" filler (a null description renders nothing).
+ *
+ * Batch 4.2 correction A8: the entry's TITLE is now the primary
+ * link to the course hub (the largest natural target in the quiet
+ * title-link grammar) — pinned here with its real route, with the
+ * heading level and accessible name unchanged.
  */
 export const Default: Story = {
   args: {
@@ -60,13 +65,21 @@ export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // The title is the entry's h2 (the /courses heading-level pin).
+    // The title is the entry's h2 (the /courses heading-level pin)...
     await expect(
       canvas.getByRole("heading", {
         level: 2,
         name: "Advanced Software Architecture",
       }),
     ).toBeVisible();
+    // ...and (A8) the title itself is the primary link to the hub.
+    const titleLink = canvas.getByRole("link", {
+      name: "Advanced Software Architecture",
+    });
+    await expect(titleLink).toHaveAttribute(
+      "href",
+      "/courses/550e8400-e29b-41d4-a716-446655440000",
+    );
 
     // Both actions are real links with their pinned names and routes.
     const edit = canvas.getByRole("link", { name: "Edit" });

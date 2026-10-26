@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { composeUserDisplayName } from "./user-identity";
+import {
+    composeUserDisplayName,
+    composeWelcomeGreeting,
+    presentFirstName,
+} from "./user-identity";
 
 /**
  * Unit tests for the SIDE-01 identity composition (pure helper).
@@ -159,5 +163,54 @@ describe("composeUserDisplayName", () => {
                 email: "m@example.com",
             }).firstName,
         ).toBe("محمد");
+    });
+});
+
+describe("composeWelcomeGreeting (Batch 4.2 corrections, A3)", () => {
+    it("composes the greeting with the exclamation mark AFTER the name", () => {
+        expect(composeWelcomeGreeting("Muhammad")).toEqual({
+            text: "Welcome back, Muhammad!",
+            name: "Muhammad",
+        });
+    });
+
+    it("applies display casing to an all-lowercase given name (presentation only)", () => {
+        // The stored claim is never modified — only the composed
+        // presentation is cased (the owner's example: "muhammad" →
+        // "Muhammad"; strings are immutable, so the source is safe).
+        const source = "muhammad";
+        const greeting = composeWelcomeGreeting(source);
+        expect(greeting.text).toBe("Welcome back, Muhammad!");
+        expect(greeting.name).toBe("Muhammad");
+        expect(source).toBe("muhammad");
+    });
+
+    it("renders the plain greeting alone when no first name exists — no dangling comma", () => {
+        for (const absent of ["", "   "]) {
+            expect(composeWelcomeGreeting(absent)).toEqual({
+                text: "Welcome back!",
+                name: "",
+            });
+        }
+    });
+
+    it("passes an Arabic given name through verbatim (no case concept)", () => {
+        const greeting = composeWelcomeGreeting("محمد");
+        expect(greeting.text).toBe("Welcome back, محمد!");
+        expect(greeting.name).toBe("محمد");
+    });
+
+    it("trims surrounding whitespace from the name segment", () => {
+        expect(composeWelcomeGreeting("  omar ")).toEqual({
+            text: "Welcome back, Omar!",
+            name: "Omar",
+        });
+    });
+
+    it("presentFirstName is a pure display helper — empty in, empty out", () => {
+        expect(presentFirstName("")).toBe("");
+        expect(presentFirstName("  ")).toBe("");
+        expect(presentFirstName("sara")).toBe("Sara");
+        expect(presentFirstName("سارة")).toBe("سارة");
     });
 });

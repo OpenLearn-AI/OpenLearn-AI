@@ -14,21 +14,40 @@ import { NAV_LINKS, isActiveRoute } from "./nav-config";
 /**
  * Mobile navigation (Batch 3.3 shell) — the sub-`md` pattern.
  *
- * A compact top bar (brand, ThemeToggle, menu trigger) plus a modal
- * off-canvas navigation drawer. The drawer is composed on Base UI's
- * regular Dialog parts — the repository's only component library, no
- * new dependency — NOT on the Batch 3.2 alert-dialog primitive,
- * whose `role="alertdialog"` semantics and pointer-dismissal
- * disablement are wrong for navigation. Base UI owns the documented
- * modal behavior (focus enters the popup on open, is trapped while
- * open, returns to the trigger on close; Escape closes; background
- * scroll is locked): no second focus-management system here.
+ * A compact top bar plus a modal off-canvas navigation drawer. The
+ * drawer is composed on Base UI's regular Dialog parts — the
+ * repository's only component library, no new dependency — NOT on
+ * the Batch 3.2 alert-dialog primitive, whose `role="alertdialog"`
+ * semantics and pointer-dismissal disablement are wrong for
+ * navigation. Base UI owns the documented modal behavior (focus
+ * enters the popup on open, is trapped while open, returns to the
+ * trigger on close; Escape closes; background scroll is locked):
+ * no second focus-management system here.
  *
  * The drawer shows text labels for every destination (never
  * icon-only by default), an explicit close button, and the account
- * actions adapted to the pattern (identity + logout; the theme
- * toggle stays in the always-visible top bar so it never requires
- * opening the menu).
+ * actions adapted to the pattern (identity + theme toggle +
+ * logout).
+ *
+ * Batch 4.2 correction A9 (2026-10-25): the always-visible mobile
+ * header is reduced to EXACTLY the identity mark and the menu
+ * trigger — the obsolete `/logo.png` reference (a 404 since the
+ * asset's removal) and the "OpenLearn AI / Adaptive Learning
+ * Platform" wordmark-and-tagline block are REMOVED from the top
+ * bar, and the header's height drops from 64px to 56px (the same
+ * comfortable step as the collapsed desktop rail: the 36px brand
+ * mark and the 36px trigger keep full legibility and tap room with
+ * tighter vertical padding). The theme toggle moves INTO the
+ * expanded drawer's account region — the same `ThemeToggle`
+ * component the desktop sidebar uses, in the same account-actions
+ * position, so its behavior is identical and it stays reachable by
+ * keyboard and screen readers inside Base UI's focus trap while the
+ * menu is open; there is never a second visible toggle (the
+ * sidebar's copy is hidden below `md`, where only this bar exists).
+ * The identity mark is the owner-supplied `public/logo.svg`
+ * (unoptimized SVG as-is, `object-contain` — no crop, no painted
+ * tile, matching the sidebar and BrandMark), still linked to `/`
+ * as the identity mark with a visually-hidden accessible name.
  *
  * Open/close state is transient and controlled here: each navigation
  * item is a real Next.js `Link` (pure link semantics — a
@@ -52,40 +71,33 @@ export function MobileNav({
 
     return (
         <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
-            {/* Top bar — mobile only (the desktop sidebar is hidden here) */}
-            <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-border bg-card px-4 md:hidden">
+            {/* Top bar — mobile only (the desktop sidebar is hidden
+                here). Correction A9: the identity mark and the menu
+                trigger, nothing else. */}
+            <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-border bg-card px-4 md:hidden">
                 <Link
                     href="/"
-                    className="flex items-center gap-3 rounded-lg outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    className="flex items-center rounded-lg outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
-                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10">
+                    <span className="sr-only">OpenLearn</span>
+                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl">
                         <Image
-                            src="/logo.png"
-                            alt="OpenLearn AI Logo"
+                            src="/logo.svg"
+                            alt=""
                             width={36}
                             height={36}
-                            className="size-full object-cover"
+                            className="size-full object-contain"
+                            unoptimized
                         />
-                    </span>
-                    <span className="min-w-0">
-                        <span className="block text-base font-bold text-foreground">
-                            OpenLearn AI
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                            Adaptive Learning Platform
-                        </span>
                     </span>
                 </Link>
 
-                <div className="flex items-center gap-2">
-                    <ThemeToggle />
-                    <DialogPrimitive.Trigger
-                        aria-label="Open menu"
-                        className="flex size-9 items-center justify-center rounded-xl border border-border bg-background text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                        <Menu className="size-5" aria-hidden="true" />
-                    </DialogPrimitive.Trigger>
-                </div>
+                <DialogPrimitive.Trigger
+                    aria-label="Open menu"
+                    className="flex size-9 items-center justify-center rounded-xl border border-border bg-background text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                    <Menu className="size-5" aria-hidden="true" />
+                </DialogPrimitive.Trigger>
             </header>
 
             {/* Off-canvas navigation drawer (portaled, modal) */}
@@ -97,15 +109,16 @@ export function MobileNav({
                     className="fixed inset-y-0 start-0 z-50 flex w-72 max-w-[85vw] flex-col bg-sidebar text-sidebar-foreground shadow-xl ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:slide-in-from-start data-closed:animate-out data-closed:slide-out-to-start"
                 >
                     {/* Drawer header: identity + explicit close affordance */}
-                    <div className="flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
+                    <div className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4">
                         <div className="flex items-center gap-3">
-                            <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10">
+                            <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl">
                                 <Image
-                                    src="/logo.png"
-                                    alt="OpenLearn AI Logo"
+                                    src="/logo.svg"
+                                    alt=""
                                     width={36}
                                     height={36}
-                                    className="size-full object-cover"
+                                    className="size-full object-contain"
+                                    unoptimized
                                 />
                             </span>
                             <DialogPrimitive.Title className="text-base font-bold">
@@ -160,8 +173,11 @@ export function MobileNav({
                         </ul>
                     </nav>
 
-                    {/* Account region — identity + logout, adapted to the
-                        drawer pattern (theme toggle lives in the top bar) */}
+                    {/* Account region — identity + actions, adapted to
+                        the drawer pattern. Correction A9: the theme
+                        toggle lives HERE (inside the expanded menu),
+                        in the same account-actions position and the
+                        same component as the desktop sidebar. */}
                     <div className="shrink-0 border-t border-sidebar-border p-4">
                         <div className="flex items-center gap-2.5 pb-3">
                             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
@@ -171,7 +187,10 @@ export function MobileNav({
                                 {userName}
                             </span>
                         </div>
-                        <LogoutButton className="w-full justify-center" />
+                        <div className="flex items-center gap-2">
+                            <ThemeToggle />
+                            <LogoutButton className="flex-1 justify-center" />
+                        </div>
                     </div>
                 </DialogPrimitive.Popup>
             </DialogPrimitive.Portal>

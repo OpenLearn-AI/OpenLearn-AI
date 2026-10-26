@@ -26,6 +26,19 @@ const routerStub = {
 
 const searchParamsStub = new URLSearchParams();
 
+/**
+ * Route params for `useParams` (Batch 4.3): stories that render a
+ * dynamic-segment page (the course-detail hub reads `params.id`)
+ * seed the stub before render via `setStorybookParams`. Application
+ * builds and runtime behavior are untouched — this module is aliased
+ * over `next/navigation` in the Storybook bundle only.
+ */
+let storyParams: Record<string, string> = {};
+
+export function setStorybookParams(params: Record<string, string>) {
+    storyParams = params;
+}
+
 export function useRouter() {
     return routerStub;
 }
@@ -39,7 +52,7 @@ export function useSearchParams() {
 }
 
 export function useParams() {
-    return {};
+    return storyParams;
 }
 
 export function useSelectedLayoutSegment() {

@@ -15,6 +15,11 @@ import type { Course } from "../features/courses/schemas";
  * (the same hermeticity pattern as the CoursesIndex stories: real
  * hooks, seeded queries, no network, no Keycloak initialization).
  *
+ * Batch 4.2 correction A6: the redundant "Courses you've created."
+ * subtitle is REMOVED — asserted as an absence alongside the
+ * retired over-promising subtitle; the masthead is the title and
+ * the primary action.
+ *
  * The list-pattern behavior itself (search semantics, count line,
  * states) is pinned by the CoursesIndex stories.
  */
@@ -75,17 +80,20 @@ export const Default: Story = {
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
 
-        // The pinned page heading and the honest subtitle (typographic
-        // apostrophe — the rendered copy uses &rsquo;).
+        // The pinned page heading.
         await expect(
             canvas.getByRole("heading", {
                 level: 1,
                 name: "Courses & Learning Hub",
             }),
         ).toBeVisible();
+
+        // Correction A6: the redundant "Courses you've created."
+        // subtitle is REMOVED (typographic apostrophe — the retired
+        // rendered copy used &rsquo;).
         await expect(
-            canvas.getByText("Courses you’ve created."),
-        ).toBeVisible();
+            canvas.queryByText("Courses you’ve created."),
+        ).toBeNull();
 
         // The primary action: a LINK with the pinned accessible name
         // and the existing creation route — the app's filled primary

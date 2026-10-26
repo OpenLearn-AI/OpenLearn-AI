@@ -17,8 +17,10 @@ import { MobileNav } from "./MobileNav";
  * - Desktop (md+): a collapsible sidebar (expanded ⇄ collapsed) with
  *   primary navigation, the current-route treatment, and an account
  *   region (identity, ThemeToggle, Logout, collapse control).
- * - Mobile (<md): a compact top bar (brand, ThemeToggle, menu
- *   trigger) and a modal off-canvas navigation drawer.
+ * - Mobile (<md): a compact top bar (identity mark, menu trigger —
+ *   correction A9: logo and hamburger ONLY, at a reduced 56px height)
+ *   and a modal off-canvas navigation drawer (theme toggle inside
+ *   the drawer's account region).
  * - A content column whose width reflows with the sidebar state.
  *
  * Batch 4.2 correction C: the shared bottom footer ("OpenLearn AI
