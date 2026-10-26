@@ -5,7 +5,6 @@
 
 # Pod A — Backend & Platform
 /backend/                       @MuhammadSeyam
-
 # Pod B — AI/ML
 /backend/app/ai/                @MuhammadSeyam
 /backend/app/rag/               @MuhammadSeyam
