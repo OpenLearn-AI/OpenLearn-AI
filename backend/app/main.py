@@ -1,25 +1,74 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.auth import router as auth_router
+from app.api.courses import router as courses_router
+from app.api.materials import (
+    router as materials_router,
+    status_router as material_status_router,
+)
+from app.api.users import router as users_router
 
 from app.config import settings
+from app.observability import setup_observability, setup_metrics
+from app.services.auth.user_service import (
+    DuplicateEmailError,
+    KeycloakIdentityError,
+)
 
+
+# Interactive docs and the OpenAPI schema are not served in production
+# (review finding B-03).
+_is_production = settings.environment == "production"
 
 app = FastAPI(
     title=settings.app_name,
+    version="0.2.0",
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
 )
+
+setup_observability()
+setup_metrics(app)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
+    # Authentication is a bearer token in the Authorization header, not a
+    # cookie, so credentialed CORS is not needed (review finding B-11).
+    # Headers stay open: the browser Sentry SDK adds tracing headers.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(courses_router)
+app.include_router(materials_router)
+app.include_router(material_status_router)
 
-@app.get("/")
-async def read_root():
-    return {"Hello": "World"}
+
+# A validated Keycloak token that cannot be resolved to a user is a caller
+# problem, not a server fault: report it as 4xx instead of an opaque 500.
+# Handlers are per exception type (never a global ValueError catch); the more
+# specific DuplicateEmailError wins over the base handler via the MRO.
+@app.exception_handler(KeycloakIdentityError)
+async def keycloak_identity_error_handler(
+    request: Request,
+    exc: KeycloakIdentityError,
+) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(DuplicateEmailError)
+async def duplicate_email_error_handler(
+    request: Request,
+    exc: DuplicateEmailError,
+) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.get("/health")

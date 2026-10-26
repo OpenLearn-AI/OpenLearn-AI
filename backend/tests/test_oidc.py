@@ -1,0 +1,965 @@
+from datetime import datetime, timedelta, timezone
+import uuid
+
+import jwt
+import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+
+from app.config import settings
+from app.db.session import get_db
+from app.main import app
+from app.models.user import User
+from app.services.auth import oidc
+
+from app.api.deps import require_admin, require_instructor, require_student, get_current_oidc_claims
+from fastapi import HTTPException, Depends
+
+ISSUER = settings.keycloak_issuer
+AUDIENCE = settings.keycloak_audience
+
+
+def _build_token(
+    private_key: str,
+    *,
+    sub: str | None = "123e4567-e89b-12d3-a456-426614174000",
+    iss: str = ISSUER,
+    aud: str = AUDIENCE,
+    expires_in_minutes: int = 15,
+    extra: dict | None = None,
+    algorithm: str = "RS256",
+    missing_claims: list[str] | None = None,
+) -> str:
+    now = datetime.now(timezone.utc)
+
+    payload = {
+        "sub": sub,
+        "iss": iss,
+        "aud": aud,
+        "iat": now,
+        "exp": now + timedelta(minutes=expires_in_minutes),
+        "preferred_username": "student1",
+        "email": "student1@openlearn.dev",
+        "realm_access": {"roles": ["student"]},
+    }
+
+    if sub is None:
+        payload.pop("sub")
+
+    if missing_claims:
+        for claim in missing_claims:
+            payload.pop(claim, None)
+
+    if extra:
+        payload.update(extra)
+
+    return jwt.encode(
+        payload,
+        private_key,
+        algorithm=algorithm,
+    )
+
+
+def test_valid_token_returns_claims(fake_jwks, rsa_keypair) -> None:
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(private_key)
+    )
+
+    assert claims["sub"] == "123e4567-e89b-12d3-a456-426614174000"
+    assert claims["iss"] == ISSUER
+    assert claims["aud"] == AUDIENCE
+    assert oidc.extract_roles(claims) == ["student"]
+
+
+def test_rejects_wrong_issuer(fake_jwks, rsa_keypair) -> None:
+    private_key, _ = rsa_keypair
+
+    with pytest.raises(ValueError, match="Invalid access token"):
+        oidc.decode_access_token(
+            _build_token(
+                private_key,
+                iss="https://evil.example/realms/openlearn",
+            )
+        )
+
+
+def test_rejects_wrong_audience(fake_jwks, rsa_keypair) -> None:
+    private_key, _ = rsa_keypair
+
+    with pytest.raises(ValueError, match="Invalid access token"):
+        oidc.decode_access_token(
+            _build_token(
+                private_key,
+                aud="some-other-client",
+            )
+        )
+
+
+def test_rejects_expired_token(fake_jwks, rsa_keypair) -> None:
+    private_key, _ = rsa_keypair
+
+    with pytest.raises(ValueError, match="Invalid access token"):
+        oidc.decode_access_token(
+            _build_token(
+                private_key,
+                expires_in_minutes=-5,
+            )
+        )
+
+
+def test_rejects_missing_subject(fake_jwks, rsa_keypair) -> None:
+    private_key, _ = rsa_keypair
+
+    with pytest.raises(ValueError, match="Invalid access token"):
+        oidc.decode_access_token(
+            _build_token(
+                private_key,
+                sub=None,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "missing_claim",
+    ["exp", "iat", "iss", "aud"],
+)
+def test_rejects_missing_required_claims(
+    fake_jwks,
+    rsa_keypair,
+    missing_claim: str,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    with pytest.raises(ValueError, match="Invalid access token"):
+        oidc.decode_access_token(
+            _build_token(
+                private_key,
+                missing_claims=[missing_claim],
+            )
+        )
+
+
+def test_rejects_unverifiable_signature(
+    fake_jwks,
+    rsa_keypair,
+    monkeypatch,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    class FailingJwksClient:
+        def get_signing_key_from_jwt(self, token):
+            raise jwt.PyJWKClientError("no key found")
+
+    monkeypatch.setattr(
+        oidc,
+        "_JWK_CLIENT",
+        FailingJwksClient(),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Could not resolve the token signing key",
+    ):
+        oidc.decode_access_token(
+            _build_token(private_key)
+        )
+
+
+def _second_private_key_pem() -> str:
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+    return private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+
+
+def test_rejects_token_signed_with_different_key(fake_jwks) -> None:
+    with pytest.raises(ValueError, match="Invalid access token"):
+        oidc.decode_access_token(
+            _build_token(_second_private_key_pem())
+        )
+
+
+def test_rejects_unsupported_algorithm(fake_jwks) -> None:
+    with pytest.raises(ValueError, match="Invalid access token"):
+        oidc.decode_access_token(
+            _build_token(
+                "s" * 32,
+                algorithm="HS256",
+            )
+        )
+
+
+def test_extract_roles_returns_empty_when_absent() -> None:
+    assert oidc.extract_roles({}) == []
+    assert oidc.extract_roles({"realm_access": {}}) == []
+
+
+def test_extract_roles_returns_empty_for_malformed_realm_access() -> None:
+    assert oidc.extract_roles({"realm_access": "nonsense"}) == []
+    assert oidc.extract_roles({"realm_access": {"roles": "student"}}) == []
+
+
+@pytest.mark.parametrize("role", ["student", "instructor", "admin"])
+def test_extract_roles_returns_each_project_role(role: str) -> None:
+    assert oidc.extract_roles({"realm_access": {"roles": [role]}}) == [role]
+
+
+def test_extract_roles_filters_non_string_roles() -> None:
+    roles = oidc.extract_roles(
+        {
+            "realm_access": {
+                "roles": ["student", 42, None, "admin", ""],
+            },
+        }
+    )
+
+    assert roles == ["student", "admin"]
+
+
+@pytest.mark.asyncio
+async def test_me_endpoint_with_valid_token(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    subject = "123e4567-e89b-12d3-a456-426614174000"
+
+    user = User(
+        keycloak_issuer=ISSUER,
+        keycloak_subject=subject,
+        email="student1@openlearn.dev",
+        settings={"theme": "dark"},
+    )
+
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(
+                "/auth/me",
+                headers={
+                    "Authorization": f"Bearer {_build_token(private_key)}"
+                },
+            )
+
+        assert response.status_code == 200
+
+        payload = response.json()
+
+        assert payload["id"] == str(user.id)
+        assert payload["email"] == "student1@openlearn.dev"
+        assert payload["settings"] == {"theme": "dark"}
+        assert payload["roles"] == ["student"]
+
+        assert payload["keycloak"]["issuer"] == ISSUER
+        assert payload["keycloak"]["subject"] == subject
+
+        assert "token" not in payload
+
+    finally:
+        app.dependency_overrides.clear()
+
+        await db_session.delete(user)
+        await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_me_endpoint_jit_creates_new_user(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    subject = "e2e-jit-0f8ad9c6-4f2a-4f3b-9d1e-2c1b3a4d5e6f"
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(
+                "/auth/me",
+                headers={
+                    "Authorization": f"Bearer {_build_token(private_key, sub=subject)}"
+                },
+            )
+
+        assert response.status_code == 200
+
+        payload = response.json()
+
+        assert payload["email"] == "student1@openlearn.dev"
+        assert payload["settings"] == {}
+        assert payload["roles"] == ["student"]
+        assert payload["keycloak"]["issuer"] == ISSUER
+        assert payload["keycloak"]["subject"] == subject
+
+        result = await db_session.execute(
+            select(User).where(User.keycloak_subject == subject)
+        )
+        saved_user = result.scalar_one()
+
+        assert saved_user is not None
+        assert saved_user.id == uuid.UUID(payload["id"])
+        assert saved_user.email == "student1@openlearn.dev"
+
+        await db_session.delete(saved_user)
+        await db_session.commit()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_auth_me_creates_or_returns_user(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    subject = "auth-me-create-or-return-subject"
+    token = _build_token(private_key, sub=subject)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            first = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            second = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+
+        first_payload = first.json()
+        second_payload = second.json()
+
+        # issuer + subject is the create-or-return key, so the repeated call
+        # resolves to the user the first call provisioned.
+        assert first_payload["id"] == second_payload["id"]
+        assert first_payload["email"] == "student1@openlearn.dev"
+        assert first_payload["keycloak"]["issuer"] == ISSUER
+        assert first_payload["keycloak"]["subject"] == subject
+
+        rows = (
+            await db_session.execute(
+                select(User).where(
+                    User.keycloak_issuer == ISSUER,
+                    User.keycloak_subject == subject,
+                )
+            )
+        ).scalars().all()
+
+        assert len(rows) == 1
+        assert rows[0].id == uuid.UUID(first_payload["id"])
+        assert rows[0].email == "student1@openlearn.dev"
+    finally:
+        app.dependency_overrides.clear()
+
+        # Remove every row for this identity so a duplicate cannot leak
+        # into later tests even when an assertion above fails.
+        result = await db_session.execute(
+            select(User).where(
+                User.keycloak_issuer == ISSUER,
+                User.keycloak_subject == subject,
+            )
+        )
+
+        for user in result.scalars().all():
+            await db_session.delete(user)
+
+        await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_auth_me_returns_400_when_email_missing(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    """A signature-valid token with no email cannot provision a user, so
+    /auth/me reports 400 instead of a 500 and creates nothing."""
+    private_key, _ = rsa_keypair
+
+    subject = "auth-me-missing-email-subject"
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        transport = ASGITransport(app=app)
+
+        token = _build_token(
+            private_key,
+            sub=subject,
+            missing_claims=["email"],
+        )
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Keycloak email is missing."
+
+        result = await db_session.execute(
+            select(User).where(User.keycloak_subject == subject)
+        )
+        assert result.scalar_one_or_none() is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_auth_me_returns_409_on_duplicate_email(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    """The token's email already belongs to a different OpenLearn user, so
+    /auth/me reports 409 rather than a 500."""
+    private_key, _ = rsa_keypair
+
+    existing_user = User(
+        keycloak_issuer=ISSUER,
+        keycloak_subject="auth-me-duplicate-email-owner-subject",
+        email="student1@openlearn.dev",
+    )
+
+    db_session.add(existing_user)
+    await db_session.commit()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        transport = ASGITransport(app=app)
+
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(
+                "/auth/me",
+                headers={
+                    "Authorization": f"Bearer {_build_token(private_key)}"
+                },
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "A different OpenLearn user already uses this email address."
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+        await db_session.delete(existing_user)
+        await db_session.commit()
+
+
+def test_student_role_is_authorized(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["student"],
+                },
+            },
+        )
+    )
+
+    result = require_student(claims)
+
+    assert result["sub"] == "123e4567-e89b-12d3-a456-426614174000"
+
+
+def test_student_role_is_forbidden_from_instructor(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["student"],
+                },
+            },
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_instructor(claims)
+
+    assert exc_info.value.status_code == 403
+
+
+def test_instructor_role_is_authorized(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["instructor"],
+                },
+            },
+        )
+    )
+
+    result = require_instructor(claims)
+
+    assert result["sub"] == "123e4567-e89b-12d3-a456-426614174000"
+
+
+def test_admin_role_is_authorized(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["admin"],
+                },
+            },
+        )
+    )
+
+    result = require_admin(claims)
+
+    assert result["sub"] == "123e4567-e89b-12d3-a456-426614174000"
+
+
+def test_missing_role_is_forbidden(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": [],
+                },
+            },
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_student(claims)
+
+    assert exc_info.value.status_code == 403
+
+
+def test_absent_role_claim_is_forbidden_without_crashing(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """A valid token with no realm_access claim at all still resolves to 403."""
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(private_key, missing_claims=["realm_access"])
+    )
+
+    assert oidc.extract_roles(claims) == []
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_admin(claims)
+
+    assert exc_info.value.status_code == 403
+
+
+def test_multi_role_token_satisfies_each_matching_guard(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """Keycloak composite roles yield multiple entries; membership is per-role."""
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["student", "admin"],
+                },
+            },
+        )
+    )
+
+    assert require_student(claims)["sub"] == "123e4567-e89b-12d3-a456-426614174000"
+    assert require_admin(claims)["sub"] == "123e4567-e89b-12d3-a456-426614174000"
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_instructor(claims)
+
+    assert exc_info.value.status_code == 403
+
+
+def test_email_does_not_grant_authorization(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """Email is never an authorization identity; only token roles decide."""
+    private_key, _ = rsa_keypair
+
+    claims = oidc.decode_access_token(
+        _build_token(
+            private_key,
+            extra={
+                "email": "admin@openlearn.dev",
+                "realm_access": {"roles": ["student"]},
+            },
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_admin(claims)
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_forged_role_claims_with_invalid_signature_are_rejected(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """Roles asserted in a token that fails signature verification yield 401."""
+    _, public_pem = rsa_keypair
+
+    forger_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    ).private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+
+    forged_token = _build_token(
+        forger_key,
+        extra={
+            "realm_access": {"roles": ["admin", "instructor"]},
+        },
+    )
+
+    from fastapi import FastAPI
+
+    test_app = FastAPI()
+
+    @test_app.get("/admin")
+    async def admin_endpoint(
+        claims: dict = Depends(require_admin),
+    ):
+        return {"sub": claims["sub"]}
+
+    transport = ASGITransport(app=test_app)
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            "/admin",
+            headers={"Authorization": f"Bearer {forged_token}"},
+        )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_authorization_is_independent_of_database_state(
+    fake_jwks,
+    rsa_keypair,
+    db_session,
+) -> None:
+    """Token roles alone decide access: no users row is required or consulted,
+    and a local users row never grants a role the token does not carry."""
+    private_key, _ = rsa_keypair
+
+    subject = "rbac-db-independence-subject"
+
+    from fastapi import FastAPI
+
+    test_app = FastAPI()
+
+    @test_app.get("/admin")
+    async def admin_endpoint(
+        claims: dict = Depends(require_admin),
+    ):
+        return {"sub": claims["sub"]}
+
+    transport = ASGITransport(app=test_app)
+
+    # No local users row exists for this subject at all: an admin-role token
+    # is still authorized (RBAC never queries PostgreSQL).
+    admin_token = _build_token(
+        private_key,
+        sub=subject,
+        extra={"realm_access": {"roles": ["admin"]}},
+    )
+
+    student_token = _build_token(
+        private_key,
+        sub=subject,
+        extra={"realm_access": {"roles": ["student"]}},
+    )
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            "/admin",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 200
+
+        # Same subject, now WITH a local users row, but no admin role in the
+        # token: still forbidden. Database existence grants nothing.
+        user = User(
+            keycloak_issuer=ISSUER,
+            keycloak_subject=subject,
+            email="rbac-db-independence@example.com",
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        try:
+            response = await client.get(
+                "/admin",
+                headers={"Authorization": f"Bearer {student_token}"},
+            )
+            assert response.status_code == 403
+        finally:
+            await db_session.delete(user)
+            await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_request_body_cannot_override_token_roles(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    """Role-looking fields in the request body are ignored by RBAC."""
+    private_key, _ = rsa_keypair
+
+    from fastapi import FastAPI
+
+    test_app = FastAPI()
+
+    @test_app.post("/instructor")
+    async def instructor_endpoint(
+        payload: dict,
+        claims: dict = Depends(require_instructor),
+    ):
+        return {"sub": claims["sub"]}
+
+    transport = ASGITransport(app=test_app)
+
+    student_token = _build_token(
+        private_key,
+        extra={"realm_access": {"roles": ["student"]}},
+    )
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/instructor",
+            json={"roles": ["instructor", "admin"]},
+            headers={"Authorization": f"Bearer {student_token}"},
+        )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_rbac_http_boundary(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    private_key, _ = rsa_keypair
+
+    from fastapi import FastAPI
+
+    test_app = FastAPI()
+
+    @test_app.get("/student")
+    async def student_endpoint(
+        claims: dict = Depends(get_current_oidc_claims),
+    ):
+        return {"sub": claims["sub"]}
+
+    @test_app.get("/instructor")
+    async def instructor_endpoint(
+        claims: dict = Depends(require_instructor),
+    ):
+        return {"sub": claims["sub"]}
+
+    @test_app.get("/admin")
+    async def admin_endpoint(
+        claims: dict = Depends(require_admin),
+    ):
+        return {"sub": claims["sub"]}
+
+    transport = ASGITransport(app=test_app)
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/student")
+        assert response.status_code == 401
+
+        student_token = _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["student"],
+                },
+            },
+        )
+
+        response = await client.get(
+            "/instructor",
+            headers={"Authorization": f"Bearer {student_token}"},
+        )
+        assert response.status_code == 403
+
+        instructor_token = _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["instructor"],
+                },
+            },
+        )
+
+        response = await client.get(
+            "/instructor",
+            headers={"Authorization": f"Bearer {instructor_token}"},
+        )
+        assert response.status_code == 200
+
+        admin_token = _build_token(
+            private_key,
+            extra={
+                "realm_access": {
+                    "roles": ["admin"],
+                },
+            },
+        )
+
+        response = await client.get(
+            "/admin",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_malformed_bearer_credentials_return_401(
+    fake_jwks,
+    rsa_keypair,
+) -> None:
+    from fastapi import FastAPI
+
+    test_app = FastAPI()
+
+    @test_app.get("/ping")
+    async def ping_endpoint(
+        claims: dict = Depends(get_current_oidc_claims),
+    ):
+        return {"sub": claims["sub"]}
+
+    transport = ASGITransport(app=test_app)
+
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        malformed_headers = [
+            {"Authorization": "Bearer not-a-jwt"},
+            {"Authorization": "Basic dXNlcjpwYXNz"},
+            {"Authorization": "Bearer"},
+        ]
+
+        for headers in malformed_headers:
+            response = await client.get("/ping", headers=headers)
+            assert response.status_code == 401
+            assert response.headers.get("www-authenticate") == "Bearer"
+            assert response.json()["detail"] == "Not authenticated"

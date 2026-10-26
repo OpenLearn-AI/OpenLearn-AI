@@ -1,0 +1,834 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (lint + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Lint with ruff
+        run: python -m ruff check .
+      - name: Run pytest
+        run: python -m pytest
+
+  frontend:
+    name: Frontend (lint + vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check if frontend exists
+        id: check_frontend
+        run: |
+          if [ -f "frontend/package.json" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check if frontend has a test script
+        id: check_test_script
+        if: steps.check_frontend.outputs.exists == 'true'
+        working-directory: frontend
+        run: |
+          if node -e "const s=require('./package.json').scripts; process.exit(s && s.test ? 0 : 1)"; then
+            echo "has_test=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_test=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up Node
+        if: steps.check_frontend.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        if: steps.check_frontend.outputs.exists == 'true'
+        working-directory: frontend
+        run: npm ci
+      - name: Lint
+        if: steps.check_frontend.outputs.exists == 'true'
+        working-directory: frontend
+        run: npm run lint
+      - name: Typecheck
+        if: steps.check_frontend.outputs.exists == 'true'
+        working-directory: frontend
+        run: npx tsc --noEmit
+      - name: Build
+        if: steps.check_frontend.outputs.exists == 'true'
+        working-directory: frontend
+        run: npm run build
+      - name: Run Vitest
+        if: steps.check_frontend.outputs.exists == 'true' && steps.check_test_script.outputs.has_test == 'true'
+        working-directory: frontend
+        run: npm run test -- --run
+      - name: Skip test notice
+        if: steps.check_frontend.outputs.exists == 'true' && steps.check_test_script.outputs.has_test == 'false'
+        run: echo "frontend/package.json has no 'test' script yet — skipping Vitest step (Pod C hasn't added tests)."
+      - name: Skip notice
+        if: steps.check_frontend.outputs.exists == 'false'
+        run: echo "No frontend/ folder yet — skipping frontend checks (Pod C hasn't scaffolded it)."
+
+  eval:
+    name: Run Eval Harness
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run Dummy Eval
+        run: python -m app.eval run dummy --dataset tests/data/dummy.json
+# OpenLearn AI — Design Tokens
+
+## 1. Overview
+
+This document defines the shared design tokens for the OpenLearn AI frontend.
+
+The design system is implemented using:
+
+* Tailwind CSS 4
+* CSS custom properties
+* shadcn/ui
+* Light and dark themes
+* OKLCH color values
+
+These tokens are the shared UI contract for all future frontend work.
+
+---
+
+## 2. Color System
+
+### Core Colors
+
+| Token                | Purpose                                 |
+| -------------------- | --------------------------------------- |
+| `background`         | Main application background             |
+| `foreground`         | Main application text                   |
+| `card`               | Card and elevated surface background    |
+| `card-foreground`    | Text displayed on cards                 |
+| `popover`            | Popover and floating surface background |
+| `popover-foreground` | Text displayed in popovers              |
+
+### Brand Colors
+
+| Token                  | Purpose                                    |
+| ---------------------- | ------------------------------------------ |
+| `primary`              | Main brand and primary actions             |
+| `primary-foreground`   | Content displayed on primary backgrounds   |
+| `secondary`            | Secondary actions and surfaces             |
+| `secondary-foreground` | Content displayed on secondary backgrounds |
+| `accent`               | Highlighted or emphasized UI               |
+| `accent-foreground`    | Content displayed on accent backgrounds    |
+
+### Semantic Colors
+
+| Token                | Purpose                                   |
+| -------------------- | ----------------------------------------- |
+| `success`            | Successful operations and positive states |
+| `success-foreground` | Content displayed on success backgrounds  |
+| `warning`            | Warnings and attention states             |
+| `warning-foreground` | Content displayed on warning backgrounds  |
+| `error`              | Errors and destructive states             |
+| `error-foreground`   | Content displayed on error backgrounds    |
+| `info`               | Informational states                      |
+| `info-foreground`    | Content displayed on info backgrounds     |
+
+The existing shadcn `destructive` token maps to the `error` semantic token.
+
+```css
+--destructive: var(--error);
+```
+
+### Utility Colors
+
+| Token              | Purpose                   |
+| ------------------ | ------------------------- |
+| `muted`            | Subtle backgrounds        |
+| `muted-foreground` | Secondary or subdued text |
+| `border`           | Default borders           |
+| `input`            | Input borders             |
+| `ring`             | Focus indicators          |
+
+---
+
+## 3. Typography
+
+The primary font is Geist Sans.
+
+The monospace font is Geist Mono.
+
+### Typography Scale
+
+| Token       |     Size | Line Height |
+| ----------- | -------: | ----------: |
+| `text-xs`   |  0.75rem |        1rem |
+| `text-sm`   | 0.875rem |     1.25rem |
+| `text-base` |     1rem |      1.5rem |
+| `text-lg`   | 1.125rem |     1.75rem |
+| `text-xl`   |  1.25rem |     1.75rem |
+| `text-2xl`  |   1.5rem |        2rem |
+| `text-3xl`  | 1.875rem |     2.25rem |
+| `text-4xl`  |  2.25rem |      2.5rem |
+| `text-5xl`  |     3rem |           1 |
+
+Usage should follow the semantic importance of the content rather than using large sizes purely for visual emphasis.
+
+---
+
+## 4. Spacing
+
+The spacing system follows a consistent 4px base unit.
+
+| Token        |   Value |
+| ------------ | ------: |
+| `spacing-0`  |       0 |
+| `spacing-1`  | 0.25rem |
+| `spacing-2`  |  0.5rem |
+| `spacing-3`  | 0.75rem |
+| `spacing-4`  |    1rem |
+| `spacing-5`  | 1.25rem |
+| `spacing-6`  |  1.5rem |
+| `spacing-8`  |    2rem |
+| `spacing-10` |  2.5rem |
+| `spacing-12` |    3rem |
+| `spacing-16` |    4rem |
+| `spacing-20` |    5rem |
+| `spacing-24` |    6rem |
+
+Spacing should be selected from this scale whenever possible.
+
+---
+
+## 5. Border Radius
+
+The base radius is:
+
+```css
+--radius: 0.625rem;
+```
+
+Derived radius tokens are:
+
+| Token        | Value                       |
+| ------------ | --------------------------- |
+| `radius-sm`  | `calc(var(--radius) * 0.6)` |
+| `radius-md`  | `calc(var(--radius) * 0.8)` |
+| `radius-lg`  | `var(--radius)`             |
+| `radius-xl`  | `calc(var(--radius) * 1.4)` |
+| `radius-2xl` | `calc(var(--radius) * 1.8)` |
+| `radius-3xl` | `calc(var(--radius) * 2.2)` |
+| `radius-4xl` | `calc(var(--radius) * 2.6)` |
+
+---
+
+## 6. Shadows
+
+The shared shadow scale is:
+
+| Token       | Usage                                |
+| ----------- | ------------------------------------ |
+| `shadow-sm` | Subtle elevation                     |
+| `shadow-md` | Cards and standard elevated surfaces |
+| `shadow-lg` | Larger elevated components           |
+| `shadow-xl` | High-emphasis floating elements      |
+
+Components should avoid arbitrary shadow values unless a specific design requirement exists.
+
+---
+
+## 7. Responsive Breakpoints
+
+The frontend uses the following responsive breakpoints:
+
+| Token |  Width |
+| ----- | -----: |
+| `sm`  |  640px |
+| `md`  |  768px |
+| `lg`  | 1024px |
+| `xl`  | 1280px |
+| `2xl` | 1536px |
+
+The default approach is mobile-first responsive design.
+
+Example:
+
+```tsx
+<div className="text-sm md:text-base lg:text-lg">
+  Responsive content
+</div>
+```
+
+---
+
+## 8. Light Theme
+
+The default theme is the light theme.
+
+Light mode uses:
+
+* A near-white application background
+* White surfaces
+* Indigo as the primary brand color
+* Neutral secondary and muted surfaces
+* Semantic success, warning, error, and info colors
+
+The primary color is based on an indigo hue.
+
+---
+
+## 9. Dark Theme
+
+Dark mode is activated using the `.dark` class.
+
+Dark mode provides:
+
+* Dark application backgrounds
+* Dark elevated surfaces
+* Adjusted primary colors for visibility
+* Softer borders
+* Higher-contrast foreground colors
+* Adjusted semantic colors for dark backgrounds
+
+The same semantic token names are used in both themes.
+
+For example:
+
+```css
+--primary
+--success
+--warning
+--error
+--info
+```
+
+Components should therefore never need to know whether the application is currently using light or dark mode.
+
+---
+
+## 10. Tailwind CSS 4 Integration
+
+The design tokens are exposed to Tailwind CSS 4 through the `@theme inline` block in:
+
+```text
+frontend/app/globals.css
+```
+
+Example:
+
+```css
+@theme inline {
+  --color-primary: var(--primary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+}
+```
+
+This allows components to use semantic utility classes such as:
+
+```tsx
+bg-primary
+text-primary-foreground
+bg-success
+text-success-foreground
+bg-warning
+text-warning-foreground
+bg-error
+text-error-foreground
+bg-info
+text-info-foreground
+```
+
+---
+
+## 11. Theme Usage Rules
+
+### Do
+
+* Use semantic design tokens.
+* Use Tailwind utility classes connected to the tokens.
+* Use the same token names across light and dark themes.
+* Prefer existing spacing, radius, and shadow values.
+* Use shadcn/ui components where applicable.
+* Keep component styling consistent with the design system.
+
+### Don't
+
+* Hard-code brand colors inside components.
+* Introduce arbitrary spacing values without a clear reason.
+* Create separate component colors for light and dark mode.
+* Override shadcn semantic tokens unnecessarily.
+* Introduce new design tokens without documenting them.
+
+---
+
+## 12. Source of Truth
+
+The primary implementation is:
+
+```text
+frontend/app/globals.css
+```
+
+The documentation is:
+
+```text
+docs/design-tokens.md
+```
+
+Any future changes to the design system should update both the implementation and this documentation.
+
+---
+
+## 13. Review Status
+
+Status: **Week 2 — Design Token Implementation**
+
+The tokens are implemented using Tailwind CSS 4 and CSS variables.
+
+The frontend production build has been verified successfully after the token implementation.
+# Environments
+
+هذا المستند هو المرجع الوحيد لروابط وحالة كل بيئة تشغيل في مشروع OpenLearn AI.
+
+## نظرة عامة
+
+| البيئة | الغرض | تعمل من | الحالة |
+|---|---|---|---|
+| `dev` | بيئة تطوير محلية على جهاز كل مطور | `docker compose -f infra/docker-compose.dev.yml up` | ✅ شغالة ومتحقق منها |
+| `staging` | بيئة مشتركة لعروض الجمعة والاختبار المتكامل | كل push على `main` (لسه مش متصلة) | ⏳ قيد التخطيط |
+| `prod` | بيئة الإنتاج النهائية | tagged releases فقط (لسه مش متصلة) | ⏳ قيد التخطيط |
+
+## `dev` — التفاصيل
+
+- **الطريقة**: Docker Compose، يشتغل بالكامل محليًا، مفيش أي حساب سحابي مطلوب.
+- **الملفات**:
+  - `infra/docker-compose.dev.yml` — يشغّل الـ backend + قاعدة بيانات PostgreSQL
+  - `backend/Dockerfile` — يبني image الـ backend
+- **كيفية التشغيل**:
+```bash
+  cd infra
+  docker compose -f docker-compose.dev.yml up --build
+```
+- **الروابط المحلية**:
+  - Backend: `http://localhost:8000`
+  - Database: `localhost:5432` (user: `openlearn`, db: `openlearn_dev`)
+- **تم التحقق**: 9 أغسطس 2026 — تم إرسال طلب GET فعلي واستقبال رد `200 OK` مع `{"Hello":"World"}`.
+
+## `staging` و `prod` — قيد الانتظار
+
+القرارات النهائية (المزود السحابي، الميزانية، الأولوية الزمنية) لسه معلقة، في انتظار اجتماع محمد صيام (Team Lead).
+
+## الوصول والأسرار (Secrets)
+
+- ممنوع رفع أي secrets حقيقية على Git — `.env` مضاف في `.gitignore`.
+- أسرار `staging`/`prod` (لما تتحدد) هتتخزن في GitHub Environments، مش في الكود.
+
+## المسؤول
+
+Pod D (هشام) — التوثيق والتحديث المستمر مع أي تغيير في البنية التحتية.
+# OpenLearn AI — MVP Definition
+
+| Field | Value |
+|---|---|
+| **Status** | Draft — pending Pod Leads + Advisor approval |
+| **Source of Truth** | [MASTER_ROADMAP.md](../planning/Roadmap/MASTER_ROADMAP.md) (SSOT) |
+| **Related Versions** | v0.4 Thin MVP (W16) · v0.5 Full MVP (W20) |
+| **Owner** | Docs Owner (rotating) |
+| **Last Updated** | 2026-08-20 |
+
+> **Rule:** This document does **not** introduce any new requirements.  
+> It only clarifies and organizes what is already defined in the Master Roadmap.
+
+---
+
+## 1. What is the MVP?
+
+OpenLearn AI has **two staged MVP targets**:
+
+| Version | Target Date | Name | Goal |
+|---------|-------------|------|------|
+| **v0.4** | 21 Nov 2026 (W16) | **Thin MVP** | Prove the AI pipeline works end-to-end |
+| **v0.5** | 19 Dec 2026 (W20) | **Full MVP + Tier 1 Freeze** | Deliver a usable student flow with auth, courses, and upload |
+
+The **critical milestone** is the **v0.4 Thin MVP**.  
+If it ships on time, the rest of the plan has enough slack. If it slips, every subsequent date is at risk.
+
+---
+
+## 2. What the MVP Contains
+
+### v0.4 — Thin MVP (Must Ship by W16)
+
+- One **pre-loaded PDF** (no upload UI required)
+- Simple **chat UI** (single chat box)
+- **No authentication**
+- End-to-end AI pipeline:
+  - OCR (or pre-extracted text)
+  - Chunking
+  - Embeddings
+  - Vector retrieval
+  - RAG answer generation
+- Answers include **citations** (source references)
+
+### v0.5 — Full MVP (Target W20)
+
+Everything in v0.4 **plus**:
+
+- Authentication (student / instructor roles)
+- Course management (basic CRUD)
+- File upload (PDF + images)
+- Full student flow: upload → process → chat with cited answers
+- RAG chat with streaming responses and proper citation rendering
+
+---
+
+## 3. Basic Student Flow (MVP)
+
+### Thin MVP (v0.4)
+1. Student opens the chat page.
+2. The system already has one pre-loaded educational PDF.
+3. Student types a question.
+4. System returns an answer grounded in the PDF with citations.
+
+### Full MVP (v0.5)
+1. Student signs up / logs in.
+2. Student creates or joins a course.
+3. Student uploads a PDF (or image).
+4. System processes the document (OCR → chunk → embed).
+5. Student asks questions in the chat.
+6. System answers with citations from the uploaded material.
+
+---
+
+## 4. What the System Can Do in the MVP
+
+| Capability | Thin MVP (v0.4) | Full MVP (v0.5) |
+|------------|------------------|------------------|
+| Pre-loaded document | ✅ | ✅ |
+| Chat with cited answers | ✅ | ✅ |
+| OCR / text extraction | ✅ (pipeline proven) | ✅ |
+| Embeddings + vector search | ✅ | ✅ |
+| RAG generation | ✅ | ✅ |
+| Authentication | ❌ | ✅ |
+| Course management | ❌ | ✅ |
+| User upload | ❌ | ✅ |
+| Streaming responses | Preferred | ✅ |
+| Citation rendering | ✅ | ✅ |
+
+---
+
+## 5. What is Explicitly **Not** in the MVP
+
+The following are **out of scope** for both Thin MVP and Full MVP (they belong to later versions or are permanently out of scope for v1.0):
+
+- Knowledge Graph construction
+- Concept extraction & prerequisite mapping
+- Student cognitive / mastery model
+- Adaptive recommendations / next-best-concept
+- Quiz generation
+- Spaced repetition scheduling
+- Learning analytics dashboard
+- Admin dashboard (beyond basic health)
+- Mobile app / mobile-first design
+- Multi-tenant / school isolation
+- Real-time collaboration
+- SSO / SAML
+- Offline mode
+- Cross-course queries
+- Multi-language UI (beyond English + Arabic text support in content)
+
+See the full signed **Out-of-Scope** list in the Master Roadmap.
+
+---
+
+## 6. Acceptance Criteria
+
+### Thin MVP (v0.4) — Must Pass
+
+- [ ] A single pre-loaded PDF is available in the system.
+- [ ] User can open a chat interface (no login required).
+- [ ] User can ask a natural-language question about the PDF.
+- [ ] System returns an answer that is grounded in the document.
+- [ ] Answer includes at least one citation (page / chunk reference).
+- [ ] The full pipeline (text → chunk → embed → retrieve → generate) runs without manual intervention.
+- [ ] Demo works on staging environment.
+
+### Full MVP (v0.5) — Must Pass
+
+All Thin MVP criteria **plus**:
+
+- [ ] User can register and log in.
+- [ ] Authenticated user can create / join a course.
+- [ ] User can upload a PDF (or image).
+- [ ] Uploaded document is processed automatically (OCR → chunk → embed).
+- [ ] User can chat with the uploaded document and receive cited answers.
+- [ ] End-to-end student flow works without developer intervention.
+- [ ] Basic role separation (student vs instructor) exists.
+
+---
+
+## 7. Why This Definition Matters
+
+- **v0.4 Thin MVP** is the earliest possible proof that the hardest technical path (OCR → RAG) actually works.
+- Shipping it six weeks before the Full MVP gives the team time to fix integration problems while they are still cheap.
+- Everything after W16 (Knowledge Graph, Cognitive Model, Adaptive Engine, Analytics) depends on a working RAG foundation.
+
+---
+
+## 8. Approval
+
+This definition must be reviewed and approved by:
+
+- [ ] Backend Pod Lead
+- [ ] AI/ML Pod Lead
+- [ ] Frontend Pod Lead
+- [ ] DevOps/QA Pod Lead
+- [ ] Advisor
+
+Once approved, this file becomes the working definition of “MVP” for the rest of the project.
+
+---
+
+*Derived strictly from MASTER_ROADMAP.md — no new requirements added.*
+# Documentation Map & Authority
+
+One authoritative source per topic. When documents conflict, this hierarchy
+decides (decision recorded in [ADR-0002](adr/0002-documentation-authority.md)):
+
+1. [`ADR`](adr/) — binding architecture decisions. **ADRs override every other
+   document**, including older parts of the specification.
+2. [`README.md`](../README.md) — repository entry point and developer orientation.
+3. [`AI_CONTEXT.md`](../AI_CONTEXT.md) — current repository state (AI/contributor context).
+4. [`design/OpenLearn_AI_v4_Technical_Specification.md`](design/OpenLearn_AI_v4_Technical_Specification.md)
+   — product & technical design authority.
+5. [`planning/Roadmap/44-WEEK-EXECUTION-PLAN.md`](../planning/Roadmap/44-WEEK-EXECUTION-PLAN.md)
+   — schedule authority (what ships when). The
+   [Master Roadmap](../planning/Roadmap/MASTER_ROADMAP.md) is strategy context;
+   [ROADMAP_GUIDE_AR.md](../planning/Roadmap/ROADMAP_GUIDE_AR.md) is an Arabic
+   reading companion (non-authoritative).
+6. [`../experiments/OCR/OCR_BENCHMARKING_HANDBOOK.md`](../experiments/OCR/OCR_BENCHMARKING_HANDBOOK.md)
+   — scientific methodology authority for OCR evaluation.
+7. [Research](research/) — supporting research. **Informs decisions; never
+   implementation authority.** Raw/unprocessed research input lives in
+   [research/raw/](research/raw/) and is explicitly non-authoritative.
+
+## Architecture & design
+
+| Topic | Authority |
+|---|---|
+| System architecture overview | [`architecture/SystemArchitecture.md`](architecture/SystemArchitecture.md) |
+| Data flow overview | [`architecture/DataFlow.md`](architecture/DataFlow.md) |
+| Deployment modes & hardware profiles | [`design/OpenLearn_AI_System_Requirements_and_Deployment_Profiles.md`](design/OpenLearn_AI_System_Requirements_and_Deployment_Profiles.md) (engineering) · user-facing edition: [`design/OpenLearn_AI_User_System_Requirements_Guide.md`](design/OpenLearn_AI_User_System_Requirements_Guide.md) |
+| Coding standards, git workflow, PR checklist | [`design/DeveloperGuide.md`](design/DeveloperGuide.md) |
+| Repository history & decisions record | [`../CHANGELOG.md`](../CHANGELOG.md) |
+
+## Planning
+
+| Topic | Authority |
+|---|---|
+| Schedule (week-by-week) | [`../planning/Roadmap/44-WEEK-EXECUTION-PLAN.md`](../planning/Roadmap/44-WEEK-EXECUTION-PLAN.md) |
+| Sprint records | [`../planning/Sprint-*.md`](../planning/) |
+| Team structure & agreements | [`../planning/team-roles/TEAM_HANDBOOK_v1.1.md`](../planning/team-roles/TEAM_HANDBOOK_v1.1.md) (roadmap wins on conflict, per its own declaration) |
+
+## Archive
+
+[`archive/`](archive/) — historical design-phase artifacts, kept for
+reference, explicitly non-authoritative.
+
+---
+
+### Known deferred decisions
+
+- **Vector store default (ChromaDB vs Qdrant):** contradiction between the
+  Tech Spec and the Master Roadmap is *not* silently resolved — see
+  [ADR-0004](adr/0004-vector-store-deferred.md) for the deferral rationale,
+  evidence criteria, and decision deadline.
+# Repository Foundation Audit
+
+> **Status:** Accepted baseline for the foundation cleanup (2026-08-16, Week 2).
+> Evidence: every claim below was verified directly against the working tree at
+> commit `8ea929c` plus the uncommitted foundation changes (P0 dependency fixes
+> and the OCR benchmark scaffold described in §10).
+> This document is a point-in-time record; it is not a living status page. For
+> current state see `AI_CONTEXT.md`.
+
+---
+
+## 1. Current repository state (summary)
+
+- **87 tracked files.** Product code: an 8-line FastAPI hello-world
+  (`backend/app/main.py`), one smoke test, and a default Next.js 16 + shadcn
+  scaffold. Everything else is documentation (~70%), planning, research dumps,
+  or OCR experiment material.
+- **19 tracked files are 0 bytes** (18 of them placeholders; 1 is a legitimate
+  Python package marker `backend/app/__init__.py`).
+- **Working infrastructure:** `infra/docker-compose.dev.yml` (backend + unused
+  postgres), `backend/Dockerfile`, `.github/workflows/ci.yml` (2 jobs),
+  dev deps now clean (§6).
+- **Real engineering assets:** `experiments/OCR/OCR_BENCHMARKING_HANDBOOK.md`
+  (1,545-line phased OCR evaluation methodology), PaddleOCR 3.x exploratory
+  notebook (English + Arabic + PDF verified working), and — as of the
+  foundation work — `experiments/OCR/ocr-benchmark/` (pinned, dependency-free
+  scaffold with 4-document pilot dataset, manifest, provenance record).
+
+## 2. Major structural problems
+
+1. **Placeholder files masquerading as documentation.** All five
+   `docs/architecture/*.md`, six of seven `docs/research/*.md`,
+   `docs/design/{Scope,Vision}.md`, root `CHANGELOG.md`, `CONTRIBUTING.md`,
+   `CODE_OF_CONDUCT.md`, and `planning/Sprint-{01,02}.md` are 0 bytes while
+   several are linked from `README.md` as authoritative.
+2. **README describes an aspirational repo, not the real one.** Its "Repository
+   layout" block lists `services/`, `models/`, `infrastructure/`, `datasets/` —
+   none exist (actual: `backend/`, `frontend/`, `infra/`, `experiments/`,
+   `docs/`, `planning/`, `presentations/`). Five links point into a
+   nonexistent `docs/project/` tree.
+3. **A scaffolding script fights the decided structure.**
+   `scripts/setup_project_structure.sh` re-creates `infrastructure/`,
+   `services/` (×9), `models/`, `datasets/`, `assets/` and the empty
+   placeholder files if ever re-run — directly contradicting the real layout
+   and the modular-monolith decision.
+4. **Raw AI research dumps live inside engineering docs.**
+   `docs/ai-reports/` (~600 KB of Perplexity/Grok transcripts) and a 167 KB
+   generated `docs/architecture/OpenLearn_AI_SaaS_Deployment_Blueprint.html`
+   sit beside authoritative specifications with nothing marking them as
+   non-authoritative.
+
+## 3. Duplicated / conflicting sources of truth
+
+| Topic | Competing sources | Status after cleanup |
+|---|---|---|
+| Vector store default | Tech Spec §10.3 (ChromaDB) vs Master Roadmap (Qdrant) | Contradiction preserved, decision **deferred** with evidence criteria → `docs/adr/0004` |
+| Schedule authority | `MASTER_ROADMAP.md` (134 KB) vs `44-WEEK-EXECUTION-PLAN.md` (615 KB) vs `ROADMAP_GUIDE_AR.md` (150 KB) | Hierarchy declared in `docs/README.md`: execution plan = schedule SSOT; master roadmap = strategy; AR guide = reading companion |
+| Requirements docs | `OpenLearn_AI_System_Requirements_and_Deployment_Profiles.md` vs `OpenLearn_AI_User_System_Requirements_Guide.md` | Both retained; authority declared (deployment profiles = engineering authority, user guide = derived user-facing text) in `docs/README.md` |
+| ADR location | DeveloperGuide says `docs/architecture/ADR/`; cleanup uses `docs/adr/` | `docs/adr/` is canonical; DeveloperGuide reference updated |
+| OCR engine version | Spec stack table "PaddleOCR v4" vs notebook running PP-OCRv5 models | Noted in ADR-0003 context; spec text unchanged (stale line, low risk) |
+
+## 4. Empty placeholders (disposition)
+
+| File | Disposition |
+|---|---|
+| `docs/architecture/SystemArchitecture.md`, `DataFlow.md` | **FILL** — short, accurate content (they are README-linked) |
+| `docs/architecture/{OfflineMode,HybridArchitecture,CloudMode}.md` | **DELETE** — empty; content already lives in Tech Spec; README links repaired |
+| `docs/research/{RAG,AdaptiveLearning,StudentModel,ModelEvaluation,LiteratureReview,CompetitorAnalysis}.md` | **DELETE** — empty stubs; `docs/research/README.md` now indexes real research (incl. raw archive) |
+| `docs/design/{Scope,Vision}.md` | **DELETE** — empty; vision/scope content lives in the Tech Spec; README links repaired |
+| `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` | **FILL** — minimal real content (all README-linked) |
+| `planning/Sprint-01.md` | **FILL** — evidence-based retrospective from git history |
+| `planning/Sprint-02.md` | **FILL** — actual current sprint scope |
+| `backend/app/__init__.py` | **KEEP** — legitimate package marker |
+
+## 5. Dead / misleading artifacts
+
+- `scripts/setup_project_structure.sh` — **DELETE** (superseded; contradicts
+  decided layout; re-running it reintroduces the placeholder mess).
+- `docs/architecture/OpenLearn_AI_SaaS_Deployment_Blueprint.html` — **ARCHIVE**
+  to `docs/archive/` (design-phase generated artifact).
+- `docs/ai-reports/**` — **ARCHIVE** to `docs/research/raw/` (valuable raw
+  research, explicitly non-authoritative).
+- `experiments/prototypes/*.html`, `presentations/demo/*.html` — **KEEP in
+  place** (correctly filed as experiments/presentations; no action).
+- Stale statements inside `AI_CONTEXT.md` (claims "frontend/ 100% empty", "no
+  CI", "17+ empty files" — all outdated) — **MODIFY** (status sections refreshed).
+
+## 6. Dependency problems (and resolutions)
+
+- `backend/requirements.txt` was a 53-line `pip freeze` (jax, jupyter stack,
+  debugpy, sounddevice, duplicate OpenCV) with zero domain relevance.
+  **Resolved:** curated to `fastapi==0.138.1`, `uvicorn==0.49.0`.
+- `backend/requirements-dev.txt` contained `httpx2` **unpinned**.
+  Investigation result: **not a typo** — starlette 1.6's TestClient requires
+  the `httpx2` package line (verified: installing it removes the deprecation
+  warning; tests pass with httpx2 alone). **Resolved:** `httpx2==2.10.0`.
+- OCR experiments had **no pinned environment at all** (PaddleOCR version
+  recorded nowhere). **Resolved:** `experiments/OCR/ocr-benchmark/` is a
+  pinned uv project (runtime deps intentionally empty at foundation stage).
+- Dockerfile installs only runtime requirements — consistent post-cleanup.
+
+## 7. CI problems
+
+- Backend job: install → `ruff check` → `pytest`. **Now valid** (deps fixed);
+  verified locally in a clean venv.
+- Frontend job: lint only; **no typecheck, no production build** — a green
+  check did not prove the app compiles. **Resolved:** `tsc --noEmit` +
+  `npm run build` steps added (executed on GitHub runners; this local
+  environment has no Node, see §12).
+- No silent-skips or `|| true` introduced; the existing Vitest skip is an
+  explicit, documented conditional (kept).
+
+## 8. Architecture contradictions & decisions
+
+See `docs/adr/`: 0001 modular monolith (decided), 0002 documentation authority
+(decided), 0003 OCR benchmark location/responsibility (decided), 0004 vector
+store (deferred with explicit evidence criteria and a decision deadline).
+
+## 9. Reproducibility & scientific problems
+
+- Notebook hardcoded `/run/media/sadin/...` paths — **resolved** (repo-relative
+  `../benchmarks/`; outputs kept as historical logs).
+- No ground truth exists; none fabricated. Annotation guideline drafted
+  (`experiments/OCR/ocr-benchmark/docs/annotation-guidelines.md`, DRAFT).
+- Data provenance: all 4 pilot documents marked rights-**UNKNOWN**
+  (`experiments/OCR/ocr-benchmark/docs/provenance.md`); `OL-C-004` is a named
+  lecturer's material and needs permission or replacement (**human decision**).
+- Metrics not yet implemented (deliberate; next task) — no scores exist.
+
+## 10. Cleanup plan executed in this task
+
+Phases: (1) structure cleanup — archive moves, placeholder
+fill/delete, scaffolder deletion; (2) documentation authority — `docs/README.md`
+hierarchy, README link repairs, AI_CONTEXT refresh, sprint records;
+(3) ADRs 0001–0004; (4) dependency verification (done in the P0 task);
+(5) CI repair (frontend typecheck + build); (6–7 foundations) benchmark
+`results/` directory, manifest `source` field, annotation guideline draft.
+Metrics/engines/ground-truth transcription intentionally **not** implemented
+here (see ADR-0003 sequencing: GT → metrics → one engine → validate harness).
+
+## 11. Files requiring human decision
+
+1. `OL-C-004` (`Data+Structre+lect1.pdf`): obtain the lecturer's permission or
+   replace the document. Blocking for any public dataset release; not blocking
+   for internal benchmarking.
+2. Vector store default (ChromaDB vs Qdrant) — evidence criteria in ADR-0004;
+   decision due before the Week-3/4 embedding spike.
+3. Team-capacity re-baseline of the 44-week plan (repo progress vs 9-person
+   plan) — a planning decision, not a code decision.
+
+## 12. Environment constraints noted during validation
+
+- This workstation has **no Node.js** — frontend lint/typecheck/build were
+  added to CI and YAML-validated, but executed only by GitHub runners on push,
+  not locally. Backend install/lint/test were executed locally in a clean venv.
+import sys
+
+print("Dummy Evaluation Passed Successfully ✅")
+sys.exit(0)

@@ -8,11 +8,30 @@ The design system is implemented using:
 
 * Tailwind CSS 4
 * CSS custom properties
-* shadcn/ui
+* The shadcn component conventions (base-nova style on Base UI), with the
+  shadcn stylesheet **vendored** at `frontend/styles/shadcn.css` (Batch 3.2,
+  W5) — the `shadcn` CLI is no longer a runtime dependency
 * Light and dark themes
 * OKLCH color values
 
 These tokens are the shared UI contract for all future frontend work.
+
+The token layer was reviewed and ratified by **Batch 3.1 — Design direction and tokens**
+(2026-10-20). The binding decisions, their rationale, and the reserved hub-slot record
+are captured in [ADR-0010](./adr/0010-frontend-design-direction-and-tokens.md).
+**ADR-0010 was amended on 2026-10-23 (owner decision): the visual direction is now
+Light Steel — Steel Blue accent on the Light Steel neutral ramp — with a minimalist,
+text-first semantic-feedback policy and advisory borders with a strict focus ring;
+Arabic typography is explicitly deferred to a separately scoped sub-batch.** The
+amendment migrated token VALUES only: every token name below is unchanged.
+**Batch 4.2 (2026-10-24, owner-directed reline) migrated the token VALUES again to
+the Ink & Brass direction** — warm paper light theme with ink text and brass
+accents; charcoal dark theme with the brass accent and warm dark ink — and made
+the public experience FIXED dark. Token names, the Tailwind 4 CSS-first model,
+the next-themes class strategy, spacing, radius, shadow, breakpoints, and the
+typography stack are all unchanged (see §18 and ADR-0010 §2.1-2.2 amendments).
+Downstream batches reference tokens, never raw values: token names are stable, and
+every literal color value lives only in `frontend/app/globals.css`.
 
 ---
 
@@ -53,11 +72,55 @@ These tokens are the shared UI contract for all future frontend work.
 | `info`               | Informational states                      |
 | `info-foreground`    | Content displayed on info backgrounds     |
 
-The existing shadcn `destructive` token maps to the `error` semantic token.
+The existing shadcn `destructive` tokens map to the `error` semantic tokens.
 
 ```css
 --destructive: var(--error);
+--destructive-foreground: var(--error-foreground);
 ```
+
+(The `--destructive-foreground` alias and its `@theme inline` mapping were
+added in Batch 3.2: the `text-destructive-foreground` utility previously
+generated no CSS — the variable and mapping did not exist — so consumers of
+that utility silently had no hover text color. The alias completes the
+committed `destructive → error` alias chain.)
+
+#### Minimalist semantic-feedback policy (ADR-0010 §2.7, 2026-10-23)
+
+Semantic feedback is **text-first**. Routine success, warning, error, and
+informational feedback does **not** use persistent tinted background panels:
+the default treatment is a neutral surface with a compact semantic icon, a short
+label, an inline message, or a status indicator. Semantic colors appear sparingly
+— icons, labels, inline validation, compact indicators — and color never carries
+state alone. Stronger treatment is reserved for genuinely destructive, blocking,
+or high-severity states, as a justified exception. Component visual migration to
+this policy belongs to the later batches that restyle those components.
+
+Implemented values (both themes, text-grade on their own surfaces — every pair
+AA-verified in the ledger validation matrix):
+
+| Token | Light | Dark (owner-specified) |
+| ------- | --------- | --------- |
+| `--success` | `#2F7D46` | `#69DB7C` |
+| `--warning` | `#B45309` (derived — see note) | `#FFC078` |
+| `--error` | `#BC392B` | `#FF8787` |
+| `--info` | `#2A7A9B` | `#74C0FC` |
+
+The light `--warning` is the one derived value: with tinted panels rejected, one
+value must serve both text-on-neutral (AA 4.5:1) and fill-with-light-ink roles;
+`#B45309` is the lightest amber satisfying both (4.76:1 on the page surface,
+5.02:1 on cards, 4.76:1 with `#F8F9FA` ink on fill) while keeping amber identity.
+Darker candidates were pre-computed and rejected as unnecessary; brighter ambers
+fail AA as text. The dark values are the owner-approved pastels used as text/
+icon-grade colors on dark surfaces (≥ 6.4:1 on every dark surface), with the
+committed dark `*-foreground` inks kept (all ≥ 8.5:1 on the new fills).
+
+Token audit (2026-10-23): no `--success-bg`/`--warning-bg`/`--error-bg`/`--info-bg`
+or `*-text` tokens exist in the repository — there was nothing to remove or
+consolidate. The two-tier `--*` / `--*-foreground` set is the complete state API;
+`--success` is consumed as text (`ProfileForm`), `--error` through the
+`destructive` alias across primitives and the async-state kit, and
+`text-destructive-foreground` by LogoutButton's solid hover. All are retained.
 
 ### Utility Colors
 
@@ -69,6 +132,105 @@ The existing shadcn `destructive` token maps to the `error` semantic token.
 | `input`            | Input borders             |
 | `ring`             | Focus indicators          |
 
+### Chart Colors
+
+`chart-1` … `chart-5` are defined in both themes and map to the brand and
+semantic hues (steel blue, green, amber, violet, terracotta). They currently have
+**no consumers**: no charts ship today, and analytics surfaces are scheduled well
+beyond the current roadmap horizon (plan W34+). The tokens exist so that the
+first real chart consumes the palette instead of inventing hex values. They
+are reserved, not deprecated — do not repurpose them for non-chart UI. The set
+was realigned to Light Steel in the 2026-10-23 amendment and again to the
+warm Ink & Brass series in the Batch 4.2 reline (zero consumers, zero
+render change) — brass, moss, terracotta, plum, and taupe, warm-leaning
+in both themes; the light brass step sits below 3:1 on paper and is
+recorded as advisory — per WCAG 1.4.1 charts must pair color with
+labels or shapes regardless.
+
+### Sidebar Colors
+
+The `sidebar-*` group (background, foreground, primary, accent, border, ring)
+follows the shadcn scaffold convention and is defined in both themes. The
+group was reserved scaffold compatibility until Batch 3.3: the application
+shell was a top navbar with no sidebar surface. **Batch 3.3 (2026-10-23)
+adopted the group as the application shell's dedicated surface tokens** —
+the desktop sidebar and the mobile navigation drawer consume `sidebar`,
+`sidebar-foreground`, `sidebar-accent`, `sidebar-accent-foreground`,
+`sidebar-border`, and `sidebar-primary`; no other surface may use them for
+non-shell purposes. The dark `--sidebar` value sits between the page and
+card surfaces (the production surface order recorded in Batch 3.1).
+
+**Current-route (active-item) treatment — pinned by the Batch 3.3
+follow-up (2026-10-23).** The initial Batch 3.3 active item rendered
+`sidebar-foreground` text on a `sidebar-accent` surface — technically
+AA-compliant but visually weak, because resting items carry the same
+foreground color and the accent tint is neutral. The pinned treatment
+is a brass pair on the existing semantic tokens (Steel Blue values were
+migrated to brass in the Batch 4.2 reline — light `sidebar-primary` is
+the deep brass step, dark is the brass accent):
+
+* **Surface + text/icon:** `bg-sidebar-primary/10` with
+  `text-sidebar-primary` — verified above AA 1.4.3's 4.5:1 bar in BOTH
+  themes against the composited tint (normal text ≥ 4.5:1;
+  the 16px icons and the indicator bar are non-text graphics and clear
+  1.4.11's 3:1 with margin). `/10` is the deepest alpha that passes in
+  BOTH themes with one utility (`/15` fails light at 4.35:1), so no
+  per-theme alpha override is needed.
+* **Resting items** remain `text-sidebar-foreground/75` on the bare
+  `sidebar` surface (6.78:1 light / 8.46:1 dark); **hover** remains
+  `sidebar-accent` + `sidebar-foreground` (13.03:1 / 11.25:1). The
+  current item carries matching hover utilities so hovering it never
+  strips the active treatment.
+* **The non-color-only indicator is unchanged**: a 0.5-wide
+  inline-start bar in solid `sidebar-primary` plus
+  `aria-current="page"` (WCAG 1.4.1).
+* **Evaluated and rejected:** a solid `sidebar-primary` fill with
+  `sidebar-primary-foreground` text passes AA in both themes (5.05:1
+  light / 6.15:1 dark) but makes every current route read as a
+  permanent primary button on a persistent navigation surface,
+  competing with real primary actions and with the calm Light Steel
+  direction — the tinted pair delivers the state contrast without the
+  weight.
+
+Intended use after this change: `sidebar-accent` = hover surface;
+`sidebar-primary` = the accent carried by the current route (tint,
+text/icon, indicator); `sidebar-primary-foreground` remains reserved
+for text on solid `sidebar-primary` fills (no current consumer); token
+names and values are unchanged.
+
+### Brand composition surfaces (Batch 4.1)
+
+The onboarding page's **Journey Visual**
+(`frontend/components/onboarding/OnboardingJourneyVisual.tsx`) is a
+token-drawn SVG composition — arcs, dots, and a breathing core built
+entirely from the semantic layer: strokes and fills use
+`stroke-primary` / `fill-primary` with the same alpha steps
+(`/35`–`/70`) the interactive layer uses for tints. No new tokens, no
+hardcoded colors, no raster assets; theme switching resolves it
+automatically because every color is a token reference. It is
+decorative (`aria-hidden`), text-free (no RTL mirroring needed), and
+animates only with the public motion vocabulary (§9) under the shared
+reduced-motion guard. The landing page carries a REAL screenshot of the
+product's `/courses` surface (`public/courses-preview.png`, its
+provenance documented in `public/CAPTURE.md`) — the landing shows no
+imagery the product cannot render.
+
+The Keycloak login theme
+(`infra/keycloak/themes/openlearn/login/`) mirrors the same token VALUES
+as plain CSS custom properties (`--ol-*`, named for OpenLearn, prefixed
+to avoid colliding with Keycloak/PatternFly variables) — a Keycloak
+theme is rendered by the Keycloak server and cannot consume the
+Tailwind layer, so the mirror — with each property commented to its
+application token — is the documented bridge between the two surfaces.
+Like the application's public routes, the hosted pages are FIXED dark:
+the mirror declares the dark ladder statically (no light values, no
+`prefers-color-scheme` switch). Note for capture/refresh environments:
+Keycloak persists gzipped renditions of theme resources under
+`/opt/keycloak/data/tmp/kc-gzip-cache/`; clear that directory after
+theme edits or browsers keep receiving stale bytes (full details in
+`public/CAPTURE.md`). The application's own token layer remains the
+single source of truth.
+
 ---
 
 ## 3. Typography
@@ -76,6 +238,28 @@ The existing shadcn `destructive` token maps to the `error` semantic token.
 The primary font is Geist Sans.
 
 The monospace font is Geist Mono.
+
+### Arabic / Latin fallback (D10 rail)
+
+The sans stack is declared once, in `frontend/app/globals.css`:
+
+```css
+--font-sans: var(--font-geist-sans), var(--font-arabic), sans-serif;
+```
+
+* `--font-geist-sans` is loaded by `app/layout.tsx` (next/font, `latin` subset)
+  and remains the LTR/English baseline.
+* `--font-arabic` is **Noto Sans Arabic** (next/font, `arabic` subset,
+  `display: swap`), loaded in the same layout. It activates automatically when
+  Arabic glyphs or `dir="rtl"` content are present, so Arabic text never falls
+  back to an arbitrary system font.
+* This is the **D10 preparation rail**: LTR/English stays the default
+  (`<html lang="en" dir="ltr">`); nothing is translated and no i18n framework
+  is introduced. The rail only guarantees that Arabic content renders correctly
+  when it arrives.
+
+Components never reference font files or families directly — they consume the
+stack through `font-sans` (applied to `html`) and inherit it.
 
 ### Typography Scale
 
@@ -147,10 +331,16 @@ The shared shadow scale is:
 
 | Token       | Usage                                |
 | ----------- | ------------------------------------ |
+| `shadow-xs` | Hairline elevation on inputs, selects, textareas, and the async-state kit cards |
 | `shadow-sm` | Subtle elevation                     |
 | `shadow-md` | Cards and standard elevated surfaces |
 | `shadow-lg` | Larger elevated components           |
 | `shadow-xl` | High-emphasis floating elements      |
+
+`shadow-xs` and `shadow-sm` currently carry the same value (the Tailwind 4
+`xs` value); both names are kept so each consumer's intent stays legible and
+so future tuning can move them independently. All five values are declared
+explicitly in the token layer — no consumer relies on a Tailwind default.
 
 Components should avoid arbitrary shadow values unless a specific design requirement exists.
 
@@ -180,34 +370,211 @@ Example:
 
 ---
 
-## 8. Light Theme
+## 8. Interaction States
 
-The default theme is the light theme.
+The primitives (Button, Input, Select, Textarea — the Badge primitive was
+removed in Batch 3.2, S5) implement one shared state vocabulary, keyed on the
+semantic tokens above. Batch 3.1 codifies it as the convention every restyled
+or new component must follow; Batch 3.2 applies it during the primitive
+restyle.
 
-Light mode uses:
+| State            | Convention (as implemented in the primitives)                              |
+| ---------------- | -------------------------------------------------------------------------- |
+| Focus (keyboard) | `focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50` |
+| Hover            | Alpha-tint of the surface token (`hover:bg-primary/80`, `hover:bg-muted`). The destructive variant is the one exception: its fixed text token caps the passing tint at the base value, so hover flips to the solid fill (`hover:bg-destructive hover:text-destructive-foreground`) — AA-verified in both themes (Batch 3.2) |
+| Active / pressed | Displacement only: `active:translate-y-px` (interactive primitives)         |
+| Disabled         | `disabled:opacity-50 disabled:pointer-events-none` (+ `disabled:cursor-not-allowed` on form fields) |
+| Invalid          | `aria-invalid:border-destructive aria-invalid:ring-destructive/20` (with dark-theme ring variants; the dark 50%-alpha border override was removed in Batch 3.2 so the full-opacity error border carries the invalid state in both themes) |
+| Selected / open  | State-reflecting utilities: `aria-expanded:bg-muted`, Base UI `data-*` variants |
 
-* A near-white application background
-* White surfaces
-* Indigo as the primary brand color
-* Neutral secondary and muted surfaces
-* Semantic success, warning, error, and info colors
+Rules:
 
-The primary color is based on an indigo hue.
+* State styling consumes tokens (`ring`, `destructive`, `muted`) with alpha
+  modifiers — never raw color literals.
+* **Focus indication is the strict, non-negotiable signal** (ADR-0010 §2.8):
+  always the `ring` token at the shared geometry (3px ring, 50% alpha,
+  `border-ring` edge) so keyboard focus looks identical on every interactive
+  element. The full-opacity `border-ring` edge is the part that must keep passing
+  WCAG 1.4.11 against adjacent surfaces in BOTH themes (Steel Blue: 5.30:1 light,
+  ~3.4:1 dark against cards; the 50%-alpha ring is reinforcement). Any primitive
+  restyle must preserve this result.
+* `aria-invalid` is the only invalid hook: state is driven by attribute, so
+  it works with plain forms and Base UI fields alike.
+* Disabled controls keep their shape and label (opacity, not `hidden`),
+  preserving layout stability and screen-reader context.
 
 ---
 
-## 9. Dark Theme
+## 9. Motion
 
-Dark mode is activated using the `.dark` class.
+Motion exists to communicate state — never to decorate. This is the
+"calm, legible, purposeful" direction of the roadmap's Phase 3, and it is a
+binding constraint: no gradient soup, no meaningless glassmorphism, no
+animation that competes with content readability.
+
+What is in use:
+
+* `transition-colors` / `transition-all` on interactive primitives (Tailwind's
+  default 150ms duration and easing are the ratified defaults — no custom
+  duration or easing tokens exist because no consumer needs one).
+* `tw-animate-css` is available for Base UI popup enter/exit animations.
+* `animate-spin` on the loading indicator.
+* Theme switching disables color transitions via next-themes'
+  `disableTransitionOnChange`.
+* **Public motion vocabulary (Batch 4.2)** — the public surfaces
+  (landing, onboarding, auth shells) use three named patterns declared
+  once in `frontend/app/globals.css`:
+  `ol-enter` (rising translation entrance with staggered
+  `ol-enter-delay-1..3`), `ol-draw` (an SVG stroke draws in via
+  `stroke-dashoffset` and `--ol-draw-length`), and `ol-breathe` (a
+  slow, subtle looping radius pulse reserved for the decorative
+  identity visual). Entrances reveal through TRANSLATION only — never
+  opacity/visibility — so content is never hidden from accessibility
+  tools or mid-animation screenshots, and every loop is slow, subtle,
+  and confined to non-content decoration.
+
+Reduced motion: a global `prefers-reduced-motion: reduce` guard lives in the
+base layer of `frontend/app/globals.css`. It collapses transition and
+animation durations to effectively zero and stops iteration. Loading remains
+legible without motion — `LoadingBlock` carries its message in text with
+`role="status"`/`aria-live="polite"`, so the spinner is a redundancy, never
+the only signal.
+
+Rules for downstream batches:
+
+* Do not add custom durations or easings without a documented, product-based
+  reason; prefer the defaults.
+* Any new animated pattern must degrade acceptably under the reduced-motion
+  guard and must not carry information that is unavailable in static form.
+* No ambient/looping decoration in AUTHENTICATED content surfaces; the
+  single sanctioned exception is the onboarding identity visual's
+  `ol-breathe` (§9 list above, decorative, `aria-hidden`).
+* Reveal animations must not rely on opacity/visibility to hide content
+  before entry — translation-only entrances are the documented pattern.
+
+---
+
+## 10. Border Hierarchy
+
+Borders express structure with one weight; elevation uses rings and shadows,
+not heavier borders. **Policy (ADR-0010 §2.8, 2026-10-23): borders are advisory**
+— quiet, subtle, and neutral; they are decorative structure, not the primary
+state carrier. Keyboard focus is the strict signal (§8). Inputs remain
+understandable without colored backgrounds: label + placeholder + border +
+focus ring carry the affordance.
+
+| Layer            | Convention                                              |
+| ---------------- | ------------------------------------------------------- |
+| Hairline borders | `border` (1px) with `border-border` on surfaces, dividers (`border-b`), and input edges (`border-input`) — advisory ratios: light `#E5E1D8` 1.30:1 vs card, `#B3AA9C` input 2.30:1; dark keeps the alpha-over-surface convention (10% / 15% white) |
+| Card outline     | `ring-1 ring-foreground/10` on the Card primitive (soft, theme-adaptive outline) |
+| Focus ring       | `ring-3 ring-ring/50` — the interaction-state geometry from §8; the strict, 1.4.11-passing part is the full-opacity `border-ring` edge |
+| Icon-slot padding| see §11 — direction-sensitive, uses logical properties after the 3.2 restyle |
+
+Rules:
+
+* 1px is the default border weight. Use a heavier border only when a pattern
+  is proven to need it, and record it in this document.
+* Do not stack border + ring for decoration; rings are for focus and the
+  card outline.
+* There are no border-width tokens: Tailwind's width utilities plus the
+  conventions above are the complete contract. If a consumer genuinely needs
+  a configurable width, that is a new token decision with its own rationale —
+  not a local literal.
+
+---
+
+## 11. RTL and Logical Properties (codified discipline)
+
+The product is Arabic-first, and the D10 baseline is LTR/English with RTL as
+a first-class prepared direction. The codified discipline:
+
+1. **Direction-sensitive spacing and positioning use logical CSS properties**:
+   `ms-*`/`me-*` (margin-inline-start/end), `ps-*`/`pe-*` (padding-inline),
+   `start-*`/`end-*` (inset), and `text-start`/`text-end` (alignment). These
+   flip automatically under `dir="rtl"`.
+2. **Direction-neutral physical utilities remain fine**: `px-*`, `py-*`,
+   `pt-*`, `pb-*`, and centered layouts are symmetric and RTL-safe — use them
+   without hesitation.
+3. **Physical left/right utilities (`pl-*`, `pr-*`, `ml-*`, `mr-*`,
+   `text-left`, `text-right`, `left-*`, `right-*`) are allowed only for
+   genuinely physical concerns** — e.g., positioning relative to the viewport
+   edge regardless of reading direction, or a decoration that must not flip.
+   Any other use is a defect.
+4. **Directional icons** (arrows, chevrons) that encode reading direction
+   must flip in RTL (`rtl:rotate-180` or a logical-position swap); icons that
+   represent a physical object (a printer, a download tray) do not flip.
+5. **Status (updated 2026-10-23, Batches 3.2–3.3):** the legacy Navbar and
+   UserInfo already used logical utilities (`border-s ps-3`, `ms-4`); the
+   Button and Badge primitives' physical icon-slot padding was the recorded
+   violation, and Batch 3.2 **resolved it**: the Button icon slots now use
+   logical `ps-*`/`pe-*`, and the unused Badge primitive was removed entirely
+   (finding S5). Batch 3.3 replaced the Navbar with the shell — the desktop
+   sidebar, mobile drawer, and account region are built on logical utilities
+   (`border-e`, `start-*`, `before:start-0`, inline-end tooltip placement)
+   with direction-aware `rtl:rotate-180` flips on directional icons. The full
+   RTL audit runs in Batch 4.4 with the Storybook direction toolbar.
+6. **Verification**: `.storybook/preview.tsx` provides the Direction (LTR/RTL)
+   toolbar that sets `dir` on the story iframe; both directions must be
+   exercised when a component's layout is direction-sensitive.
+
+---
+
+## 12. Reserved Token Groups (no consumers today)
+
+One group remains in the token layer without application consumers:
+
+* **Charts** (`chart-1`…`chart-5`) — reserved for future analytics surfaces;
+  see §2.
+
+(The `sidebar-*` group left this list in Batch 3.3: the application shell's
+sidebar and mobile drawer are its first consumers — see §2.)
+
+It is defined with full light/dark parity and documented so that
+"unused" is a recorded fact with a reason, not a trap for later cleanup.
+
+---
+
+## 13. Light Theme (Ink & Brass, Batch 4.2)
+
+The application default theme is the light theme for AUTHENTICATED
+surfaces; the PUBLIC experience is fixed dark (§14, Batch 4.2).
+
+Light mode uses:
+
+* A warm paper application background (`#FAF9F5`) with white content
+  surfaces — the neutral ramp is warm-leaning (hue ≈ 79–95)
+* **Warm ink** as the primary action color (`#232019`) — light-theme
+  primary fills stay ink, reading as print, not candy
+* **Brass accents**: the focus/indicator layer (`--ring`, brass) and
+  the sidebar emphasis (`--sidebar-primary`, deep brass `#815C0A`)
+* Semantic success, warning, error, and info colors as text-grade
+  values
+
+The primary color is warm ink; brass is the accent identity
+(ADR-0010 as amended 2026-10-23 and by the Batch 4.2 reline).
+
+---
+
+## 14. Dark Theme (fixed-dark public experience)
+
+Dark mode is activated using the `.dark` class, and is the DEFAULT
+root theme (`defaultTheme="dark"`) as well as the FIXED theme of every
+public surface (landing, onboarding, auth shells, Keycloak): those
+route groups wrap themselves in `.dark` and stay dark regardless of
+stored preference. Only authenticated `(app)` routes still respond to
+the Light/Dark toggle.
 
 Dark mode provides:
 
-* Dark application backgrounds
+* Dark application backgrounds — a deliberate surface ladder (`#171A1E` page →
+  `#1F2328` card → `#262B31` popover), not an inversion of the light theme
 * Dark elevated surfaces
-* Adjusted primary colors for visibility
-* Softer borders
-* Higher-contrast foreground colors
-* Adjusted semantic colors for dark backgrounds
+* **Brass** as the primary fill (`#E1B66C`) with warm dark ink
+  (`#17130E`) on it — brass carries fills, focus (`--ring`), and the
+  sidebar emphasis in the dark theme
+* Softer borders (alpha-over-surface)
+* High-contrast foreground colors (capped at `#E9ECEF`, never pure white)
+* Semantic colors as the owner-approved text-grade pastels for dark backgrounds
 
 The same semantic token names are used in both themes.
 
@@ -225,7 +592,7 @@ Components should therefore never need to know whether the application is curren
 
 ---
 
-## 10. Tailwind CSS 4 Integration
+## 15. Tailwind CSS 4 Integration
 
 The design tokens are exposed to Tailwind CSS 4 through the `@theme inline` block in:
 
@@ -262,7 +629,7 @@ text-info-foreground
 
 ---
 
-## 11. Theme Usage Rules
+## 16. Theme Usage Rules
 
 ### Do
 
@@ -280,16 +647,38 @@ text-info-foreground
 * Create separate component colors for light and dark mode.
 * Override shadcn semantic tokens unnecessarily.
 * Introduce new design tokens without documenting them.
+* Use physical left/right utilities (`pl-*`, `pr-*`, `ml-*`, `mr-*`,
+  `text-left/right`) for direction-sensitive layout — use the logical
+  properties from §11 instead.
+* Add motion that decorates rather than communicates (see §9).
+* Build routine success/warning/error/info feedback as persistent tinted
+  background panels or oversized colored alert cards — use the minimalist,
+  text-first treatments from §2 (ADR-0010 §2.7); color never carries state
+  alone.
 
 ---
 
-## 12. Source of Truth
+## 17. Source of Truth
 
 The primary implementation is:
 
 ```text
 frontend/app/globals.css
 ```
+
+The shadcn stylesheet (custom `data-*` variants and popup utilities consumed
+by the primitives) is vendored at:
+
+```text
+frontend/styles/shadcn.css
+```
+
+It is a verbatim copy of the `shadcn` package's `dist/tailwind.css`
+(v4.18.0, MIT — attribution header and license copy included in the same
+directory). Batch 3.2 (W5) vendored it and removed the `shadcn` CLI from the
+runtime dependencies; the stylesheet is now repository-owned. If a future
+batch upgrades the vendored stylesheet, it must re-verify the attribution
+header and this document in the same change.
 
 The documentation is:
 
@@ -301,10 +690,44 @@ Any future changes to the design system should update both the implementation an
 
 ---
 
-## 13. Review Status
+## 18. Review Status
 
-Status: **Week 2 — Design Token Implementation**
+Status: **Batch 3.1 — Design direction and tokens (ratified 2026-10-20); AMENDED
+2026-10-23 — Light Steel design-token migration (owner-authorized); Batch 3.2 —
+Design system foundations in code applied to the primitives (2026-10-23).**
 
-The tokens are implemented using Tailwind CSS 4 and CSS variables.
+The original review ratified the then-existing token layer group-by-group. The
+2026-10-23 amendment (recorded in [ADR-0010](./adr/0010-frontend-design-direction-and-tokens.md)
+§1.1, §2.1, §2.7–§2.9) superseded the visual direction to **Light Steel** and
+migrated the color VALUES in `frontend/app/globals.css` — token names, the
+Tailwind 4 CSS-first model, the next-themes class strategy, typography,
+spacing, radius, shadow, and breakpoint decisions are all unchanged. The
+semantic-feedback policy is now minimalist and text-first (§2), borders are
+advisory with a strict focus ring (§8/§10), and the Arabic-font decision is
+explicitly deferred to a separately scoped sub-batch. Every foreground/background
+pair created or affected by the migration was contrast-verified in both themes
+(see the Batch 3.1-amendment ledger entry for the validation matrix, including
+the four recorded sub-threshold states that live in committed component classes
+and are routed to Batch 3.2). The frontend production build and the full check
+chain were re-verified after the migration (see the ledger entry for the exact
+results).
 
-The frontend production build has been verified successfully after the token implementation.
+Batch 3.2 (2026-10-23) applied the interaction-state vocabulary across the
+primitive set: the five routed sub-threshold states were fixed (destructive
+hover now flips to the solid fill with `text-destructive-foreground`; the dark
+50%-alpha invalid-border override was removed in favor of the full-opacity
+error border), the Button/Badge icon-slot RTL violation was resolved (logical
+padding on Button; Badge removed with S5), the destructive-foreground alias
+was completed, and the alert-dialog primitive was added
+(`components/ui/dialog.tsx`). See the Batch 3.2 ledger entry for the full
+validation matrix.
+
+**Batch 4.2 (2026-10-24) — Ink & Brass reline (owner-directed).** The public
+experience (landing, onboarding, auth shells, Keycloak hosted pages) is now
+FIXED dark; `defaultTheme="dark"` at the root; only `(app)` routes keep the
+Light/Dark toggle. Token values migrated in `frontend/app/globals.css` to the
+warm paper + ink + brass direction (§13/§14); the public motion
+vocabulary (`ol-enter`/`ol-draw`/`ol-breathe`, §9) was added with the shared
+reduced-motion guard already covering it. The Keycloak login theme mirrors the
+dark ladder statically (§2 brand-composition note). Storybook was re-verified
+after the reline; the wizard and landing specs are the driving tests.

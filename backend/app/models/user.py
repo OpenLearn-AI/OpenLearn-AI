@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import String, Text, text
+from sqlalchemy import String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,6 +17,16 @@ class User(Base):
         default=uuid.uuid4,
     )
 
+    keycloak_issuer: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+
+    keycloak_subject: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
     email: Mapped[str] = mapped_column(
         String(255),
         unique=True,
@@ -24,21 +34,9 @@ class User(Base):
         index=True,
     )
 
-    password_hash: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-    )
-
-    preferred_lang: Mapped[str] = mapped_column(
-        String(10),
-        default="en",
-        server_default="en",
-        nullable=False,
-    )
-
-    role: Mapped[str] = mapped_column(
-        String(20),
-        default="student",
+    email_verified: Mapped[bool] = mapped_column(
+        default=False,
+        server_default="false",
         nullable=False,
     )
 
@@ -48,3 +46,12 @@ class User(Base):
         server_default=text("'{}'::jsonb"),
         nullable=False,
     )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "keycloak_issuer",
+            "keycloak_subject",
+            name="uq_users_keycloak_identity",
+        ),
+    )
+

@@ -1,0 +1,724 @@
+/*
+ * OpenLearn AI — Keycloak login theme stylesheet (Batch 4.1 corrective follow-up).
+ *
+ * SCOPE AND ARCHITECTURE (verified against the live KC 26.7.3 runtime):
+ *   - Keycloak's FreeMarker templates are intact (parent=keycloak): every
+ *     element ID and form behavior — #username, #password, #kc-login,
+ *     #kc-page-title, #kc-registration — is unchanged. This theme layers
+ *     presentation and message copy only.
+ *   - The `keycloak` parent theme ships its own layout stylesheet
+ *     (css/login.css) which positions the brand row, the .card-pf card,
+ *     the signup row, and the mobile collapse. Because a child theme's
+ *     `styles=` list REPLACES the parent's, this theme explicitly loads
+ *     `css/login.css` first (theme.properties) and then this file —
+ *     the previous batch's CSS never loaded the parent layout at all,
+ *     which is the main reason the rendered page collapsed into a
+ *     full-width unstyled form over PatternFly's dark marketing photo.
+ *   - Keycloak 26.7.3's `keycloak` parent renders PatternFly v3/v4 class
+ *     names (`card-pf`, `pf-c-form-control`, `pf-c-button`) — verified in
+ *     the live DOM and in the parent's theme.properties class mapping.
+ *     The previous file targeted `pf-v5-`/`pf-v6-` names that do not
+ *     exist on these pages, so almost none of it applied. This file
+ *     targets the verified class set only.
+ *
+ * PALETTE: the Ink & Brass DARK token values (same hex sources as
+ * frontend/app/globals.css and docs/design-tokens.md), mirrored as plain
+ * custom properties — a Keycloak theme cannot consume the application's
+ * Tailwind layer. Names are prefixed `--ol-` to avoid colliding with
+ * PatternFly/Keycloak variables. Like the rest of the public
+ * experience, the hosted pages are FIXED dark (Batch 4.2): there is no
+ * light variant and no prefers-color-scheme switch — this is the
+ * application's dark ladder (#171A1E page / #1F2328 card) with the
+ * brass accent (#E1B66C) carrying fills and focus.
+ *
+ * TYPOGRAPHY: the application loads Geist via next/font (build-time
+ * download; no font files exist in the repository to ship, and Keycloak
+ * themes must be self-contained). The stack below is the documented
+ * fallback: a neutral system grotesque with Arabic-capable Noto faces
+ * before the generic fallbacks, so Arabic text renders correctly in both
+ * directions.
+ *
+ * RTL: logical properties (`margin-inline`, `inset-inline-end`,
+ * `text-align: start`) throughout; the brand row is a flex container, so
+ * it flips naturally when Keycloak renders dir="rtl" (which it does as
+ * soon as the realm enables internationalization and an RTL locale is
+ * active). No left/right hard-coding.
+ *
+ * MOTION: only color/box-shadow transitions on interactive elements,
+ * wrapped in a prefers-reduced-motion guard.
+ */
+
+/* ── Palette (fixed-dark mirrors of the Ink & Brass tokens) ────────── */
+
+:root {
+  color-scheme: dark;
+
+  /* --primary (dark) — brass fill accent */
+  --ol-primary: #e1b66c;
+  /* --primary-foreground (dark) — warm dark ink on brass */
+  --ol-primary-foreground: #17130e;
+  /* hover step of --primary (the app composites primary/80; plain CSS
+     uses this derived lighter step instead) */
+  --ol-primary-hover: #e9bf85;
+  /* --background (dark) — charcoal ladder anchor */
+  --ol-bg: #171a1e;
+  /* --card (dark) */
+  --ol-card: #1f2328;
+  /* --foreground (dark) — capped at #e9ecef, never pure white */
+  --ol-fg: #e9ecef;
+  /* --muted-foreground (dark) */
+  --ol-muted-fg: #adb5bd;
+  /* --border (dark) — alpha-over-surface convention */
+  --ol-border: rgb(255 255 255 / 10%);
+  /* --input (dark) — the visible control edge */
+  --ol-input: rgb(255 255 255 / 15%);
+  /* --ring (dark) — brass */
+  --ol-ring: #e1b66c;
+  /* focus ring tint (brass at ~35% over the page background) */
+  --ol-ring-tint: rgb(225 182 108 / 35%);
+  /* --error (dark) */
+  --ol-error: #ff8787;
+  /* quiet error surface tint for alerts */
+  --ol-error-bg: rgb(255 135 135 / 8%);
+  /* --success (dark) */
+  --ol-success: #69db7c;
+  /* --warning (dark) */
+  --ol-warning: #ffc078;
+  /* --info (dark) */
+  --ol-info: #74c0fc;
+
+  --ol-font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    "Noto Sans", "Noto Sans Arabic", "Noto Kufi Arabic", Arial, sans-serif;
+
+  /* PatternFly v4's intended customization point for its control height
+     (its `.pf-c-form-control:not(textarea)` rule out-specifies a plain
+     height override, so the variable is set instead). */
+  --pf-c-form-control--Height: 44px;
+}
+
+/* ── Page canvas ─────────────────────────────────────────────────────
+   The parent login.css resets PatternFly's .login-pf photo background,
+   but then paints body with its own keycloak-bg.png; PF3 also paints
+   .login-pf. Both are replaced by the flat charcoal page with the same
+   brass/paper ambient the application's public surfaces use — kept
+   restrained because these pages are utility surfaces, not marketing. */
+
+.login-pf,
+.login-pf body {
+  background: var(--ol-bg);
+}
+
+.login-pf body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 60% 45% at 22% 12%,
+      rgb(225 182 108 / 8%),
+      transparent 70%
+    );
+}
+
+.login-pf body {
+  color: var(--ol-fg);
+  font-family: var(--ol-font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  /* Registration and other long pages: center WITHOUT the
+     justify-content dropout — a centered flex column whose content is
+     taller than the viewport makes the top unreachable by scroll (the
+     reported registration clipping). margin-block:auto on the page
+     container centers short pages and degrades to normal flow for
+     tall ones. */
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+.login-pf-page {
+  width: 100%;
+  max-width: 512px;
+  margin-inline: auto;
+  margin-block: auto;
+  padding: 40px 16px 48px;
+}
+
+/* ── Brand row (logo mark + wordmark) ────────────────────────────────
+   The template renders msg("loginTitleHtml") as the row's text; the
+   theme puts the product logo mark before it via ::before. The mark
+   is the CURRENT approved brand asset — the same transparent
+   `public/logo.svg` the application renders (frontend/public/logo.svg,
+   inlined byte-for-byte here at resources/img/logo.svg so the hosted
+   pages and the app share ONE logo source). It is a 249×220
+   transparent vector (two stroked arcs + two dots), so it is drawn
+   with `contain` at its natural aspect inside the 40px cell — no
+   crop, no distortion, no painted tile behind it (the app's
+   BrandMark/AppSidebar presentation, Batch 4.2 correction A). The
+   legacy opaque 1024×1024 logo.png this rule used to draw was
+   removed with the swap. */
+
+#kc-header {
+  float: none;
+  padding: 0;
+  margin: 0 0 28px;
+}
+
+#kc-header-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--ol-fg);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+#kc-header-wrapper::before {
+  content: "";
+  display: inline-block;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  background: url("../img/logo.svg") center / contain no-repeat;
+}
+
+/* ── The auth card ─────────────────────────────────────────────────── */
+
+.login-pf-page .card-pf {
+  max-width: 440px;
+  margin: 0 auto;
+  border: 1px solid var(--ol-border);
+  border-top: 1px solid var(--ol-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
+  background-color: var(--ol-card);
+  color: var(--ol-fg);
+  padding: 28px;
+}
+
+.login-pf-page .card-pf {
+  /* PF3 ships its own .card-pf paddings; keep one deliberate value. */
+  padding: 28px;
+}
+
+/* Card header: brand-consistent centered composition. */
+
+.login-pf-page .login-pf-page-header {
+  margin: 0;
+}
+
+.login-pf-header {
+  float: none;
+  text-align: center;
+}
+
+#kc-page-title {
+  margin: 0;
+  color: var(--ol-fg);
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+
+/* Required-fields pages (registration, update-password…): the base
+   template renders the "* Required fields" note BEFORE the title and
+   parks the title in a PF3 `col-md-10` (a floated, 83%-wide column),
+   which left a stray note above a prematurely wrapping heading. A flex
+   column restores the natural hierarchy — title first, note beneath,
+   both full-width — without touching the template. */
+.login-pf-page .login-pf-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.login-pf-page .login-pf-header > div .col-md-10 {
+  order: -1;
+  float: none;
+  width: 100%;
+  padding: 0;
+}
+
+.login-pf-page .login-pf-header > div .subtitle {
+  float: none;
+  width: 100%;
+  padding: 0;
+  text-align: center;
+}
+
+/* "Fields marked with * are required" note (registration pages). */
+
+.subtitle {
+  color: var(--ol-muted-fg);
+  font-size: 0.8125rem;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.subtitle .required,
+.required {
+  color: var(--ol-error);
+}
+
+/* ── Content area ──────────────────────────────────────────────────── */
+
+#kc-content {
+  margin-top: 22px;
+}
+
+#kc-content-wrapper {
+  margin-top: 0;
+}
+
+/* ── Feedback alerts (global message: invalid credentials, info…) ──── */
+
+.pf-c-alert.pf-m-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--ol-border);
+  border-radius: 10px;
+  background-color: var(--ol-card);
+  color: var(--ol-fg);
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  box-shadow: none;
+}
+
+.pf-c-alert.pf-m-danger {
+  border-color: var(--ol-error);
+  background-color: var(--ol-error-bg);
+}
+
+.pf-c-alert.pf-m-success {
+  border-color: var(--ol-success);
+}
+
+.pf-c-alert.pf-m-warning {
+  border-color: var(--ol-warning);
+}
+
+.pf-c-alert.pf-m-info {
+  border-color: var(--ol-info);
+}
+
+.pf-c-alert__icon {
+  color: var(--ol-muted-fg);
+  margin-top: 1px;
+}
+
+.pf-c-alert.pf-m-danger .pf-c-alert__icon {
+  color: var(--ol-error);
+}
+
+.pf-c-alert.pf-m-success .pf-c-alert__icon {
+  color: var(--ol-success);
+}
+
+.pf-c-alert__title,
+.pf-c-alert.pf-m-inline .kc-feedback-text {
+  color: var(--ol-fg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.pf-c-alert.pf-m-danger .pf-c-alert__title,
+.pf-c-alert.pf-m-danger .kc-feedback-text {
+  color: var(--ol-error);
+}
+
+/* ── Forms ─────────────────────────────────────────────────────────── */
+
+.pf-c-form-control,
+textarea.pf-c-form-control,
+select.pf-c-form-control,
+.form-control {
+  /* PF4 re-declares --pf-c-form-control--Height ON the element (its
+     `.pf-c-form-control:not(textarea)` height rule reads it), so the
+     element-level value — not :root — is the effective override. */
+  --pf-c-form-control--Height: 44px;
+  display: block;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  background-color: var(--ol-card);
+  border: 1px solid var(--ol-input);
+  border-radius: 10px;
+  color: var(--ol-fg);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  box-shadow: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+textarea.pf-c-form-control,
+select.pf-c-form-control {
+  height: auto;
+  min-height: 44px;
+  padding-block: 9px;
+}
+
+/* PF4's `.pf-c-form-control:not(textarea)` (0,2,1) out-specifies the plain
+   class rule above, so this rule matches that specificity and wins by
+   source order — the belt-and-braces height control. */
+.pf-c-form-control:not(textarea):not(select) {
+  height: 44px;
+}
+
+.pf-c-form-control::placeholder {
+  color: var(--ol-muted-fg);
+  opacity: 0.7;
+}
+
+.pf-c-form-control:focus {
+  /* PF4 draws its own focus as a 2px bottom border + padding shift via
+     custom properties (`.pf-c-form-control:focus` re-declares
+     BorderBottom*). Resolving those variables back to the resting
+     values hands the focus signal entirely to the ring below — no
+     double edge, no text shift. */
+  --pf-c-form-control--focus--BorderBottomColor: var(--ol-ring);
+  --pf-c-form-control--focus--BorderBottomWidth: 1px;
+  --pf-c-form-control--focus--PaddingBottom: var(
+      --pf-global--spacer--form-element
+    );
+
+  outline: none;
+  border-color: var(--ol-ring);
+  box-shadow: 0 0 0 3px var(--ol-ring-tint);
+}
+
+/* Invalid fields: error edge + keep the focus signal distinct. */
+.pf-c-form-control[aria-invalid="true"],
+.has-error .pf-c-form-control {
+  border-color: var(--ol-error);
+}
+
+.pf-c-form-control[aria-invalid="true"]:focus,
+.has-error .pf-c-form-control:focus {
+  --pf-c-form-control--focus--BorderBottomColor: var(--ol-error);
+
+  border-color: var(--ol-error);
+  box-shadow: 0 0 0 3px var(--ol-ring-tint);
+}
+
+/* Field labels. */
+.pf-c-form__label,
+.pf-c-form__label-text {
+  color: var(--ol-fg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.pf-c-form__label {
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.form-group {
+  margin-bottom: 18px;
+  text-align: start;
+}
+
+/* Per-field error text (kcInputErrorMessageClass). */
+.has-error .pf-c-form__helper-text.pf-m-error,
+#input-error {
+  color: var(--ol-error);
+  font-size: 0.8125rem;
+  margin-top: 6px;
+  display: block;
+}
+
+/* Password visibility toggle inside the input group. PF4 paints the
+   control button's frame with an ::after border (not the border
+   property), which is why a plain `border: none` never removed the
+   box — the frame is removed at the pseudo-element instead. */
+.pf-c-input-group {
+  display: flex;
+  align-items: stretch;
+  background-color: transparent;
+}
+
+.pf-c-input-group .pf-c-form-control {
+  flex: 1 1 auto;
+  width: 1%;
+}
+
+.pf-c-button.pf-m-control {
+  background: none;
+  border: none;
+  color: var(--ol-muted-fg);
+  font-size: 1rem;
+  padding-inline: 10px;
+  cursor: pointer;
+}
+
+.pf-c-button.pf-m-control::after {
+  border: none;
+}
+
+.pf-c-button.pf-m-control:hover {
+  color: var(--ol-fg);
+}
+
+.pf-c-button.pf-m-control:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ol-ring-tint);
+  border-radius: 10px;
+}
+
+/* Checkbox / radio (remember-me, terms, profile choices). */
+.pf-c-check__label,
+.pf-c-radio__label {
+  color: var(--ol-fg);
+  font-size: 0.875rem;
+}
+
+.pf-c-check__input,
+.pf-c-radio__input {
+  accent-color: var(--ol-primary);
+}
+
+/* Instructional paragraphs (e.g. update-password pages). */
+p.instruction {
+  color: var(--ol-muted-fg);
+  font-size: 0.875rem;
+  margin: 0 0 16px;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+
+.pf-c-button {
+  font-family: inherit;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pf-c-button.pf-m-primary {
+  background-color: var(--ol-primary);
+  color: var(--ol-primary-foreground);
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  height: 44px;
+  padding: 0 20px;
+}
+
+.pf-c-button.pf-m-primary:hover,
+.pf-c-button.pf-m-primary:focus {
+  background-color: var(--ol-primary-hover);
+  color: var(--ol-primary-foreground);
+}
+
+.pf-c-button.pf-m-primary:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ol-ring-tint);
+}
+
+.pf-c-button.pf-m-primary:active {
+  background-color: var(--ol-primary-hover);
+}
+
+/* Quiet secondary (btn-default / control variants). */
+.pf-c-button.pf-m-default,
+.btn-default {
+  background: none;
+  border: 1px solid var(--ol-input);
+  border-radius: 10px;
+  color: var(--ol-fg);
+  font-weight: 500;
+}
+
+.pf-c-button.pf-m-default:hover,
+.btn-default:hover {
+  background-color: var(--ol-bg);
+}
+
+/* Links. */
+a {
+  color: var(--ol-primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: var(--ol-primary-hover);
+  text-decoration: underline;
+}
+
+a:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px var(--ol-ring-tint);
+}
+
+/* ── Form actions ──────────────────────────────────────────────────── */
+
+#kc-form-buttons {
+  margin-top: 22px;
+}
+
+/* ── Options row (remember-me / back-to-login / register) ──────────── */
+
+.login-pf-settings {
+  margin-top: 2px;
+}
+
+.login-pf-settings a,
+#kc-form-options a {
+  font-size: 0.875rem;
+}
+
+/* "« Back to Login" on registration: quiet, start-aligned, clearly
+   separated from the fields above and the submit button below. */
+#kc-form-options {
+  margin-top: 16px;
+  margin-bottom: 4px;
+  text-align: start;
+}
+
+/* "New user? Register" row.
+   PF3 pulls this block out of the card with negative margins and a grey
+   band background (the legacy footer-band look); the margins also caused
+   horizontal overflow on narrow viewports. It is restored to normal
+   in-card flow. */
+.login-pf-page .login-pf-signup,
+#kc-info {
+  margin: 22px 0 0;
+}
+
+#kc-info-wrapper {
+  background: transparent;
+  border-top: 1px solid var(--ol-border);
+  padding: 18px 0 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--ol-muted-fg);
+}
+
+.login-pf-page .login-pf-signup a {
+  color: var(--ol-primary);
+  font-weight: 500;
+}
+
+/* ── Locale selector (renders when the realm enables i18n) ─────────── */
+
+#kc-locale {
+  inset-inline-end: 16px;
+  inset-inline-start: auto;
+}
+
+#kc-current-locale-link {
+  background: none;
+  border: none;
+  color: var(--ol-muted-fg);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+#kc-current-locale-link:hover {
+  color: var(--ol-fg);
+}
+
+#kc-locale ul {
+  background-color: var(--ol-card);
+  border: 1px solid var(--ol-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 10%);
+}
+
+#kc-locale-dropdown a {
+  color: var(--ol-fg);
+}
+
+#kc-locale-dropdown a:hover {
+  color: var(--ol-primary);
+}
+
+/* ── Authenticator selection rows (try-another-way flows) ──────────── */
+
+.select-auth-container {
+  border: 1px solid var(--ol-border);
+  border-radius: 10px;
+  background-color: var(--ol-card);
+  padding: 12px 14px;
+}
+
+.select-auth-box-headline {
+  color: var(--ol-fg);
+}
+
+.select-auth-box-desc {
+  color: var(--ol-muted-fg);
+}
+
+/* ── Terms / error page helpers ────────────────────────────────────── */
+
+#kc-terms-text {
+  color: var(--ol-muted-fg);
+  font-size: 0.875rem;
+}
+
+#kc-error-message .instruction {
+  color: var(--ol-muted-fg);
+}
+
+/* ── Mobile ────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  .login-pf body {
+    background: var(--ol-bg);
+  }
+
+  .login-pf-page {
+    padding: 24px 12px 40px;
+  }
+
+  #kc-header {
+    margin-bottom: 20px;
+  }
+
+  #kc-header-wrapper {
+    font-size: 1.125rem;
+  }
+
+  #kc-header-wrapper::before {
+    width: 34px;
+    height: 34px;
+  }
+
+  .login-pf-page .card-pf {
+    max-width: none;
+    padding: 22px 18px;
+  }
+
+  #kc-form-buttons {
+    margin-top: 18px;
+  }
+}
+
+/* ── Motion safety ─────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-c-button,
+  a,
+  .pf-c-form-control {
+    transition: none;
+  }
+}

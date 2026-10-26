@@ -1,0 +1,31 @@
+from typing import Any
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_oidc_claims
+from app.db.session import get_db
+from app.schemas.auth import CurrentUserResponse
+from app.services.auth.oidc import extract_roles
+from app.services.auth.user_service import get_or_create_user_from_keycloak
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.get("/me", response_model=CurrentUserResponse)
+async def read_current_user(
+    claims: dict[str, Any] = Depends(get_current_oidc_claims),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    user = await get_or_create_user_from_keycloak(db, claims)
+
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "settings": user.settings,
+        "roles": extract_roles(claims),
+        "keycloak": {
+            "issuer": user.keycloak_issuer,
+            "subject": user.keycloak_subject,
+        },
+    }

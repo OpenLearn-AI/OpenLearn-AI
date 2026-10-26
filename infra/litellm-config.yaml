@@ -1,0 +1,63 @@
+# =============================================================================
+# LiteLLM Proxy — Staging Configuration
+# =============================================================================
+#
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+#
+# KEY ROTATION STRATEGY (for production readiness):
+# -------------------------------------------------
+# 1. LITELLM_MASTER_KEY  — controls admin access to the proxy.
+#    • Set via env var (never commit the real value).
+#    • Rotate quarterly or immediately on suspected compromise.
+#
+# 2. Provider API keys (e.g. GEMINI_API_KEY) — passed as env vars.
+#    • Rotate per provider's recommended schedule.
+#    • Use separate keys for staging vs production.
+#
+# 3. Virtual keys — for production, generate scoped short-lived keys
+#    via POST /key/generate so the backend never holds the master key.
+#    See: https://docs.litellm.ai/docs/proxy/virtual_keys
+# =============================================================================
+
+model_list:
+  # Primary (and only) reasoning model — Google Gemini via LiteLLM's AI
+  # Studio integration ("gemini/" prefix; key resolved from the container's
+  # GEMINI_API_KEY environment variable). The alias MUST stay identical to
+  # the application's AI_REASONING_MODEL (celery_worker environment in
+  # docker-compose.staging.yml and the config.py default) because the worker
+  # sends the alias as the chat-completion model name.
+  #
+  # FALLBACK POLICY (B6-PREP-GEMINI): intentionally a single model with NO
+  # secondary fallback entry. The application never requests a fallback
+  # model (AI_REASONING_FALLBACKS is unset -> empty PAL chain, and no
+  # general_settings.fallbacks is configured), so a second entry would be
+  # unreachable configuration adding an unverifiable budget-accounting
+  # surface. Model/fallback routing belongs to the gateway (decisions.md
+  # §3.5): adding a verified Gemini fallback later is a config-only change.
+  # No OpenAI entry remains — no OpenAI provider key is needed by this
+  # deployment.
+  - model_name: "gemini-3.6-flash"
+    litellm_params:
+      model: "gemini/gemini-3.6-flash"
+      api_key: "os.environ/GEMINI_API_KEY"
+
+general_settings:
+  # Master key for authenticating requests to the proxy
+  master_key: "os.environ/LITELLM_MASTER_KEY"
+
+  # Maximum budget (USD) — safety net for staging
+  max_budget: 10.0
+
+  # Budget reset interval
+  budget_duration: "30d"
+
+litellm_settings:
+  # Drop unsupported params instead of erroring
+  drop_params: true
+
+  # Enable spend tracking
+  success_callback: ["langfuse"]
+
+  # Set default model when none specified (kept in step with the primary
+  # model_list alias; the application always sends an explicit model).
+  default_model: "gemini-3.6-flash"

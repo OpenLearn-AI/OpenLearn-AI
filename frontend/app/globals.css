@@ -1,391 +1,542 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+/* Vendored in Batch 3.2 (W5) — was: @import "shadcn/tailwind.css" (runtime dep, removed) */
+@import "../styles/shadcn.css";
 
 @custom-variant dark (&:is(.dark *));
 
 /* =========================================================
    OPENLEARN AI — DESIGN TOKENS
    Tailwind CSS 4 + CSS Variables
+
+   Ink & Brass direction (owner-directed accent change,
+   visual-direction batch): a warm academic minimalism.
+   Light theme: warm paper surfaces, near-black ink text
+   and primary actions, and a restrained brass accent that
+   carries focus, selection, and emphasis. Dark theme: the
+   proven charcoal ladder with brass as the fill accent.
+
+   Two deliberate structural decisions:
+   - The light `primary` is warm INK, not a hue. A colored
+     primary button is what made previous directions read as
+     "generic SaaS accent"; ink-on-paper actions stay calm,
+     and the brass hue appears where identity matters (rings,
+     emphasis, dark-mode fills, charts).
+   - The dark neutrals keep their ADR-0010 ladder — they are
+     verified, AA-strong, and their charcoal aligns with the
+     product logo tile. Only the blue VALUES migrated to
+     brass; every token NAME is unchanged.
+
+   Token names are unchanged from Light Steel; only color
+   VALUES migrated. Hex comments record the approved source
+   values; docs/design-tokens.md is the usage contract.
    ========================================================= */
 
 @theme inline {
-  /* =======================================================
+   /* =======================================================
      COLORS — CORE
      ======================================================= */
 
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+   --color-background: var(--background);
+   --color-foreground: var(--foreground);
 
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
+   --color-card: var(--card);
+   --color-card-foreground: var(--card-foreground);
 
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
+   --color-popover: var(--popover);
+   --color-popover-foreground: var(--popover-foreground);
 
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
+   --color-primary: var(--primary);
+   --color-primary-foreground: var(--primary-foreground);
 
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
+   --color-secondary: var(--secondary);
+   --color-secondary-foreground: var(--secondary-foreground);
 
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
+   --color-muted: var(--muted);
+   --color-muted-foreground: var(--muted-foreground);
 
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
+   --color-accent: var(--accent);
+   --color-accent-foreground: var(--accent-foreground);
 
-  --color-destructive: var(--destructive);
+   --color-destructive: var(--destructive);
+   --color-destructive-foreground: var(--destructive-foreground);
 
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+   --color-border: var(--border);
+   --color-input: var(--input);
+   --color-ring: var(--ring);
 
-  /* =======================================================
+   /* =======================================================
      COLORS — SEMANTIC
      ======================================================= */
 
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
+   --color-success: var(--success);
+   --color-success-foreground: var(--success-foreground);
 
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
+   --color-warning: var(--warning);
+   --color-warning-foreground: var(--warning-foreground);
 
-  --color-error: var(--error);
-  --color-error-foreground: var(--error-foreground);
+   --color-error: var(--error);
+   --color-error-foreground: var(--error-foreground);
 
-  --color-info: var(--info);
-  --color-info-foreground: var(--info-foreground);
+   --color-info: var(--info);
+   --color-info-foreground: var(--info-foreground);
 
-  /* =======================================================
+   /* =======================================================
      CHARTS
      ======================================================= */
 
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
+   --color-chart-1: var(--chart-1);
+   --color-chart-2: var(--chart-2);
+   --color-chart-3: var(--chart-3);
+   --color-chart-4: var(--chart-4);
+   --color-chart-5: var(--chart-5);
 
-  /* =======================================================
+   /* =======================================================
      SIDEBAR
      ======================================================= */
 
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+   --color-sidebar: var(--sidebar);
+   --color-sidebar-foreground: var(--sidebar-foreground);
+   --color-sidebar-primary: var(--sidebar-primary);
+   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+   --color-sidebar-accent: var(--sidebar-accent);
+   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+   --color-sidebar-border: var(--sidebar-border);
+   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* =======================================================
+   /* =======================================================
      TYPOGRAPHY
      ======================================================= */
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+   /* D10: Geist is the Latin/LTR baseline; Noto Sans Arabic is the
+      Arabic-capable fallback so glyphs render correctly when Arabic
+      content or dir="rtl" is present. English/LTR is unchanged. */
+   --font-sans: var(--font-geist-sans), var(--font-arabic), sans-serif;
+   --font-mono: var(--font-geist-mono);
+   --font-heading: var(--font-sans);
+   --font-arabic: var(--font-arabic);
 
-  --text-xs: 0.75rem;
-  --text-xs--line-height: 1rem;
+   --text-xs: 0.75rem;
+   --text-xs--line-height: 1rem;
 
-  --text-sm: 0.875rem;
-  --text-sm--line-height: 1.25rem;
+   --text-sm: 0.875rem;
+   --text-sm--line-height: 1.25rem;
 
-  --text-base: 1rem;
-  --text-base--line-height: 1.5rem;
+   --text-base: 1rem;
+   --text-base--line-height: 1.5rem;
 
-  --text-lg: 1.125rem;
-  --text-lg--line-height: 1.75rem;
+   --text-lg: 1.125rem;
+   --text-lg--line-height: 1.75rem;
 
-  --text-xl: 1.25rem;
-  --text-xl--line-height: 1.75rem;
+   --text-xl: 1.25rem;
+   --text-xl--line-height: 1.75rem;
 
-  --text-2xl: 1.5rem;
-  --text-2xl--line-height: 2rem;
+   --text-2xl: 1.5rem;
+   --text-2xl--line-height: 2rem;
 
-  --text-3xl: 1.875rem;
-  --text-3xl--line-height: 2.25rem;
+   --text-3xl: 1.875rem;
+   --text-3xl--line-height: 2.25rem;
 
-  --text-4xl: 2.25rem;
-  --text-4xl--line-height: 2.5rem;
+   --text-4xl: 2.25rem;
+   --text-4xl--line-height: 2.5rem;
 
-  --text-5xl: 3rem;
-  --text-5xl--line-height: 1;
+   --text-5xl: 3rem;
+   --text-5xl--line-height: 1;
 
-  /* =======================================================
+   /* =======================================================
      SPACING
      ======================================================= */
 
-  --spacing-0: 0;
-  --spacing-1: 0.25rem;
-  --spacing-2: 0.5rem;
-  --spacing-3: 0.75rem;
-  --spacing-4: 1rem;
-  --spacing-5: 1.25rem;
-  --spacing-6: 1.5rem;
-  --spacing-8: 2rem;
-  --spacing-10: 2.5rem;
-  --spacing-12: 3rem;
-  --spacing-16: 4rem;
-  --spacing-20: 5rem;
-  --spacing-24: 6rem;
+   --spacing-0: 0;
+   --spacing-1: 0.25rem;
+   --spacing-2: 0.5rem;
+   --spacing-3: 0.75rem;
+   --spacing-4: 1rem;
+   --spacing-5: 1.25rem;
+   --spacing-6: 1.5rem;
+   --spacing-8: 2rem;
+   --spacing-10: 2.5rem;
+   --spacing-12: 3rem;
+   --spacing-16: 4rem;
+   --spacing-20: 5rem;
+   --spacing-24: 6rem;
 
-  /* =======================================================
+   /* =======================================================
      BORDER RADIUS
      ======================================================= */
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+   --radius-sm: calc(var(--radius) * 0.6);
+   --radius-md: calc(var(--radius) * 0.8);
+   --radius-lg: var(--radius);
+   --radius-xl: calc(var(--radius) * 1.4);
+   --radius-2xl: calc(var(--radius) * 1.8);
+   --radius-3xl: calc(var(--radius) * 2.2);
+   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* =======================================================
+   /* =======================================================
      SHADOWS
      ======================================================= */
 
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1),
-    0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1),
-    0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1),
-    0 8px 10px -6px rgb(0 0 0 / 0.1);
+   /* Batch 3.1: shadow-xs is explicitly declared because shipped
+      consumers (Select, Textarea, LoadingBlock, ErrorState) already
+      apply `shadow-xs`; declaring it here centralizes the value in
+      the token layer instead of relying on Tailwind's default. */
+   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1),
+      0 2px 4px -2px rgb(0 0 0 / 0.1);
+   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
+   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1),
+      0 8px 10px -6px rgb(0 0 0 / 0.1);
 
-  /* =======================================================
+   /* =======================================================
      RESPONSIVE BREAKPOINTS
      ======================================================= */
 
-  --breakpoint-sm: 640px;
-  --breakpoint-md: 768px;
-  --breakpoint-lg: 1024px;
-  --breakpoint-xl: 1280px;
-  --breakpoint-2xl: 1536px;
+   --breakpoint-sm: 640px;
+   --breakpoint-md: 768px;
+   --breakpoint-lg: 1024px;
+   --breakpoint-xl: 1280px;
+   --breakpoint-2xl: 1536px;
 }
 
 /* =========================================================
-   OPENLEARN AI — LIGHT THEME
+   OPENLEARN AI — LIGHT THEME (“paper & ink with brass”)
    ========================================================= */
 
 :root {
-  /* =======================================================
-     CORE
+   /* =======================================================
+     CORE — warm off-white paper page, white content
+     surfaces, warm neutral ramp for structure.
      ======================================================= */
 
-  --background: oklch(0.985 0.003 255);
-  --foreground: oklch(0.20 0.025 260);
+   --background: oklch(0.982 0.005 95); /* #FAF9F5 */
+   --foreground: oklch(0.244 0.014 88); /* #232019 */
 
-  /* =======================================================
+   /* =======================================================
      SURFACES
      ======================================================= */
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.20 0.025 260);
+   --card: oklch(1 0 0);
+   --card-foreground: oklch(0.244 0.014 88);
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.20 0.025 260);
+   --popover: oklch(1 0 0);
+   --popover-foreground: oklch(0.244 0.014 88);
 
-  /* =======================================================
-     BRAND
+   /* =======================================================
+     BRAND — warm ink primary + restrained brass accent.
+     The light `primary` is INK by design (calm, premium,
+     hue-conflict-free); brass carries identity through the
+     ring, sidebar emphasis, and charts (docs/design-tokens.md).
      ======================================================= */
 
-  --primary: oklch(0.55 0.22 264);
-  --primary-foreground: oklch(0.985 0 0);
+   --primary: oklch(0.244 0.014 88); /* #232019 — warm ink */
+   --primary-foreground: oklch(0.982 0.005 95); /* #FAF9F5 */
 
-  --secondary: oklch(0.95 0.015 255);
-  --secondary-foreground: oklch(0.25 0.035 260);
+   --secondary: oklch(0.943 0.010 87); /* #EFECE5 */
+   --secondary-foreground: oklch(0.328 0.022 85); /* #3A3428 */
 
-  --accent: oklch(0.94 0.025 260);
-  --accent-foreground: oklch(0.30 0.06 260);
+   --accent: oklch(0.943 0.010 87); /* #EFECE5 */
+   --accent-foreground: oklch(0.244 0.014 88); /* #232019 */
 
-  /* =======================================================
+   /* =======================================================
      MUTED
      ======================================================= */
 
-  --muted: oklch(0.95 0.01 255);
-  --muted-foreground: oklch(0.50 0.035 255);
+   --muted: oklch(0.943 0.010 87); /* #EFECE5 */
+   --muted-foreground: oklch(0.430 0.018 81); /* #554F45 */
 
-  /* =======================================================
-     SEMANTIC STATES
+   /* =======================================================
+     SEMANTIC STATES — minimalist, text-first feedback
+     (ADR-0010 §2.7): in this theme every semantic value is
+     text-grade on the neutral surfaces (AA verified).
+     The Semantic colors are unchanged from the Light Steel
+     verification — they are feedback vocabulary, not brand
+     accent, and keep their meaning independent of it.
      ======================================================= */
 
-  --success: oklch(0.62 0.18 155);
-  --success-foreground: oklch(0.98 0.01 155);
+   --success: oklch(0.527 0.115 150.3); /* #2F7D46 */
+   --success-foreground: oklch(0.982 0.005 95); /* #FAF9F5 */
 
-  --warning: oklch(0.78 0.17 75);
-  --warning-foreground: oklch(0.25 0.04 75);
+   --warning: oklch(0.5553 0.1455 49); /* #B45309 — derived, see docs */
+   --warning-foreground: oklch(0.982 0.005 95); /* #FAF9F5 */
 
-  --error: oklch(0.58 0.22 27);
-  --error-foreground: oklch(0.98 0.01 27);
+   --error: oklch(0.537 0.17 29.8); /* #BC392B — see docs note */
+   --error-foreground: oklch(1 0 0); /* #FFFFFF */
 
-  --info: oklch(0.62 0.18 240);
-  --info-foreground: oklch(0.98 0.01 240);
+   --info: oklch(0.546 0.091 229.5); /* #2A7A9B */
+   --info-foreground: oklch(0.982 0.005 95); /* #FAF9F5 */
 
-  /* Keep shadcn destructive compatible */
-  --destructive: var(--error);
+   /* Keep shadcn destructive compatible */
+   --destructive: var(--error);
+   --destructive-foreground: var(--error-foreground);
 
-  /* =======================================================
-     BORDERS & INPUTS
+   /* =======================================================
+     BORDERS & INPUTS — advisory borders + strict focus ring
+     (ADR-0010 §2.8): quiet warm-neutral edges; the brass ring
+     carries focus and interactivity, not heavy borders.
      ======================================================= */
 
-  --border: oklch(0.90 0.015 255);
-  --input: oklch(0.90 0.015 255);
-  --ring: oklch(0.55 0.22 264);
+   --border: oklch(0.910 0.013 87); /* #E5E1D8 */
+   --input: oklch(0.742 0.022 79); /* #B3AA9C */
+   --ring: oklch(0.549 0.114 80); /* brass — 4.70:1 non-text on paper */
 
-  /* =======================================================
-     CHARTS
+   /* =======================================================
+     CHARTS — warm-leaning series (reserved, zero consumers);
+     every series clears the 3:1 non-text bar on its surfaces.
      ======================================================= */
 
-  --chart-1: oklch(0.55 0.22 264);
-  --chart-2: oklch(0.65 0.18 155);
-  --chart-3: oklch(0.72 0.16 75);
-  --chart-4: oklch(0.62 0.20 320);
-  --chart-5: oklch(0.60 0.20 30);
+   --chart-1: oklch(0.549 0.114 80); /* brass */
+   --chart-2: oklch(0.553 0.107 158); /* #2F855A — moss */
+   --chart-3: oklch(0.595 0.137 43.5); /* #C05F33 — terracotta */
+   --chart-4: oklch(0.572 0.104 294.4); /* #7C6BAF — plum */
+   --chart-5: oklch(0.659 0.066 61.5); /* #B08968 — taupe */
 
-  /* =======================================================
+   /* =======================================================
      BASE RADIUS
      ======================================================= */
 
-  --radius: 0.625rem;
+   --radius: 0.625rem;
 
-  /* =======================================================
-     SIDEBAR
+   /* =======================================================
+     SIDEBAR — application shell surface tokens (adopted by
+     Batch 3.3; active/current-item treatment recorded in
+     docs/design-tokens.md). `sidebar-primary` is the deep
+     brass emphasis tone: active items = brass tint + brass
+     text (6.05:1 on the white rail) instead of a blue.
      ======================================================= */
 
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.20 0.025 260);
+   --sidebar: oklch(1 0 0);
+   --sidebar-foreground: oklch(0.244 0.014 88);
 
-  --sidebar-primary: oklch(0.55 0.22 264);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+   --sidebar-primary: oklch(0.501 0.100 80); /* #815C0A — deep brass */
+   --sidebar-primary-foreground: oklch(0.982 0.005 95);
 
-  --sidebar-accent: oklch(0.94 0.025 260);
-  --sidebar-accent-foreground: oklch(0.30 0.06 260);
+   --sidebar-accent: oklch(0.943 0.010 87);
+   --sidebar-accent-foreground: oklch(0.244 0.014 88);
 
-  --sidebar-border: oklch(0.90 0.015 255);
-  --sidebar-ring: oklch(0.55 0.22 264);
+   --sidebar-border: oklch(0.943 0.010 87);
+   --sidebar-ring: oklch(0.549 0.114 80);
 }
 
 /* =========================================================
-   OPENLEARN AI — DARK THEME
+   OPENLEARN AI — DARK THEME (charcoal ladder + brass accent)
    ========================================================= */
 
 .dark {
-  /* =======================================================
-     CORE
+   /* =======================================================
+     CORE — dark ladder (deliberate design, NOT an inversion;
+     ADR-0010 values retained): #171A1E page → #1F2328 card →
+     #262B31 popover; text is capped at #E9ECEF, never pure
+     white. The charcoal aligns with the product logo tile.
      ======================================================= */
 
-  --background: oklch(0.15 0.025 260);
-  --foreground: oklch(0.96 0.01 255);
+   --background: oklch(0.216 0.009 255.6); /* #171A1E */
+   --foreground: oklch(0.942 0.005 247.9); /* #E9ECEF */
 
-  /* =======================================================
+   /* =======================================================
      SURFACES
      ======================================================= */
 
-  --card: oklch(0.19 0.025 260);
-  --card-foreground: oklch(0.96 0.01 255);
+   --card: oklch(0.254 0.011 254); /* #1F2328 */
+   --card-foreground: oklch(0.942 0.005 247.9);
 
-  --popover: oklch(0.19 0.025 260);
-  --popover-foreground: oklch(0.96 0.01 255);
+   --popover: oklch(0.287 0.013 253); /* #262B31 */
+   --popover-foreground: oklch(0.942 0.005 247.9);
 
-  /* =======================================================
-     BRAND
+   /* =======================================================
+     BRAND — brass fill accent with warm dark ink text:
+     the hue flips to lighter brass so fills carry dark ink
+     (mirroring the production primary pattern). Brass is the
+     same hue as the light ring, so one accent identity spans
+     both themes while light actions stay ink.
      ======================================================= */
 
-  --primary: oklch(0.65 0.20 264);
-  --primary-foreground: oklch(0.15 0.025 260);
+   --primary: oklch(0.80 0.105 80); /* #E1B66C — brass */
+   --primary-foreground: oklch(0.19 0.012 80); /* #17130E — warm ink */
 
-  --secondary: oklch(0.25 0.025 260);
-  --secondary-foreground: oklch(0.96 0.01 255);
+   --secondary: oklch(0.306 0.014 248.3); /* #2A3036 */
+   --secondary-foreground: oklch(0.911 0.007 247.9); /* #DEE2E6 */
 
-  --accent: oklch(0.28 0.04 260);
-  --accent-foreground: oklch(0.95 0.015 255);
+   --accent: oklch(0.317 0.016 248.3); /* #2C333A */
+   --accent-foreground: oklch(0.942 0.005 247.9);
 
-  /* =======================================================
+   /* =======================================================
      MUTED
      ======================================================= */
 
-  --muted: oklch(0.25 0.025 260);
-  --muted-foreground: oklch(0.70 0.025 255);
+   --muted: oklch(0.286 0.012 248.2); /* #262B30 */
+   --muted-foreground: oklch(0.769 0.015 248); /* #ADB5BD */
 
-  /* =======================================================
-     SEMANTIC STATES
+   /* =======================================================
+     SEMANTIC STATES — committed dark values retained
+     (text-grade pastels on dark surfaces; all AA-verified).
      ======================================================= */
 
-  --success: oklch(0.70 0.18 155);
-  --success-foreground: oklch(0.15 0.025 155);
+   --success: oklch(0.802 0.168 147.3); /* #69DB7C */
+   --success-foreground: oklch(0.15 0.025 155);
 
-  --warning: oklch(0.78 0.17 75);
-  --warning-foreground: oklch(0.18 0.025 75);
+   --warning: oklch(0.85 0.115 69); /* #FFC078 */
+   --warning-foreground: oklch(0.18 0.025 75);
 
-  --error: oklch(0.65 0.20 27);
-  --error-foreground: oklch(0.15 0.025 27);
+   --error: oklch(0.756 0.146 21.1); /* #FF8787 */
+   --error-foreground: oklch(0.15 0.025 27);
 
-  --info: oklch(0.70 0.18 240);
-  --info-foreground: oklch(0.15 0.025 240);
+   --info: oklch(0.782 0.115 243.8); /* #74C0FC */
+   --info-foreground: oklch(0.15 0.025 240);
 
-  --destructive: var(--error);
+   --destructive: var(--error);
+   --destructive-foreground: var(--error-foreground);
 
-  /* =======================================================
-     BORDERS & INPUTS
+   /* =======================================================
+     BORDERS & INPUTS — alpha-over-surface convention kept
+     (advisory per ADR-0010 §2.8); the strict focus signal is
+     the --ring token below.
      ======================================================= */
 
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.65 0.20 264);
+   --border: oklch(1 0 0 / 10%);
+   --input: oklch(1 0 0 / 15%);
+   --ring: oklch(0.80 0.105 80); /* brass */
 
-  /* =======================================================
-     CHARTS
+   /* =======================================================
+     CHARTS — raised warm series (reserved, zero consumers)
      ======================================================= */
 
-  --chart-1: oklch(0.65 0.20 264);
-  --chart-2: oklch(0.70 0.18 155);
-  --chart-3: oklch(0.75 0.16 75);
-  --chart-4: oklch(0.68 0.20 320);
-  --chart-5: oklch(0.68 0.20 30);
+   --chart-1: oklch(0.80 0.105 80); /* brass */
+   --chart-2: oklch(0.714 0.12 156.1); /* #5CB983 */
+   --chart-3: oklch(0.72 0.125 43); /* #E58963 — terracotta */
+   --chart-4: oklch(0.709 0.081 292.4); /* #A298D0 — plum */
+   --chart-5: oklch(0.78 0.075 62); /* #DBAD86 — taupe */
 
-  /* =======================================================
-     SIDEBAR
+   /* =======================================================
+     SIDEBAR — scaffold compatibility (sits below cards in
+     dark, production surface order); emphasis flips to brass
      ======================================================= */
 
-  --sidebar: oklch(0.18 0.025 260);
-  --sidebar-foreground: oklch(0.96 0.01 255);
+   --sidebar: oklch(0.233 0.011 254.1); /* #1A1E23 */
+   --sidebar-foreground: oklch(0.942 0.005 247.9);
 
-  --sidebar-primary: oklch(0.65 0.20 264);
-  --sidebar-primary-foreground: oklch(0.15 0.025 260);
+   --sidebar-primary: oklch(0.80 0.105 80); /* brass */
+   --sidebar-primary-foreground: oklch(0.19 0.012 80);
 
-  --sidebar-accent: oklch(0.28 0.04 260);
-  --sidebar-accent-foreground: oklch(0.95 0.015 255);
+   --sidebar-accent: oklch(0.306 0.014 248.3);
+   --sidebar-accent-foreground: oklch(0.942 0.005 247.9);
 
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.65 0.20 264);
+   --sidebar-border: oklch(1 0 0 / 10%);
+   --sidebar-ring: oklch(0.80 0.105 80);
+
+   /* =======================================================
+     DARK AMBIENT LAYER (public-surface depth)
+     The fixed-dark public experience (landing, onboarding)
+     builds its tonal variation from mixes of the dark
+     ladder and the brass accent — never from raw colors.
+     See docs/design-tokens.md §public-dark-ambience.
+     ======================================================= */
+
+   --ambient-brass-subtle: color-mix(in oklab, var(--primary) 9%, transparent);
+   --ambient-brass-soft: color-mix(in oklab, var(--primary) 15%, transparent);
+   --ambient-brass-strong: color-mix(in oklab, var(--primary) 26%, transparent);
+   --ambient-paper: color-mix(in oklab, var(--foreground) 5%, transparent);
 }
 
 /* =========================================================
    BASE UI RULES
    ========================================================= */
 
+/* =========================================================
+   PUBLIC-SURFACE MOTION (restrained entrance vocabulary)
+   Two small, purposeful entrance animations for the fixed-dark
+   public experience (used by the landing page only): a fade-up
+   entrance and a delayed step. Text-safe: transforms/opacity
+   only (no layout shift). The global prefers-reduced-motion
+   guard below instantly completes them when motion is declined.
+   ========================================================= */
+
+@layer components {
+   .ol-enter {
+      animation: ol-enter 0.7s cubic-bezier(0.22, 0.61, 0.21, 1) both;
+   }
+
+   .ol-enter-delay-1 {
+      animation-delay: 0.1s;
+   }
+
+   .ol-enter-delay-2 {
+      animation-delay: 0.22s;
+   }
+
+   .ol-enter-delay-3 {
+      animation-delay: 0.36s;
+   }
+}
+
+@keyframes ol-enter {
+   from {
+      opacity: 0;
+      transform: translateY(12px);
+   }
+   to {
+      opacity: 1;
+      transform: translateY(0);
+   }
+}
+
+/* Onboarding identity visual: a one-shot draw-on for the two identity
+   arcs and a long, very quiet "breathe" for the dots (opacity only).
+   The global prefers-reduced-motion guard collapses all of these to
+   an instant final state, and the absent-JS case renders the full
+   static composition (SVG attributes are the resting state). */
+@keyframes ol-draw {
+   from {
+      stroke-dashoffset: var(--ol-draw-length, 1200);
+   }
+   to {
+      stroke-dashoffset: 0;
+   }
+}
+
+@keyframes ol-breathe {
+   from,
+   to {
+      opacity: 1;
+   }
+   50% {
+      opacity: 0.72;
+   }
+}
+
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
+   * {
+      @apply border-border outline-ring/50;
+   }
 
-  html {
-    @apply font-sans;
-  }
+   html {
+      @apply font-sans;
+   }
 
-  body {
-    @apply bg-background text-foreground;
-  }
+   body {
+      @apply bg-background text-foreground;
+   }
 
-  button,
-  input,
-  textarea,
-  select {
-    font: inherit;
-  }
+   button,
+   input,
+   textarea,
+   select {
+      font: inherit;
+   }
+
+   /* Reduced-motion guard (unchanged since Batch 3.1): decorative
+      movement is suppressed when requested; state feedback remains
+      legible without motion. */
+   @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+         animation-duration: 0.01ms !important;
+         animation-iteration-count: 1 !important;
+         transition-duration: 0.01ms !important;
+         scroll-behavior: auto !important;
+      }
+   }
 }

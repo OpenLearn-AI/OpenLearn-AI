@@ -1,109 +1,42 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+"use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+import { LandingPage } from "@/components/landing/LandingPage";
+import { useAuth } from "@/lib/auth-context";
+
+/**
+ * The public landing page (Batch 4.1).
+ *
+ * Auth rules (both owner-approved):
+ *   - The landing is genuinely public: this page calls only `useAuth()`
+ *     (Keycloak state) and never `useMe()` or any authenticated API.
+ *     The previous landing's unconditional `useMe()` threw `ApiError`
+ *     (401) for signed-out visitors, and the global session recovery
+ *     then bounced them to `/login?redirectedFrom=%2F` — the landing
+ *     was not actually public at runtime. That defect is fixed here by
+ *     construction: no API call exists on this route.
+ *   - Authenticated users visiting `/` are redirected to `/dashboard`
+ *     (Decision Lock §4.1, assigned to this batch), but only after
+ *     authentication initialization has completed — while Keycloak's
+ *     `check-sso` is in flight the landing renders normally, so there
+ *     is no splash and no flash-of-nothing for either audience.
+ *
+ * The redirect runs in an effect (never during render) and uses
+ * `replace` so the landing does not remain in the history stack between
+ * `/` and the dashboard. Redirect loops are structurally impossible:
+ * `/dashboard` never redirects back to `/`.
+ */
 export default function Home() {
-  return (
-    <main className="min-h-screen bg-background p-8">
-      <div className="mx-auto max-w-4xl">
+    const { isAuthenticated, isLoading } = useAuth();
+    const router = useRouter();
 
-        {/* Header */}
-        <div className="mb-8">
-          <Badge className="mb-3">
-            OpenLearn AI
-          </Badge>
+    useEffect(() => {
+        if (!isLoading && isAuthenticated) {
+            router.replace("/dashboard");
+        }
+    }, [isLoading, isAuthenticated, router]);
 
-          <h1 className="text-3xl font-bold tracking-tight">
-            Design System
-          </h1>
-
-          <p className="mt-2 text-muted-foreground">
-            Testing our colors, typography, spacing, and UI components.
-          </p>
-        </div>
-
-        {/* Components */}
-        <div className="grid gap-6 md:grid-cols-2">
-
-          {/* Learning Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Start Learning</CardTitle>
-
-              <CardDescription>
-                Continue your learning journey with AI.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent>
-              <div className="space-y-4">
-
-                <Input
-                  placeholder="Enter your course name..."
-                />
-
-                <div className="flex gap-3">
-                  <Button>
-                    Start Learning
-                  </Button>
-
-                  <Button variant="outline">
-                    Explore
-                  </Button>
-                </div>
-
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* UI Preview Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>UI Preview</CardTitle>
-
-              <CardDescription>
-                Core components of our design system.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent>
-              <div className="flex flex-wrap gap-3">
-
-                <Badge>
-                  Primary
-                </Badge>
-
-                <Badge variant="secondary">
-                  Secondary
-                </Badge>
-
-                <Badge variant="outline">
-                  Outline
-                </Badge>
-
-                <Button variant="ghost">
-                  Ghost Button
-                </Button>
-
-              </div>
-            </CardContent>
-          </Card>
-
-        </div>
-      </div>
-    </main>
-  );
+    return <LandingPage />;
 }
-
-/*
-cd frontend
-npm run dev  
-Local: http://localhost:3000
-*/ 

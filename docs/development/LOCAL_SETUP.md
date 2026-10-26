@@ -1,0 +1,832 @@
+# Local Development Setup
+
+This guide describes how to set up and run OpenLearn AI locally on a fresh
+machine. The one-command path is:
+
+```bash
+bash scripts/setup-dev.sh
+```
+
+The script is **branch-independent**: run it from whatever branch you actually
+want to develop on. It never checks out, switches, or pulls branches, never
+rewrites your working tree, and never deletes git changes. Everything in this
+guide applies to any branch that contains the project files shown below.
+
+After the script finishes you will have:
+
+- PostgreSQL (with pgvector), Redis (Celery broker), MinIO (S3-compatible
+  storage), and Keycloak running in Docker — all published on loopback only
+- A Python virtualenv in `backend/.venv` with all backend dependencies
+- Frontend dependencies installed via `npm ci`
+- Alembic migrations applied to the application database
+- Local Keycloak demo accounts ready for login: `testuser` (role `student`)
+  and `instructor` (role `instructor` — the demo course-owner account)
+
+You then start the backend and frontend yourself in two terminals (the script
+intentionally does not run them in the foreground).
+
+---
+
+## 1. Prerequisites
+
+| Tool | Required version | Check with |
+|------|------------------|------------|
+| Git | any recent | `git --version` |
+| Docker | 24+ recommended | `docker --version` |
+| Docker Compose | v2 (`docker compose` plugin) | `docker compose version` |
+| Python | **3.12.x (exact)** — matches CI | `python3 --version` (Linux/macOS/WSL2) or `py -3.12 --version` (Windows) |
+| Node.js | >= 20 (CI targets Node 20) | `node --version` |
+| npm | bundled with Node | `npm --version` |
+| curl | any | `curl --version` |
+| Bash | the shell that runs the script | `bash --version` |
+
+Notes:
+
+- The Python 3.12 requirement is exact (not "3.11 or newer"). The setup
+  script hard-checks `3.12` and fails otherwise, because the pinned backend
+  dependencies are built and tested against CI's Python 3.12.
+- There is no `engines` pin in `frontend/package.json`; the practical floor
+  is Node 20, which is what CI uses.
+- The backend needs **no external AI API keys to start or use the app
+  locally**. The honest local defaults, however, exercise the real processing
+  path where possible: OCR runs as `mock` (immaterial for born-digital PDFs —
+  the targeted-OCR gate only fires on PDFs with fewer than 50 extracted
+  characters), while embeddings default to the real `bge-m3` provider (the
+  ~2 GB model downloads from HuggingFace on the FIRST processed material)
+  and vectors persist to the real `postgres`/pgvector path. See
+  `backend/.env.example` for exactly what each setting exercises.
+
+### Supported operating systems
+
+| Environment | Status | Notes |
+|-------------|--------|-------|
+| Ubuntu 22.04 | Supported | System Python is 3.10 — install Python 3.12 first (e.g. deadsnakes PPA) |
+| Ubuntu 24.04 | Supported | System Python is 3.12 out of the box |
+| Other modern Linux distributions | Supported | Anything meeting the prerequisites above |
+| macOS (Intel & Apple Silicon) + Docker Desktop | Supported | All images used are multi-arch; the script is compatible with macOS's stock Bash 3.2 |
+| Windows + WSL2 (Ubuntu) | Supported (recommended Windows workflow) | Treated as Linux; the script explicitly avoids picking up the Windows `py.exe` through the WSL interop PATH |
+| Windows + Git Bash + Docker Desktop | Possible with additional steps | Requires Windows CPython 3.12 installed; the script auto-selects it via `py.exe -3.12` and rejects MSYS2/MinGW Python builds (their ABI lacks wheels for packages like `cryptography`) |
+| Windows native (PowerShell / CMD) | Not supported | The setup script is a Bash script; use WSL2 or Git Bash |
+
+Docker Desktop notes (macOS and Windows): the script only relies on standard
+published ports on `localhost` and on read-only bind mounts of two files from
+`infra/`, so no bind-mount or path-translation configuration is needed.
+
+---
+
+## 2. Clone the repository
+
+```bash
+git clone https://github.com/OpenLearn-AI/OpenLearn-AI.git
+cd OpenLearn-AI
+```
+
+Then switch to whichever development branch you need, using your normal git
+workflow (for example `git switch <branch>` or `git checkout <branch>`). The
+setup script works on the branch you have checked out; it displays the
+current branch for information only and never changes it.
+
+---
+
+## 3. Environment files
+
+The setup script creates three environment files **only if they do not
+already exist**. Existing files are never overwritten, so your local changes
+are always safe.
+
+| File | Created from | Purpose |
+|------|--------------|---------|
+| `backend/.env` | `backend/.env.example` | Backend configuration: `DATABASE_URL`, Keycloak/OIDC settings, S3/MinIO settings, AI provider selection |
+| `frontend/.env.local` | `frontend/.env.example` | Frontend configuration: `NEXT_PUBLIC_API_URL` and Keycloak connection settings |
+| `.env.local` (repo root) | generated by the script | Compose interpolation + generated credentials: `OPENLEARN_TEST_USER_PASSWORD`, `OPENLEARN_INSTRUCTOR_USER_PASSWORD`, `REDIS_PASSWORD`, `REDIS_URL`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `S3_BUCKET_NAME` |
+
+Key facts about each file:
+
+- `backend/.env` — the important default is
+  `DATABASE_URL=postgresql+asyncpg://openlearn:devpassword@localhost:5432/openlearn_dev`.
+  `devpassword` is an intentional local-development default from the
+  repository's compose file; it is not a real secret. `scripts/setup-dev.sh`
+  fills the empty `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` placeholders in
+  place with the generated MinIO credentials from `.env.local` (they must
+  match the MinIO service's credentials) and appends the AI-provider block
+  if the keys are not already present. A value you set yourself is never
+  overwritten; a MISMATCH with `.env.local` is warned about, never silently
+  "fixed".
+- `frontend/.env.local` — the API base URL variable used by the current
+  frontend code is **`NEXT_PUBLIC_API_URL`** (default
+  `http://localhost:8000`). This is the variable the repository actually
+  consumes; there is no `NEXT_PUBLIC_API_BASE_URL` in the codebase. If you
+  change it, restart `npm run dev` so Next.js picks up the new value.
+- `.env.local` (root) — on first run the script generates the Keycloak
+  test/instructor passwords (policy: at least 8 characters, 1 uppercase,
+  1 digit) plus the `REDIS_PASSWORD` / `MINIO_ROOT_USER` /
+  `MINIO_ROOT_PASSWORD` credentials, and composes `REDIS_URL` (full URL
+  pointing at the loopback-published dev Redis) from the generated password.
+  Values are intentionally never printed to the terminal; open the file to
+  read them. You may replace any generated value with your own before running
+  the script — existing non-empty values are never overwritten. Re-running
+  the bootstrap resets both Keycloak user passwords to whatever this file
+  currently contains. The API process reads `REDIS_PASSWORD`/`REDIS_URL`
+  from this file through the pydantic settings contract (`backend/app/config.py`)
+  — you do not export anything by hand.
+
+All three files are git-ignored (`.env`, `.env.local`, `*.env` and
+`*.env.*` patterns are in `.gitignore`; only `*.env.example` templates are
+tracked) and must never be committed — including renamed copies such as
+`.env.bak` or `.env.before-some-fix`, which the `*.env.*` rule also ignores.
+
+---
+
+## 4. One-command setup
+
+From the repository root (the script can be invoked from any working
+directory — it locates the repository relative to its own path):
+
+```bash
+bash scripts/setup-dev.sh
+```
+
+What each phase does:
+
+| Phase | What it does |
+|-------|--------------|
+| 1 — Preflight | Verifies git, Docker, Compose v2, a working Docker daemon, Node >= 20, npm, curl, and a Python 3.12 interpreter (auto-selecting `py.exe -3.12` on Windows-native shells) |
+| 2 — Repository state | Confirms the target directory really is the OpenLearn-AI repository (compose file plus `backend/` and `frontend/` present) and that it is a git working tree. Shows the current branch informationally. No git mutations of any kind |
+| 3 — Environment files | Creates `backend/.env`, `frontend/.env.local`, and root `.env.local` only if missing; generates the Redis/MinIO credentials and the Keycloak test/instructor passwords into `.env.local`; fills empty `S3_*` placeholders in `backend/.env` in place (never duplicating keys); appends the AI-provider block only when the keys are absent; warns about any duplicate keys it finds (report-only) |
+| 4 — Docker infrastructure | Starts the `db`, `redis`, and `minio` containers, runs the one-shot `minio-init` (creates the materials bucket idempotently), waits (bounded 120 s) for PostgreSQL and for Redis authenticated PING and for the MinIO S3 API, then confirms the materials bucket with an **authenticated** check (the MinIO image ships a default `local` alias with empty credentials, so an unauthenticated readiness probe cannot prove the configured credentials work — the setup re-establishes the alias from the container's own runtime credentials on every `mc` call and fails with a targeted diagnostic if authentication or the bucket is broken), creates the `keycloak` and `openlearn_dev` databases idempotently, starts Keycloak, waits (bounded 180 s) for the realm's OIDC discovery endpoint, then runs the one-shot `keycloak-bootstrap` (enables registration; creates/updates `testuser` with the `student` role and `instructor` with the `instructor` role) and checks its exit code |
+| 5 — Backend environment | Creates `backend/.venv` if missing (Windows-style `Scripts\` and Unix-style `bin/` layouts both supported), then installs `requirements.txt` + `requirements-dev.txt` unless core dependencies already import. Warns that this is a large install |
+| 6 — Frontend environment | Runs `npm ci` in `frontend/` when `node_modules` is missing or older than `package-lock.json`; skips otherwise |
+| 7 — Migrations | Runs `python -m alembic upgrade head` from `backend/` and reports the current revision |
+| 8 — Verification | Confirms all four services are running, PostgreSQL answers, Redis authenticated PING passes, MinIO answers an authenticated request and the materials bucket exists (distinguishing service-down from credential-mismatch from missing-bucket, each with its own fix command), Keycloak discovery is reachable, and prints the exact commands to start the API, the worker, and the frontend |
+
+Safety properties (by design, verified in the script):
+
+- Idempotent — safe to re-run at any time; every phase detects existing state
+  and skips or no-ops accordingly.
+- Never mutates git: no checkout, switch, pull, reset, or clean.
+- Never destructive to data: no `docker compose down`, no `down -v`, no
+  `docker volume rm`, no `docker system prune`, no `docker rm -f`, no
+  database drops. Databases are only ever created, never dropped.
+- Never overwrites an existing environment file.
+- Never prints secret values (the generated test-user password is written to
+  `.env.local` only).
+- All waits are bounded; failures produce targeted diagnostics rather than
+  hangs.
+
+---
+
+## 5. What stays running (Docker infrastructure)
+
+After the script exits, four containers keep running:
+
+| Service | Image | Port | Details |
+|---------|-------|------|---------|
+| `db` | `pgvector/pgvector:pg16` | `5432` | User `openlearn`, password `devpassword`. Databases: `openlearn` (Compose-created initial database), `openlearn_dev` (application DB used by the backend), `keycloak` (Keycloak's own storage). Data persists in the `postgres_data` named volume |
+| `keycloak` | `quay.io/keycloak/keycloak:26.7.3` | `8080` | Development mode, realm `openlearn` imported from `infra/realm-export.json` on first start (already-existing realms are left as-is). Bootstrap admin: `admin`/`admin` at `http://localhost:8080/admin`. Data persists in the `keycloak_dev_data` named volume |
+| `redis` | digest-pinned `redis` (same image as staging) | `6379` | Celery broker for the material-processing worker; password-protected (`REDIS_PASSWORD` from `.env.local`). Published on 127.0.0.1 only. Data persists in the `redis_dev_data` named volume |
+| `minio` | digest-pinned MinIO (same image as staging) | `9000` (S3 API), `9001` (console) | S3-compatible object store for course materials; credentials are `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env.local` (the same values the backend uses as its S3 keys). Published on 127.0.0.1 only. Data persists in the `minio_dev_data` named volume |
+
+The third compose service, `keycloak-bootstrap`, is a **one-shot** job: it
+runs the script in `infra/dev/bootstrap-keycloak.sh` against the running
+Keycloak and exits. A non-zero exit code means it actually failed.
+
+The `minio-init` service is likewise a **one-shot** job (gated behind the
+`init` Compose profile, exactly like its staging counterpart): it creates the
+materials bucket named by `S3_BUCKET_NAME` and exits. It is idempotent —
+running it against an existing bucket reports "already exists" and changes
+nothing. The setup script runs it for you and waits for its real exit code.
+
+On the database-name question: the compose file only creates `openlearn`,
+but the backend (`backend/.env.example`, `app/config.py`, and CI) uses
+`openlearn_dev`, and Keycloak is configured to use `keycloak`. The setup
+script bridges this gap by creating both secondary databases idempotently.
+This is the current, intentional behavior — if you create the databases by
+hand instead, these are the three names that should exist.
+
+---
+
+## 6. Run the backend
+
+In a new terminal:
+
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+```
+
+(On Windows/PowerShell with a Windows CPython venv, activate with
+`.\.venv\Scripts\Activate.ps1` instead.)
+
+Verify:
+
+```bash
+curl http://localhost:8000/health
+```
+
+The health endpoint is `GET /health` (defined in `backend/app/main.py`).
+Interactive API docs are at `http://localhost:8000/docs` while the server is
+running. The API process itself needs no AI API keys — no API endpoint calls
+a provider. The material-processing worker (below) is where provider settings
+apply; see `backend/.env.example` for what each default exercises.
+
+The API process also needs no exported Redis variables: the Celery publisher
+resolves Redis settings through the shared pydantic settings contract
+(`backend/app/config.py`), which reads the repository-root `.env.local`
+(`REDIS_PASSWORD` + `REDIS_URL`, written by `scripts/setup-dev.sh`) in
+addition to `backend/.env`. Precedence: process environment > `backend/.env`
+> `.env.local` > defaults. If neither variable can be resolved, material
+registration fails fast with an actionable error naming the fix.
+
+---
+
+## 7. Run the frontend
+
+In a second terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Then open `http://localhost:3000`. The frontend talks to the backend through
+`NEXT_PUBLIC_API_URL` (default `http://localhost:8000`) and to Keycloak
+through `NEXT_PUBLIC_KEYCLOAK_URL` / `NEXT_PUBLIC_KEYCLOAK_REALM` /
+`NEXT_PUBLIC_KEYCLOAK_CLIENT_ID`.
+
+---
+
+## 7b. Material processing workflow (local AI environment)
+
+The document-ingestion pipeline is real and runs entirely locally:
+upload → object storage (MinIO) → Celery task (Redis broker) → worker
+(Docling parse → chunk → embed → pgvector persist) → status
+`pending → processing → ready | failed`.
+
+1. Start the processing worker (new terminal; the same command and queues the
+   staging worker uses):
+
+   ```bash
+   bash scripts/run-worker-dev.sh
+   ```
+
+   With the default provider block (`backend/.env.example`, appended to an
+   existing `backend/.env` by the setup script), embeddings are real BGE-M3
+   vectors and chunk vectors are persisted to PostgreSQL; OCR is mock, which
+   is immaterial for born-digital PDFs (the targeted-OCR gate only fires on
+   PDFs with fewer than 50 extracted characters). The FIRST processed
+   material downloads the BGE-M3 model (~2 GB) into your local HuggingFace
+   cache; later runs reuse it.
+
+2. Verify the whole environment in one command:
+
+   ```bash
+   bash scripts/verify-local-environment.sh
+   ```
+
+   Checks services and readiness (db/redis/minio/keycloak), configuration
+   consistency (including `config.redis-url` — without it the API would
+   target the unresolvable container hostname), backend API health, worker
+   readiness and task discovery, database prerequisites (pgvector extension,
+   `vector_records`, migrations at head), storage connectivity through the
+   application's real client code path, and the demo accounts. Exit code
+   0 = environment ready. It never creates or deletes anything.
+
+3. Exercise the actual end-to-end ingestion with the two locked demo PDFs:
+
+   ```bash
+   bash scripts/run-material-smoke-test.sh
+   ```
+
+   To debug a failure while keeping the created resources
+   (`course`/`material`/`s3_key` ids are always written to the run's
+   `created-ids.txt`), pass `--keep-resources` (same as `KEEP_RESOURCES=1`).
+
+   The run logs in as the instructor through the real UI (Playwright), creates
+   a labeled course, uploads and registers each PDF through the supported API
+   flow, polls the real status lifecycle to `ready`, verifies persistence
+   (status endpoint, materials list, vector rows), checks the student's
+   owner-scoped view, and deletes exactly what it created. First run: pass a
+   larger `SMOKE_TIMEOUT` (e.g. `SMOKE_TIMEOUT=1800`) if the BGE-M3 model
+   still has to download.
+
+---
+
+## 8. Authentication
+
+Local authentication is standard OIDC against the local Keycloak:
+
+| Setting | Value |
+|---------|-------|
+| Realm | `openlearn` |
+| Frontend client | `openlearn-frontend` (public client) |
+| Expected API audience | `openlearn-api` |
+| Local test user | `testuser` (email `test@example.com`) |
+| Test-user role | `student` |
+| Test-user password | Whatever `OPENLEARN_TEST_USER_PASSWORD` in the root `.env.local` contains |
+| Demo instructor account | `instructor` (email `instructor@example.com`) — role `instructor` (Batch 2.1) |
+| Instructor password | Whatever `OPENLEARN_INSTRUCTOR_USER_PASSWORD` in the root `.env.local` contains |
+
+Log in at `http://localhost:3000/login` as `testuser`. Registration is also
+enabled (`registrationAllowed=true`, email verification off), so you can
+create additional local users from the UI. There is a `student` realm role;
+assign more roles from the Keycloak admin console (`admin`/`admin`) if you
+need them for testing.
+
+### Demo accounts (Batch 2.1)
+
+Two repeatable, non-production local accounts are provisioned by the
+one-shot `keycloak-bootstrap` job (idempotent — re-running the bootstrap
+resets their passwords to the current `.env.local` values):
+
+| Account | Role | Purpose |
+|---------|------|---------|
+| `testuser` (`test@example.com`) | `student` | General sign-in testing and the student view of the demo journey (an honest empty course list under owner-scoped listing) |
+| `instructor` (`instructor@example.com`) | `instructor` | The demo course-owner account (Batch 2.1): owns the demo courses and is the account that can exercise the instructor-gated material operations |
+
+Both passwords live only in the git-ignored root `.env.local`
+(`OPENLEARN_TEST_USER_PASSWORD`, `OPENLEARN_INSTRUCTOR_USER_PASSWORD`) —
+generated by `setup-dev.sh`, never printed to the terminal, and never
+committed. These are demo/local accounts: do not reuse them against staging
+or any shared environment. If you cannot use the compose bootstrap path,
+the manual equivalent is three `kcadm.sh` calls against the local console
+(create/update the user, set the password, add the `instructor` role) —
+`infra/dev/bootstrap-keycloak.sh` is the reference for the exact commands.
+
+If login fails, the most common causes are:
+
+1. **Wrong password** — re-run the setup script; the bootstrap resets the
+   `testuser` password to the current value in `.env.local` (idempotent).
+2. **Keycloak not running** — check `docker compose --env-file .env.local -f
+   infra/docker-compose.dev.yml ps`.
+3. **Realm problem** — open the admin console and confirm the `openlearn`
+   realm exists and is enabled.
+
+The backend validates tokens against
+`http://localhost:8080/realms/openlearn` (issuer and JWKS settings in
+`backend/.env`), so the same Keycloak instance must be reachable from both
+browser and backend.
+
+---
+
+## 9. Database migrations
+
+The setup script already applies all migrations during Phase 7.
+
+Run them manually (for example after pulling changes that add a migration):
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m alembic upgrade head
+```
+
+Alembic reads `DATABASE_URL` from `backend/.env` via the application settings
+(`backend/alembic/env.py` imports `app.config.settings`), so migrations
+always target the database your backend actually uses. To inspect the
+current state:
+
+```bash
+python -m alembic current
+python -m alembic history
+```
+
+Never create application tables by hand — always go through Alembic.
+
+---
+
+## 10. Stopping the environment
+
+From the repository root:
+
+```bash
+# Stop containers but KEEP all data (Postgres data, Keycloak realm/users):
+docker compose --env-file .env.local -f infra/docker-compose.dev.yml stop
+
+# Start them again later:
+docker compose --env-file .env.local -f infra/docker-compose.dev.yml start
+```
+
+`docker compose down` also stops the containers and removes them plus the
+network, but **keeps** the named volumes — your data survives (including the
+Redis append-only data and the stored material objects in MinIO). Use it when
+you want a clean slate of containers without losing data.
+
+`docker compose down -v` additionally **deletes the volumes**, destroying
+the databases, the Keycloak realm, users, the test user, the broker data, and
+every stored material object. Do not use it as a routine cleanup step; the
+setup script never runs it. If you do use it deliberately, re-run
+`bash scripts/setup-dev.sh` afterwards to rebuild everything (the bucket is
+recreated idempotently by the `minio-init` one-shot service).
+
+Remember: the setup script does not start the backend, frontend, or the
+processing worker, so "stopping the environment" only concerns the four
+Docker containers (plus your own dev-server/worker terminals).
+
+---
+
+## 11. Running Tests and Quality Checks
+
+The repository has a pytest suite in `backend/tests/` and two frontend test
+layers (Vitest and Playwright). Every command below was checked against the
+current repository configuration (`backend/pytest.ini`,
+`backend/requirements-dev.txt`, `frontend/package.json`,
+`frontend/vitest.config.ts`, `frontend/playwright.config.ts`, and the CI
+workflows in `.github/workflows/`). All commands assume the one-command
+setup (Section 4) has been run.
+
+Prerequisites at a glance:
+
+| What you run | Directory | Docker `db` needed | Migrations applied | Dev servers running |
+|--------------|-----------|--------------------|--------------------|---------------------|
+| Backend pytest | `backend/` | yes (PostgreSQL + pgvector) | yes | none |
+| Frontend unit tests (`npm run test`) | `frontend/` | no | no | none |
+| Frontend Storybook tests (`npm run test:storybook`) | `frontend/` | no | no | none (Chromium binary needed) |
+| Frontend E2E (`npm run test:e2e`) | `frontend/` | yes | yes | backend + frontend + Keycloak |
+
+Lint, type-check, and build commands are quality checks, not tests; they
+are listed with their suites and do not substitute for them.
+
+### Backend tests
+
+All backend commands run from `backend/`. The examples call the
+virtualenv's interpreter directly, so the same command line works in any
+shell; activating the venv first (as in Sections 6 and 9) also works. The
+interpreter path depends on the platform (created in Phase 5):
+
+| Environment | Interpreter |
+|-------------|-------------|
+| Linux / macOS / WSL2 | `.venv/bin/python` |
+| Windows Git Bash (Windows CPython venv) | `.venv/Scripts/python.exe` |
+| Windows PowerShell | `.venv\Scripts\python.exe` |
+
+Full suite — everything CI's two backend jobs run, in one command:
+
+```bash
+.venv/bin/python -m pytest tests
+```
+
+There are no pytest markers; test categories are directory-based. CI
+(`.github/workflows/ci.yml`) selects them exactly like this:
+
+```bash
+# "Backend" CI job — core API / service / database / worker tests:
+.venv/bin/python -m pytest tests --ignore=tests/pal --ignore=tests/documents
+
+# "AI tests" CI job — PAL provider/router tests and document pipeline tests:
+.venv/bin/python -m pytest tests/pal tests/documents
+```
+
+Targeted runs (pytest accepts forward slashes on Windows too):
+
+```bash
+.venv/bin/python -m pytest tests/test_main.py                     # one file
+.venv/bin/python -m pytest tests/test_main.py::test_health_check  # one test function
+.venv/bin/python -m pytest tests -k material                      # keyword filter
+```
+
+What the suite requires — verified from `tests/conftest.py` and the test
+modules themselves:
+
+- **PostgreSQL + pgvector, up and migrated.** The `db_session` fixture
+  connects to `settings.database_url` — the same `openlearn_dev` database
+  the backend uses (Section 5). There is no separate test database and no
+  automatic rollback: database-backed tests create their own rows (users,
+  courses, materials) and delete them again, so an interrupted run can
+  leave rows behind. To run against a scratch database instead, set
+  `DATABASE_URL` in the environment before pytest — environment variables
+  override `backend/.env` (this is exactly how CI injects its database
+  URL).
+- **No Keycloak, no Redis, no running backend, no AI API keys.** OIDC
+  tests mint RS256 tokens locally and fake the JWKS client; the
+  Celery-related test modules set `REDIS_PASSWORD` themselves and never
+  contact a broker; API tests use the in-process TestClient; all PAL
+  providers default to `mock` (Section 1).
+
+One group is opt-in: the real-PostgreSQL pgvector integration tests in
+`tests/pal/providers/vector_db/` are skipped unless `OPENLEARN_PG_TESTS=1`
+is set. They require the `vector_records` table (migrations applied),
+touch only rows whose ID starts with `p9b-test:`, and can target a
+different database through `OPENLEARN_TEST_DATABASE_URL`:
+
+```bash
+# Bash (Linux / macOS / WSL2 / Git Bash):
+OPENLEARN_PG_TESTS=1 .venv/bin/python -m pytest tests/pal/providers/vector_db
+```
+
+```powershell
+# Windows PowerShell:
+$env:OPENLEARN_PG_TESTS = "1"
+.venv\Scripts\python.exe -m pytest tests/pal/providers/vector_db
+```
+
+Backend quality checks (not tests), plus the eval-harness job CI runs:
+
+```bash
+.venv/bin/python -m ruff check .                                        # lint (CI runs this before tests)
+.venv/bin/python -m pytest tests --cov=app --cov-report=term            # optional coverage report
+.venv/bin/python -m app.eval run dummy --dataset tests/data/dummy.json  # eval harness (no infrastructure)
+```
+
+The coverage command relies on `pytest-cov`, which is pinned in
+`requirements-dev.txt`; CI does not enforce coverage.
+
+### Regenerating `docs/openapi.json`
+
+The tracked OpenAPI document at `docs/openapi.json` is generated from the live
+FastAPI application — never hand-edited — and is formatted deterministically
+(2-space indent, sorted keys, trailing newline) so it produces no spurious
+diffs. Regenerate it after any change to a route, `response_model`, or the
+application version. The command **must be run from `backend/`** so that the
+`app` package is importable:
+
+```bash
+cd backend
+python -m app.openapi_export
+```
+
+`backend/tests/test_openapi_contract.py` fails when the tracked file no longer
+matches the application, printing the same command.
+
+### Frontend tests
+
+All frontend commands run from `frontend/` with dependencies installed
+(`npm ci`, setup Phase 6). Only scripts actually defined in
+`frontend/package.json` are used here.
+
+**Unit tests.** The default `npm run test` script runs only the Vitest
+`unit` project — plain Node environment over `lib/**/*.test.ts` and
+`features/**/*.test.ts` (see `frontend/vitest.config.ts`). It does not run
+the Storybook or E2E suites and needs no browser, servers, or environment
+variables:
+
+```bash
+npm run test
+npm run test -- lib/api.test.ts     # one file
+npm run test -- -t "bearer token"   # filter by test name
+```
+
+**Storybook component tests.** The `storybook` Vitest project renders the
+stories in `frontend/stories/` in a headless Chromium via
+`@vitest/browser-playwright`, including axe accessibility checks that fail
+the run on violations:
+
+```bash
+npx playwright install chromium   # once — installs the browser binary
+npm run test:storybook
+```
+
+**E2E tests (Playwright).** Four spec files — `e2e/login.spec.ts`,
+`e2e/courses-crud.spec.ts`, `e2e/profile-roundtrip.spec.ts`, and
+`e2e/onboarding.spec.ts` — drive the real UI against the real stack.
+Since Batch 5.1, the courses-crud file also carries the
+affordance-visibility checks, and its CRUD loop runs on the instructor
+account (the hub's Edit/Delete/Upload affordances are instructor-gated
+since Batch 4.3). Start everything first: the `db` + `keycloak`
+containers (Section 5), the backend on `:8000` (Section 6), and the
+frontend on `:3000` (Section 7). Then set the credentials the specs
+read:
+
+```bash
+# Bash (Linux / macOS / WSL2 / Git Bash):
+export E2E_USERNAME=testuser
+export E2E_PASSWORD=<OPENLEARN_TEST_USER_PASSWORD value from ../.env.local>
+# Batch 5.1 — required ONLY by the courses-crud CRUD loop (the instructor
+# test account). Without it that test skips with an explicit message; the
+# other flows are unaffected.
+export E2E_INSTRUCTOR_USERNAME=instructor
+export E2E_INSTRUCTOR_PASSWORD=<OPENLEARN_INSTRUCTOR_USER_PASSWORD value from ../.env.local>
+npm run test:e2e
+```
+
+```powershell
+# Windows PowerShell:
+$env:E2E_USERNAME = "testuser"
+$env:E2E_PASSWORD = "<OPENLEARN_TEST_USER_PASSWORD value from ..\.env.local>"
+# Batch 5.1 — required ONLY by the courses-crud CRUD loop.
+$env:E2E_INSTRUCTOR_USERNAME = "instructor"
+$env:E2E_INSTRUCTOR_PASSWORD = "<OPENLEARN_INSTRUCTOR_USER_PASSWORD value from ..\.env.local>"
+npm run test:e2e
+```
+
+Behavior worth knowing (from `frontend/playwright.config.ts` and the
+specs):
+
+- The Playwright runner reads the credential pairs from the environment:
+  `E2E_USERNAME`/`E2E_PASSWORD` (the student test user — login, profile,
+  onboarding, and the affordance-visibility flow) and
+  `E2E_INSTRUCTOR_USERNAME`/`E2E_INSTRUCTOR_PASSWORD` (the instructor
+  test account — the courses-crud CRUD loop only). The `NEXT_PUBLIC_*`
+  variables are consumed by the frontend app itself and come from
+  `frontend/.env.local` when `npm run dev` starts (Section 3).
+- The suite runs serially against Chromium only — the flows share
+  Keycloak sessions and course/profile data. Locally there are no retries
+  (CI retries twice); failures leave traces and screenshots under
+  `frontend/test-results/`.
+- Each credential pair gates exactly its own flows: a spec whose pair is
+  unset skips with an explicit, actionable message, so a green result
+  without both pairs does not mean every flow ran — set both for the
+  full suite. The instructor pair is never silently replaced by the
+  student pair (the CRUD flow's affordances are instructor-gated).
+- Targeted runs: `npm run test:e2e -- e2e/login.spec.ts` (one spec file)
+  or `npm run test:e2e -- -g "Course"` (title filter).
+- `PLAYWRIGHT_BASE_URL` overrides the target URL (default
+  `http://localhost:3000`), so the same suite can be pointed at another
+  deployment.
+
+Frontend quality checks (not tests):
+
+```bash
+npm run lint         # ESLint (flat config)
+npm run typecheck    # tsc --noEmit
+npm run build        # production build — needs NEXT_PUBLIC_* from frontend/.env.local
+```
+
+### If tests fail
+
+- Backend tests fail with connection errors or missing tables → the `db`
+  container is not running or migrations were not applied (Sections 5 and
+  9). Re-running the setup script is safe and fixes both.
+- Vitest Storybook tests or Playwright E2E cannot launch a browser → run
+  `npx playwright install chromium` (on Linux, `--with-deps` adds missing
+  OS libraries, which is what CI does).
+- E2E cannot reach Keycloak or the API → the corresponding container or
+  dev server is down, or `NEXT_PUBLIC_API_URL` in `frontend/.env.local`
+  does not match the backend port. See Troubleshooting (Section 12).
+
+---
+
+## 12. Troubleshooting
+
+All compose commands below assume the repository root and this prefix:
+
+```bash
+DC="docker compose --env-file .env.local -f infra/docker-compose.dev.yml"
+```
+
+### Docker daemon unavailable
+
+Symptom: the script exits during preflight with "Docker daemon is not
+reachable". Fix: start Docker Desktop (macOS/Windows) or the system service
+(`sudo systemctl start docker` on most Linux distributions), then re-run the
+script. `docker info` is the quickest reachability check.
+
+### Port 5432 already in use (PostgreSQL)
+
+Symptom: the `db` container starts but PostgreSQL never becomes ready, or
+the script's PostgreSQL wait fails. Usually a locally installed PostgreSQL
+is bound to 5432. Fix: stop the local service (`sudo systemctl stop
+postgresql`) or change the host-side port mapping in
+`infra/docker-compose.dev.yml` (e.g. `"5433:5432"`) **and** update the port
+in `backend/.env` `DATABASE_URL` to match. The script never changes this
+file for you.
+
+### Port 8080 already in use (Keycloak)
+
+Symptom: Keycloak container restarts or the discovery probe fails while the
+logs show a bind error. Fix: stop whatever occupies 8080 (`sudo lsof -i
+:8080` on Linux/macOS), or remap the port in the compose file and update the
+Keycloak URLs in `backend/.env` and `frontend/.env.local` to match.
+
+### Port 8000 or 3000 already in use (dev servers)
+
+These are started by you, not the script. For the backend, pick another port
+(`uvicorn app.main:app --reload --port 8001`) and update
+`NEXT_PUBLIC_API_URL` in `frontend/.env.local` (then restart the frontend
+dev server). For the frontend, `npm run dev -- -p 3001` — but note the
+backend's CORS allow-list (`CORS_ORIGINS` in `backend/.env`) must include
+the frontend origin you end up using.
+
+### Keycloak realm not ready
+
+Symptom: the script's Keycloak wait fails even though the container runs.
+The script prints its own diagnostics (proxy variables, whether port 8080
+answers, container log tail). Readiness is checked against the standard OIDC
+discovery document, `http://localhost:8080/realms/openlearn/.well-known/openid-configuration`
+— you can curl it yourself. Known causes: proxy environment variables
+intercepting localhost requests (set `no_proxy="127.0.0.1,localhost"`), a
+disabled realm (fix in the admin console), or a slow first start (the wait
+is bounded at 180 s; simply re-running the script is safe).
+
+### Database connection failure (backend)
+
+Symptom: uvicorn starts but requests fail with connection errors, or Alembic
+cannot connect. Check, in order: the `db` container is running
+(`$DC ps`), `DATABASE_URL` in `backend/.env` points at
+`localhost:5432/openlearn_dev` with user `openlearn`, and the
+`openlearn_dev` database exists (the script creates it; to verify:
+`$DC exec db psql -U openlearn -d postgres -c '\l'`).
+
+### Missing database
+
+If `openlearn_dev` or `keycloak` is missing (for example after
+reconstructing the volume manually), either re-run the setup script or
+create it explicitly:
+
+```bash
+$DC exec db psql -U openlearn -d postgres -c 'CREATE DATABASE openlearn_dev;'
+```
+
+Existing databases are never dropped by the script, so re-running it is
+always safe.
+
+### Alembic migration failure
+
+Symptom: Phase 7 reports a migration error. Usual causes: the database is
+unreachable (see above), the schema was modified by hand, or a migration was
+authored incorrectly on your branch. Read the error output — Alembic names
+the failing revision. Do not "fix" schema drift by editing tables manually;
+resolve the migration itself.
+
+### Frontend cannot reach the API
+
+Symptom: the UI loads but API calls fail. Check: the backend is actually
+running and `curl http://localhost:8000/health` works; `NEXT_PUBLIC_API_URL`
+in `frontend/.env.local` matches the backend port; the backend's
+`CORS_ORIGINS` includes `http://localhost:3000`. Remember that
+`NEXT_PUBLIC_*` variables are inlined when the dev server starts — restart
+`npm run dev` after changing them.
+
+### Keycloak login failure
+
+See the "If login fails" list in the Authentication section: password reset
+via re-run, container status, realm enabled. Also confirm the browser can
+reach `http://localhost:8080/realms/openlearn/.well-known/openid-configuration`
+directly — if the browser has a proxy configured, localhost must be excluded
+there too.
+
+### Stale containers
+
+If containers are in a weird state after an interrupted run:
+
+```bash
+$DC ps
+$DC restart db keycloak
+```
+
+`restart` is safe and keeps data. Avoid `down -v` (see Stopping the
+environment). The setup script itself never removes containers, so stale
+state from other experiments is never cleaned up implicitly.
+
+### Environment-file mismatch
+
+The script never overwrites your existing files, so if
+`backend/.env.example` gains new variables in a branch you pull, your old
+`backend/.env` stays as-is. Compare and merge manually:
+
+```bash
+diff backend/.env.example backend/.env
+diff frontend/.env.example frontend/.env.local
+```
+
+To regenerate a file from scratch, delete it yourself and re-run the script.
+
+### Dependency installation issues
+
+Backend: the first install is large (several GB with the torch stack) and
+can take several minutes; a flaky network shows up as pip hash/timeout
+errors — just re-run the script (it retries the install because the import
+check will still fail). The venv must be Python 3.12; the script refuses
+known-broken MSYS2/MinGW venvs on Windows with instructions to move
+`backend/.venv` aside. Frontend: `npm ci` requires `package-lock.json` to be
+in sync with `package.json`; if you changed dependencies, update the
+lockfile deliberately (`npm install`) rather than fighting `npm ci`.
+
+---
+
+## 13. Final verification checklist
+
+Run through this after setup (and any time something feels off):
+
+```bash
+DC="docker compose --env-file .env.local -f infra/docker-compose.dev.yml"
+
+# 1. Containers running
+$DC ps                                   # db and keycloak "running"
+
+# 2. PostgreSQL reachable
+$DC exec db pg_isready -U openlearn -d postgres
+
+# 3. Keycloak realm reachable (OIDC discovery)
+curl --noproxy '*' -fsS \
+  http://localhost:8080/realms/openlearn/.well-known/openid-configuration \
+  >/dev/null && echo "keycloak OK"
+
+# 4. Backend healthy
+curl --noproxy '*' http://localhost:8000/health
+
+# 5. Frontend loads
+#    open http://localhost:3000
+
+# 6. Authentication works
+#    log in at http://localhost:3000/login as testuser (student) or
+#    instructor (instructor); the passwords are the
+#    OPENLEARN_TEST_USER_PASSWORD / OPENLEARN_INSTRUCTOR_USER_PASSWORD
+#    values in .env.local
+
+# 7. Migrations applied
+cd backend && source .venv/bin/activate && python -m alembic current
+```
+
+Items 1–3 are exactly what the setup script verifies itself in Phase 8, so
+if the script finished green, those are already true.
