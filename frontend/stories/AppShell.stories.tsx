@@ -260,8 +260,28 @@ export const SidebarCollapsed: Story = {
         // the toggle fully transparent (computed opacity — a style the
         // synthetic runner reads reliably), while both keep their
         // document positions (opacity-only swap, zero layout shift).
-        await expect(getComputedStyle(brand).opacity).toBe("1");
-        await expect(getComputedStyle(toggle).opacity).toBe("0");
+        //
+        // Both values are transition-affected AND ambient-pointer
+        // affected: the addon-vitest runner runs every story in real
+        // Playwright Chromium, where (on Linux) there is a documented
+        // race in which the browser applies :hover to top-left content
+        // when a story's DOM mounts WITHOUT any mouse movement, even
+        // though the runner parks the cursor in a beforeEach (its own
+        // comments call this "sometimes"). The synthesized hover
+        // engages this region's designed opacity cross-fade from
+        // browser state the play never drives, so an instantaneous
+        // read can catch a mid-flight frame (e.g. "0.967108" ≈ 3/4
+        // through the 150ms ease) instead of the settled value. The
+        // contract is the SETTLED idle state; these waitFors preserve
+        // the exact expected values ("1"/"0" still fails hard on any
+        // genuine regression to the idle utilities) while ignoring
+        // transient transition frames.
+        await waitFor(() => {
+            expect(getComputedStyle(brand).opacity).toBe("1");
+        });
+        await waitFor(() => {
+            expect(getComputedStyle(toggle).opacity).toBe("0");
+        });
 
         // Batch 4.2 correction B: the brand region's second row — the
         // SIDE-01 empty spacer on pointer devices (the toggle's row

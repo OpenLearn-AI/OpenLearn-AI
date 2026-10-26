@@ -34,7 +34,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@chromatic-com/storybook": "latest",
+    "@chromatic-com/storybook": "5.3.1",
     "@playwright/test": "^1.63.0",
     "@storybook/addon-a11y": "^10.6.0",
     "@storybook/addon-docs": "^10.6.0",
@@ -44,17 +44,17 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/browser-playwright": "latest",
-    "@vitest/coverage-v8": "latest",
+    "@vitest/browser-playwright": "4.1.11",
+    "@vitest/coverage-v8": "4.1.11",
     "chromatic": "^18.7.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "eslint-plugin-storybook": "^10.6.0",
-    "playwright": "latest",
+    "playwright": "1.63.0",
     "storybook": "^10.6.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vite": "latest",
-    "vitest": "latest"
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
   }
 }
