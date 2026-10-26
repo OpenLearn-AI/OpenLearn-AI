@@ -1,18 +1,29 @@
-import os
-
 from celery import Celery
 from celery.signals import worker_process_init
 
-
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
-
-if not REDIS_PASSWORD:
-    raise RuntimeError(
-        "REDIS_PASSWORD environment variable is not set"
-    )
+from app.config import settings
 
 
-REDIS_URL = f"redis://:{REDIS_PASSWORD}@redis:6379"
+# Broker/result Redis location, resolved through the shared pydantic settings
+# contract (app.config.Settings.redis_connection_url) so that the API process
+# started with the documented command (uvicorn app.main:app --reload --port
+# 8000) and the worker started via scripts/run-worker-dev.sh receive
+# COMPATIBLE settings:
+#
+#   precedence: process environment (REDIS_URL / REDIS_PASSWORD)
+#             > backend/.env
+#             > repository-root .env.local (written by scripts/setup-dev.sh)
+#             > Settings defaults
+#
+# The default host stays "redis" — the container-network hostname used by
+# staging and by any compose-hosted worker. Local host processes point at the
+# loopback-published Redis via REDIS_URL, which scripts/setup-dev.sh writes
+# into .env.local and scripts/run-worker-dev.sh also exports. Nothing sets
+# these variables in staging, so the composed default below is byte-identical
+# to the previous hardcode. An unresolvable configuration raises immediately
+# with an actionable diagnostic (see app/config.py) — it must never fall back
+# to an unauthenticated default.
+REDIS_URL = settings.redis_connection_url
 
 CELERY_BROKER_URL = f"{REDIS_URL}/0"
 CELERY_RESULT_BACKEND = f"{REDIS_URL}/1"
@@ -25,6 +36,7 @@ celery_app = Celery(
     include=[
         "app.workers.tasks.sample",
         "app.workers.tasks.material_tasks",
+        "app.workers.tasks.maintenance_tasks",
     ],
 )
 
@@ -40,8 +52,8 @@ celery_app.conf.update(
 
     # Task time limits (W7 F10): soft 10m / hard 11m. SoftTimeLimitExceeded
     # feeds the existing material failure path (result: failed). The hard
-    # kill / OOM / container restart case remains the documented W7 residual
-    # gap; no reaper is built.
+    # kill / OOM / container restart case is covered by the periodic
+    # ``reap_stuck_materials`` task below (review finding B-07).
     task_soft_time_limit=600,
     task_time_limit=660,
 
@@ -73,8 +85,14 @@ celery_app.conf.update(
         },
     },
 
-    # Celery Beat
-    beat_schedule={},
+    # Celery Beat: needs a running ``celery ... beat`` process (staging compose
+    # has one; start one locally to exercise it).
+    beat_schedule={
+        "reap-stuck-materials": {
+            "task": "app.workers.tasks.maintenance_tasks.reap_stuck_materials",
+            "schedule": 300.0,
+        },
+    },
 )
 
 

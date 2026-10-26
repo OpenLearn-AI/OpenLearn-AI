@@ -14,7 +14,7 @@ from app.pal.providers.vector_db.mock_provider import MockVectorDBProvider
 from app.pal.providers.vector_db.postgres_provider import PostgresVectorDBProvider
 
 
-def test_default_vector_db_provider_is_mock() -> None:
+def test_default_vector_db_provider_is_mock(mock_ai_providers) -> None:
     assert isinstance(get_vector_db_provider(), MockVectorDBProvider)
 
 

@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Text, func, text
+from sqlalchemy import DateTime, Index, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,6 +35,17 @@ class VectorRecordModel(Base):
     """A stored dense embedding with JSONB provenance metadata."""
 
     __tablename__ = "vector_records"
+    # GIN (jsonb_path_ops) serves the ``metadata @> {...}`` filter used to
+    # delete a material's vectors (reprocess, course delete) without a full
+    # table scan. Mirrored by migration c5e8f1a2b9d7.
+    __table_args__ = (
+        Index(
+            "ix_vector_records_metadata_gin",
+            "metadata",
+            postgresql_using="gin",
+            postgresql_ops={"metadata": "jsonb_path_ops"},
+        ),
+    )
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
 

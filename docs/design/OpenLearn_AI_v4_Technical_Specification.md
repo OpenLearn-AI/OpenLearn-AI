@@ -1186,7 +1186,7 @@ Six ORM models exist (`app/models/__init__.py`): `User`, `Profile`, `Course`, `E
 | Table | Key columns and constraints (verified) |
 |-------|----------------------------------------|
 | `users` | UUID PK; `keycloak_issuer` (String 512) + `keycloak_subject` (String 255) — the identity pair; `email` unique + indexed; `email_verified` (bool); `settings` JSONB. **No password hash, no role column** (removed by migration; ADR-0006) |
-| `profiles` | 1:1 with `users` (unique `user_id`, FK CASCADE); Week-6 CSP subset: `education_level` (String 50), `major`, `university` (String 255), `preferred_language` (default `en`, CHECK `en`/`ar`), `learning_style_vark` (String 20), `daily_available_minutes` (CHECK 1–1440, NULL until onboarding) |
+| `profiles` | 1:1 with `users` (unique `user_id`, FK CASCADE); Week-6 CSP subset: `education_level` (String 50), `major`, `university` (String 255), `preferred_language` (default `en`, CHECK `en`/`ar`), `learning_style_vark` (String 100; Batch 4.2 widens it for the comma-joined VARK multi-select), `daily_available_minutes` (CHECK 1–1440, NULL until onboarding) |
 | `courses` | UUID PK; `owner_id` FK → `users` CASCADE + indexed; `title` (String 255); `description` (Text, nullable); `created_at` |
 | `enrollments` | `course_id` + `user_id` FKs, both CASCADE; unique constraint `(course_id, user_id)`; `created_at` |
 | `materials` | `course_id` FK CASCADE + indexed; `title`; `s3_key` — **server-generated**, unique, never taken from a client-supplied path; `status` default `pending` with deliberately **no CHECK constraint** (status vocabulary owned by the future processing phase); `uploaded_by` FK → `users` CASCADE |

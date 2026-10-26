@@ -28,10 +28,13 @@ class ProfileUpdate(BaseModel):
     major: str = Field(min_length=1, max_length=255)
     preferred_language: SupportedLanguage
     university: str | None = Field(default=None, min_length=1, max_length=255)
+    # Free text in the contract (no enum yet); Batch 4.2 raises the
+    # documented max to 100 chars so a comma-joined multi-select of the
+    # four VARK styles fits outright ("Visual,Aural,Read/Write,Kinesthetic").
     learning_style_vark: str | None = Field(
         default=None,
         min_length=1,
-        max_length=20,
+        max_length=100,
     )
     # Required and positive per the Week 6 contract; capped at 1440 to mirror
     # the approved ck_profiles_daily_available_minutes_range database constraint.

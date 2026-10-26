@@ -3,13 +3,21 @@
 Uses the established authenticated-endpoint harness (fake JWKS + overridden DB
 session) and a fake boto3 so no real MinIO/S3 instance is required. Tests
 verify behavior, not storage internals.
+
+Week 9 additions: the fake S3 client also serves ``get_object`` (registration
+hashes the stored object for content deduplication) and records
+``delete_object`` calls (verified-duplicate cleanup), and the registration
+tests cover the course-scoped deduplication and duplicate-failed retry paths.
 """
+import hashlib
+import io
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
@@ -41,12 +49,83 @@ AUDIENCE = settings.keycloak_audience
 
 
 class FakeS3Client:
+    DEFAULT_PAYLOAD = b"fake-material-bytes"
+
     def __init__(self):
         self.calls = []
+        # Stored objects by key (Week 9): served by ``get_object`` for the
+        # registration hash; unknown keys hash the default payload so tests
+        # only seed content when a deduplication decision depends on it.
+        self.objects: dict[str, bytes] = {}
+        self.missing_keys: set[str] = set()
+        self.deleted_keys: list[str] = []
+        # Per-key overrides: ETag returned by HEAD/GET, and reported size.
+        self.etags: dict[str, str] = {}
+        self.sizes: dict[str, int] = {}
 
-    def generate_presigned_url(self, ClientMethod, Params, ExpiresIn):
-        self.calls.append((ClientMethod, dict(Params), ExpiresIn))
-        return "https://storage.example/presigned-upload-url"
+    def generate_presigned_post(self, Bucket, Key, Conditions, ExpiresIn):
+        self.calls.append(
+            {
+                "Bucket": Bucket,
+                "Key": Key,
+                "Conditions": list(Conditions),
+                "ExpiresIn": ExpiresIn,
+            }
+        )
+        return {
+            "url": "https://storage.example/bucket",
+            "fields": {"key": Key, "policy": "signed-policy"},
+        }
+
+    def _missing_error(self, operation):
+        return ClientError(
+            {
+                "Error": {
+                    "Code": "NoSuchKey",
+                    "Message": "The specified key does not exist.",
+                },
+                "ResponseMetadata": {"HTTPStatusCode": 404},
+            },
+            operation,
+        )
+
+    def etag_for(self, Key):
+        return self.etags.get(Key, '"default-etag"')
+
+    def head_object(self, Bucket, Key):
+        # Unknown keys serve the default payload: from the storage's point of
+        # view the presigned upload happened. The missing-object case is
+        # armed explicitly by the tests that need it.
+        if self.missing_keys and Key in self.missing_keys:
+            raise self._missing_error("HeadObject")
+        payload = self.objects.get(Key, self.DEFAULT_PAYLOAD)
+        return {
+            "ContentLength": self.sizes.get(Key, len(payload)),
+            "ETag": self.etag_for(Key),
+        }
+
+    def get_object(self, Bucket, Key, IfMatch=None):
+        if self.missing_keys and Key in self.missing_keys:
+            raise self._missing_error("GetObject")
+        if IfMatch is not None and IfMatch != self.etag_for(Key):
+            raise ClientError(
+                {
+                    "Error": {"Code": "PreconditionFailed", "Message": "x"},
+                    "ResponseMetadata": {"HTTPStatusCode": 412},
+                },
+                "GetObject",
+            )
+        return {"Body": io.BytesIO(self.objects.get(Key, self.DEFAULT_PAYLOAD))}
+
+    def delete_object(self, Bucket, Key):
+        self.deleted_keys.append(Key)
+        self.objects.pop(Key, None)
+
+    def delete_objects(self, Bucket, Delete):
+        for item in Delete["Objects"]:
+            self.deleted_keys.append(item["Key"])
+            self.objects.pop(item["Key"], None)
+        return {}
 
 
 class FakeBoto3:
@@ -161,6 +240,26 @@ def _upload_url_payload(**overrides) -> dict:
     return payload
 
 
+async def _process(
+    db_session, token: str, material_id: uuid.UUID, raise_app_exceptions=True
+):
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        transport = ASGITransport(app=app, raise_app_exceptions=raise_app_exceptions)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.post(
+                f"/v1/materials/{material_id}/process",
+                headers=headers,
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+
 @pytest.mark.asyncio
 async def test_owner_instructor_can_request_upload_url(
     db_session,
@@ -190,7 +289,9 @@ async def test_owner_instructor_can_request_upload_url(
 
     assert body["course_id"] == str(course.id)
     assert body["title"] == "Lecture 1"
-    assert body["upload_url"] == "https://storage.example/presigned-upload-url"
+    assert body["upload_url"] == "https://storage.example/bucket"
+    assert body["upload_fields"]["key"] == body["s3_key"]
+    assert body["max_size_bytes"] == 10 * 1024 * 1024
     assert body["s3_key"].startswith(f"courses/{course.id}/materials/")
     assert isinstance(body["expires_in"], int)
     assert body["expires_in"] > 0
@@ -236,11 +337,13 @@ async def test_upload_url_uses_configured_storage_settings(
     assert config is not None
     assert "s3v4" in str(getattr(config, "signature_version", ""))
 
-    method, params, expires_in = fake_boto3.s3_client.calls[0]
-    assert method == "put_object"
-    assert params["Bucket"] == settings.s3_bucket_name
-    assert params["Key"] == response.json()["s3_key"]
-    assert expires_in == settings.s3_url_expiration_seconds
+    call = fake_boto3.s3_client.calls[0]
+    assert call["Bucket"] == settings.s3_bucket_name
+    assert call["Key"] == response.json()["s3_key"]
+    assert call["ExpiresIn"] == settings.s3_url_expiration_seconds
+    assert ["content-length-range", 1, settings.max_upload_size_bytes] in call[
+        "Conditions"
+    ]
 
     await db_session.delete(instructor)
     await db_session.commit()
@@ -431,6 +534,7 @@ async def test_register_material_creates_pending_row_and_enqueues_processing(
     db_session,
     rsa_keypair,
     fake_jwks,
+    fake_boto3,
     fake_publisher,
 ):
     private_key, _ = rsa_keypair
@@ -483,6 +587,7 @@ async def test_register_material_publish_failure_returns_500_and_leaves_pending(
     db_session,
     rsa_keypair,
     fake_jwks,
+    fake_boto3,
     monkeypatch,
 ):
     """F8 pin: commit-before-publish.
@@ -638,12 +743,17 @@ async def test_register_material_key_must_belong_to_route_course(
 
 
 @pytest.mark.asyncio
-async def test_register_material_duplicate_key_conflicts(
+async def test_register_material_same_key_twice_reuses_canonical(
     db_session,
     rsa_keypair,
     fake_jwks,
+    fake_boto3,
     fake_publisher,
 ):
+    """Week 9: the same s3_key holds the same object, so a second
+    registration is a content duplicate and reuses the canonical material —
+    no second row, no second job, and the canonical object itself is never
+    deleted (the duplicate-object guard rejects the identical key)."""
     private_key, _ = rsa_keypair
     instructor = await _create_user(
         db_session,
@@ -668,8 +778,345 @@ async def test_register_material_duplicate_key_conflicts(
         )
 
     assert first.status_code == 202
-    assert second.status_code == 409
+    assert second.status_code == 202
+
+    first_body = first.json()
+    second_body = second.json()
+    assert second_body["material_id"] == first_body["material_id"]
+    assert first_body["job_id"] == "test-job-id"
+    assert second_body["job_id"] is None
+    assert second_body["status"] == PENDING_STATUS
+
     assert len(fake_publisher) == 1
+    assert fake_boto3.s3_client.deleted_keys == []
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == uuid.UUID(first_body["material_id"]))
+    )
+    stored = result.scalar_one()
+    assert stored.sha256 is not None
+    assert stored.sha256 == hashlib.sha256(FakeS3Client.DEFAULT_PAYLOAD).hexdigest()
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_register_material_concurrent_duplicate_returns_winner(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_boto3,
+    fake_publisher,
+    monkeypatch,
+):
+    """Week 9: when a concurrent registration of the same content wins the
+    (course_id, sha256) insert race, the loser gets the winner back (202,
+    no job) instead of a 409, and its orphan object is deleted."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-duplicate-race-subject",
+        "material-duplicate-race@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    content = b"same lecture pdf"
+    first_key = material_service.build_material_s3_key(course.id, "slides.pdf")
+    second_key = material_service.build_material_s3_key(course.id, "slides-copy.pdf")
+    fake_boto3.s3_client.objects[first_key] = content
+    fake_boto3.s3_client.objects[second_key] = content
+
+    # Simulate the race: both pre-insert lookups miss; only the lookup in
+    # the IntegrityError handler sees the committed winner.
+    real_lookup = material_service.find_material_by_content_hash
+    calls = {"n": 0}
+
+    async def racing_lookup(db, course_id, sha256):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            return None
+        return await real_lookup(db, course_id, sha256)
+
+    monkeypatch.setattr(
+        "app.api.materials.find_material_by_content_hash", racing_lookup
+    )
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        first = await client.post(
+            f"/v1/courses/{course.id}/materials",
+            json={"title": "Slides", "s3_key": first_key},
+            headers=headers,
+        )
+        second = await client.post(
+            f"/v1/courses/{course.id}/materials",
+            json={"title": "Slides again", "s3_key": second_key},
+            headers=headers,
+        )
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert second.json()["material_id"] == first.json()["material_id"]
+    assert second.json()["job_id"] is None
+    assert len(fake_publisher) == 1
+    assert fake_boto3.s3_client.deleted_keys == [second_key]
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Week 9 — course-scoped SHA-256 deduplication on registration
+# ---------------------------------------------------------------------------
+
+
+async def _register(db_session, token: str, course_id: uuid.UUID, s3_key: str, title="Slides", raise_app_exceptions=True):
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        transport = ASGITransport(app=app, raise_app_exceptions=raise_app_exceptions)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.post(
+                f"/v1/courses/{course_id}/materials",
+                json={"title": title, "s3_key": s3_key},
+                headers=headers,
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_register_material_missing_object_returns_404(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_boto3,
+    fake_publisher,
+):
+    """Week 9 registration hashes the stored object; when no object was
+    uploaded for the s3_key the registration cannot proceed and reports 404."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-missing-object-subject",
+        "material-missing-object@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    s3_key = material_service.build_material_s3_key(course.id, "slides.pdf")
+    fake_boto3.s3_client.missing_keys.add(s3_key)
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _register(db_session, token, course.id, s3_key)
+
+    assert response.status_code == 404
+    assert fake_publisher == []
+
+    result = await db_session.execute(
+        select(Material).where(Material.course_id == course.id)
+    )
+    assert result.scalars().all() == []
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("canonical_status", [READY_STATUS, PENDING_STATUS, PROCESSING_STATUS])
+async def test_register_material_duplicate_of_active_status_reuses_canonical(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_boto3,
+    fake_publisher,
+    canonical_status,
+):
+    """Week 9: a duplicate of a ready/pending/processing material returns the
+    canonical material ID without enqueueing another job, and the freshly
+    uploaded duplicate object is deleted after verification."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        f"material-dedup-{canonical_status}-subject",
+        f"material-dedup-{canonical_status}@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    content = b"identical lecture pdf"
+    canonical = await _create_material(
+        db_session, course, instructor,
+        status=canonical_status,
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+    duplicate_key = material_service.build_material_s3_key(course.id, "slides-copy.pdf")
+    fake_boto3.s3_client.objects[duplicate_key] = content
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _register(db_session, token, course.id, duplicate_key)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["material_id"] == str(canonical.id)
+    assert body["job_id"] is None
+    assert body["status"] == canonical_status
+
+    assert fake_publisher == []
+    assert fake_boto3.s3_client.deleted_keys == [duplicate_key]
+
+    result = await db_session.execute(
+        select(Material).where(Material.course_id == course.id)
+    )
+    assert [m.id for m in result.scalars().all()] == [canonical.id]
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_register_material_same_content_other_course_is_not_duplicate(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_boto3,
+    fake_publisher,
+):
+    """Week 9 deduplication is course-scoped: identical content in another
+    course of the same owner registers normally."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-dedup-scope-subject",
+        "material-dedup-scope@example.com",
+    )
+    course_a = await _create_course(db_session, instructor, title="A")
+    course_b = await _create_course(db_session, instructor, title="B")
+    content = b"identical lecture pdf"
+    await _create_material(
+        db_session, course_a, instructor,
+        status=READY_STATUS,
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+
+    other_key = material_service.build_material_s3_key(course_b.id, "other.pdf")
+    fake_boto3.s3_client.objects[other_key] = content
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _register(db_session, token, course_b.id, other_key)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["job_id"] == "test-job-id"
+    assert body["status"] == PENDING_STATUS
+    assert len(fake_publisher) == 1
+
+    result = await db_session.execute(
+        select(Material).where(Material.course_id == course_b.id)
+    )
+    created = result.scalar_one()
+    assert created.sha256 == hashlib.sha256(content).hexdigest()
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_register_material_duplicate_of_failed_reuses_without_retry(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_boto3,
+    fake_publisher,
+):
+    """Week 9: a duplicate of a failed material just returns the existing
+    material: no enqueue, no retry claimed, budget untouched."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-dedup-failed-subject",
+        "material-dedup-failed@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    content = b"identical lecture pdf"
+    canonical = await _create_material(
+        db_session, course, instructor,
+        status=FAILED_STATUS,
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+    duplicate_key = material_service.build_material_s3_key(course.id, "slides-copy.pdf")
+    fake_boto3.s3_client.objects[duplicate_key] = content
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _register(db_session, token, course.id, duplicate_key)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["material_id"] == str(canonical.id)
+    assert body["job_id"] is None
+    assert body["status"] == FAILED_STATUS
+    assert fake_publisher == []
+    assert fake_boto3.s3_client.deleted_keys == [duplicate_key]
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == canonical.id)
+    )
+    unchanged = result.scalar_one()
+    assert unchanged.status == FAILED_STATUS
+    assert unchanged.retry_count == 0
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_register_material_duplicate_of_failed_with_exhausted_budget_reuses(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_boto3,
+    fake_publisher,
+):
+    """Week 9: once the retry budget is exhausted a duplicate of a failed
+    material is still reused (no enqueue, no budget change)."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-dedup-exhausted-subject",
+        "material-dedup-exhausted@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    content = b"identical lecture pdf"
+    canonical = await _create_material(
+        db_session, course, instructor,
+        status=FAILED_STATUS,
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+    canonical.retry_count = 3
+    await db_session.commit()
+
+    duplicate_key = material_service.build_material_s3_key(course.id, "slides-copy.pdf")
+    fake_boto3.s3_client.objects[duplicate_key] = content
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _register(db_session, token, course.id, duplicate_key)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["material_id"] == str(canonical.id)
+    assert body["job_id"] is None
+    assert body["status"] == FAILED_STATUS
+
+    assert fake_publisher == []
+    assert fake_boto3.s3_client.deleted_keys == [duplicate_key]
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == canonical.id)
+    )
+    unchanged = result.scalar_one()
+    assert unchanged.status == FAILED_STATUS
+    assert unchanged.retry_count == 3
 
     await db_session.delete(instructor)
     await db_session.commit()
@@ -1224,6 +1671,349 @@ async def test_get_material_status_reports_each_status_unchanged(
     await db_session.commit()
 
 
+@pytest.mark.asyncio
+async def test_process_material_failed_material_reenters_processing(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_publisher,
+):
+    """Week 9 retry control: POST /v1/materials/{id}/process re-enters a
+    failed material through the shared retry budget — one atomic claim
+    (retry_count 0 -> 1, committed before publish) and a fresh job."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-process-failed-subject",
+        "material-process-failed@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    material = await _create_material(
+        db_session, course, instructor, status=FAILED_STATUS
+    )
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _process(db_session, token, material.id)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["material_id"] == str(material.id)
+    assert body["job_id"] == "test-job-id"
+    assert body["status"] == PENDING_STATUS
+
+    # The reprocessing job references the material's own canonical object.
+    assert fake_publisher == [
+        {
+            "material_id": material.id,
+            "s3_key": material.s3_key,
+            "course_id": material.course_id,
+            "owner_id": material.uploaded_by,
+        }
+    ]
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == material.id)
+    )
+    requeued = result.scalar_one()
+    assert requeued.status == PENDING_STATUS
+    assert requeued.retry_count == 1
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_process_material_ready_material_reprocesses(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_publisher,
+):
+    """Week 9 retry control: a ready material is explicitly reprocessable
+    (the plan's claim matches ``ready`` and ``failed`` alike) and consumes
+    the same retry budget."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-process-ready-subject",
+        "material-process-ready@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    material = await _create_material(
+        db_session, course, instructor, status=READY_STATUS
+    )
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _process(db_session, token, material.id)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["material_id"] == str(material.id)
+    assert body["status"] == PENDING_STATUS
+    assert fake_publisher != []
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == material.id)
+    )
+    requeued = result.scalar_one()
+    assert requeued.status == PENDING_STATUS
+    assert requeued.retry_count == 1
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("initial_status", [PENDING_STATUS, PROCESSING_STATUS])
+async def test_process_material_in_flight_returns_409(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_publisher,
+    initial_status,
+):
+    """Week 9 retry control: an in-flight material (pending/processing) is
+    rejected with 409 and nothing is enqueued — no second job can be created
+    for it, mirroring the worker's own claim exclusivity."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-process-inflight-subject",
+        "material-process-inflight@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    material = await _create_material(
+        db_session, course, instructor, status=initial_status
+    )
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _process(db_session, token, material.id)
+
+    assert response.status_code == 409
+    assert "already queued or processing" in response.json()["detail"]
+    assert fake_publisher == []
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == material.id)
+    )
+    unchanged = result.scalar_one()
+    assert unchanged.status == initial_status
+    assert unchanged.retry_count == 0
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("initial_status", [FAILED_STATUS, READY_STATUS])
+async def test_process_material_budget_exhausted_returns_409(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_publisher,
+    initial_status,
+):
+    """Week 9 retry control: once the shared budget is exhausted, an
+    eligible material is rejected with 409 — no enqueue, no budget change,
+    no bypass for this endpoint."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-process-exhausted-subject",
+        "material-process-exhausted@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    material = await _create_material(
+        db_session, course, instructor, status=initial_status
+    )
+    material.retry_count = 3
+    await db_session.commit()
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _process(db_session, token, material.id)
+
+    assert response.status_code == 409
+    assert "retry budget exhausted" in response.json()["detail"]
+    assert fake_publisher == []
+
+    result = await db_session.execute(
+        select(Material).where(Material.id == material.id)
+    )
+    unchanged = result.scalar_one()
+    assert unchanged.status == initial_status
+    assert unchanged.retry_count == 3
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_process_material_publish_failure_compensates(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    monkeypatch,
+):
+    """Week 9 retry control: when the queue publication fails after the
+    claim, the claim is compensated (status restored, retry count
+    decremented) while the retry is still pending, and the request returns
+    500 — the same F8 contract as registration and dedup retries."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-process-retryfail-subject",
+        "material-process-retryfail@example.com",
+    )
+    course = await _create_course(db_session, instructor)
+    material = await _create_material(
+        db_session, course, instructor, status=FAILED_STATUS
+    )
+
+    async def failing_enqueue(material_id, s3_key, course_id, owner_id):
+        raise RuntimeError("broker unavailable")
+
+    monkeypatch.setattr(
+        "app.api.materials.enqueue_material_processing", failing_enqueue
+    )
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _process(
+        db_session, token, material.id, raise_app_exceptions=False
+    )
+
+    assert response.status_code == 500
+
+    engine = create_async_engine(settings.database_url)
+    factory = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    try:
+        async with factory() as fresh_session:
+            result = await fresh_session.execute(
+                select(Material).where(Material.id == material.id)
+            )
+            restored = result.scalar_one()
+            assert restored.status == FAILED_STATUS
+            assert restored.retry_count == 0
+    finally:
+        await engine.dispose()
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_process_material_unknown_material_returns_404(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_publisher,
+):
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-process-404-subject",
+        "material-process-404@example.com",
+    )
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+    response = await _process(db_session, token, uuid.uuid4())
+
+    assert response.status_code == 404
+    assert fake_publisher == []
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_process_material_non_owner_instructor_forbidden(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_publisher,
+):
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "material-process-nonowner-owner-subject",
+        "material-process-nonowner-owner@example.com",
+    )
+    intruder = await _create_user(
+        db_session,
+        "material-process-nonowner-intruder-subject",
+        "material-process-nonowner-intruder@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+
+    token = _build_token(private_key, sub=intruder.keycloak_subject, roles=["instructor"])
+    response = await _process(db_session, token, material.id)
+
+    assert response.status_code == 403
+    assert fake_publisher == []
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_process_material_student_forbidden(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    fake_publisher,
+):
+    """The process trigger is a mutation: it requires the instructor role,
+    same as registration — a student owning nothing gets 403."""
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "material-process-student-owner-subject",
+        "material-process-student-owner@example.com",
+    )
+    student = await _create_user(
+        db_session,
+        "material-process-student-subject",
+        "material-process-student@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+
+    token = _build_token(private_key, sub=student.keycloak_subject, roles=["student"])
+    response = await _process(db_session, token, material.id)
+
+    assert response.status_code == 403
+    assert fake_publisher == []
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_process_material_unauthenticated_returns_401(
+    db_session,
+    fake_publisher,
+):
+    owner = await _create_user(
+        db_session,
+        "material-process-anon-owner-subject",
+        "material-process-anon-owner@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+
+    response = await _process(db_session, "", material.id)
+
+    assert response.status_code == 401
+    assert fake_publisher == []
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
 def test_openapi_documents_material_endpoints():
     client = TestClient(app)
     spec = client.get("/openapi.json").json()
@@ -1282,6 +2072,43 @@ def test_openapi_documents_material_endpoints():
     assert "401" in list_responses
     assert "403" in list_responses
     assert "404" in list_responses
+
+    process_path = "/v1/materials/{material_id}/process"
+
+    assert process_path in paths
+
+    process_responses = paths[process_path]["post"]["responses"]
+    assert "202" in process_responses
+    assert "401" in process_responses
+    assert "403" in process_responses
+    assert "404" in process_responses
+    assert "409" in process_responses
+    assert "429" in process_responses
+
+    # Week 9 read API: persisted document pages.
+    pages_path = "/v1/materials/{material_id}/pages"
+
+    assert pages_path in paths
+
+    pages_responses = paths[pages_path]["get"]["responses"]
+    assert "200" in pages_responses
+    assert "401" in pages_responses
+    assert "403" in pages_responses
+    assert "404" in pages_responses
+    assert "422" in pages_responses
+
+    pages_response_schema = (
+        spec["components"]["schemas"]["MaterialPagesResponse"]
+    )
+    assert pages_response_schema["properties"]["material_id"]["format"] == "uuid"
+    assert pages_response_schema["properties"]["pages"]["type"] == "array"
+    assert (
+        pages_response_schema["properties"]["pages"]["items"]["$ref"]
+        == "#/components/schemas/MaterialPageResponse"
+    )
+    page_schema = spec["components"]["schemas"]["MaterialPageResponse"]
+    assert page_schema["properties"]["page_number"]["minimum"] == 1
+    assert page_schema["required"] == ["page_number", "text"]
 
 
 def test_material_status_literal_accepts_exact_vocabulary_only():
@@ -1390,8 +2217,8 @@ async def test_api_full_flow_pending_then_ready_via_worker(
     assert result.scalar_one().status == PENDING_STATUS
 
     # ``app.workers.tasks.material_tasks`` imports ``app.workers.celery_app``,
-    # which requires ``REDIS_PASSWORD`` at import time. No broker is contacted.
-    monkeypatch.setenv("REDIS_PASSWORD", "test-redis-password")
+    # whose Redis settings are guaranteed resolvable by tests/conftest.py.
+    # No broker is contacted.
     from app.workers.tasks import material_tasks
 
     async def fake_process_content(*args, **kwargs):
@@ -1434,3 +2261,446 @@ async def test_api_full_flow_pending_then_ready_via_worker(
             await db_session.commit()
         finally:
             await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_get_material_pages_returns_persisted_pages_for_owner(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    """Week 9 read API: the owner reads the material's persisted page output,
+    ordered by ascending page number regardless of write order."""
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "material-pages-api-owner-subject",
+        "material-pages-api-owner@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    await material_service.replace_material_pages(
+        db_session,
+        material.id,
+        pages=[(2, "second page text"), (1, "first page text")],
+    )
+    await db_session.commit()
+    token = _build_token(private_key, sub=owner.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(
+            f"/v1/materials/{material.id}/pages",
+            headers=headers,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["material_id"] == str(material.id)
+    assert body["pages"] == [
+        {"page_number": 1, "text": "first page text"},
+        {"page_number": 2, "text": "second page text"},
+    ]
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_get_material_pages_returns_empty_list_before_first_success(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    """A material with no persisted page output — not yet processed, in
+    flight, or failed — reads back as 200 with an empty list."""
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "material-pages-api-empty-owner-subject",
+        "material-pages-api-empty-owner@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    token = _build_token(private_key, sub=owner.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(
+            f"/v1/materials/{material.id}/pages",
+            headers=headers,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"material_id": str(material.id), "pages": []}
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.parametrize("role", ["student", "instructor"])
+@pytest.mark.asyncio
+async def test_get_material_pages_forbidden_for_non_owner(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    role,
+):
+    """Pages are only readable by the user who owns the material's course.
+
+    Same authorization surface as the status read: ownership, no role
+    dependency — a non-owner gets 403 whether they hold the instructor role
+    or not.
+    """
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "material-pages-nonowner-owner-subject",
+        "material-pages-nonowner-owner@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+
+    intruder = await _create_user(
+        db_session,
+        "material-pages-nonowner-intruder-subject",
+        "material-pages-nonowner-intruder@example.com",
+    )
+    token = _build_token(private_key, sub=intruder.keycloak_subject, roles=[role])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(
+            f"/v1/materials/{material.id}/pages",
+            headers=headers,
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Insufficient permissions"
+
+    await db_session.delete(owner)
+    await db_session.delete(intruder)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_get_material_pages_unknown_material_returns_404(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "material-pages-missing-subject",
+        "material-pages-missing@example.com",
+    )
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(
+            f"/v1/materials/{uuid.uuid4()}/pages",
+            headers=headers,
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Material not found"
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_get_single_material_page_for_owner(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    """Week 9: the owner reads one page; empty pages are returned too, and a
+    page that does not exist is 404."""
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "material-page-single-owner-subject",
+        "material-page-single-owner@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    await material_service.replace_material_pages(
+        db_session,
+        material.id,
+        pages=[(1, "first page text"), (2, "")],
+    )
+    await db_session.commit()
+    token = _build_token(private_key, sub=owner.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        first = await client.get(f"/v1/materials/{material.id}/pages/1", headers=headers)
+        empty = await client.get(f"/v1/materials/{material.id}/pages/2", headers=headers)
+        missing = await client.get(f"/v1/materials/{material.id}/pages/3", headers=headers)
+        invalid = await client.get(f"/v1/materials/{material.id}/pages/0", headers=headers)
+
+    assert first.status_code == 200
+    assert first.json() == {"page_number": 1, "text": "first page text"}
+    assert empty.status_code == 200
+    assert empty.json() == {"page_number": 2, "text": ""}
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "Page not found"
+    assert invalid.status_code == 422
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_get_single_material_page_forbidden_for_non_owner(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "material-page-single-nonowner-owner-subject",
+        "material-page-single-nonowner-owner@example.com",
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    await material_service.replace_material_pages(
+        db_session, material.id, pages=[(1, "secret page")]
+    )
+    await db_session.commit()
+    intruder = await _create_user(
+        db_session,
+        "material-page-single-nonowner-intruder-subject",
+        "material-page-single-nonowner-intruder@example.com",
+    )
+    token = _build_token(private_key, sub=intruder.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(
+            f"/v1/materials/{material.id}/pages/1", headers=headers
+        )
+
+    assert response.status_code == 403
+
+    await db_session.delete(owner)
+    await db_session.delete(intruder)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_get_material_pages_unauthenticated_returns_401(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    async with _api(db_session) as (client, _headers):
+        response = await client.get(
+            f"/v1/materials/{uuid.uuid4()}/pages",
+        )
+
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Review fixes: size cap, ETag pinning, pagination, rate limit
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_register_material_stores_etag_of_hashed_object(
+    db_session, rsa_keypair, fake_jwks, fake_boto3, fake_publisher
+):
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session, "material-etag-subject", "material-etag@example.com"
+    )
+    course = await _create_course(db_session, instructor)
+    s3_key = material_service.build_material_s3_key(course.id, "slides.pdf")
+    fake_boto3.s3_client.etags[s3_key] = '"etag-v1"'
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    response = await _register(db_session, token, course.id, s3_key)
+
+    assert response.status_code == 202
+    material = await db_session.get(Material, uuid.UUID(response.json()["material_id"]))
+    assert material.s3_etag == '"etag-v1"'
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_register_material_over_size_cap_returns_413(
+    db_session, rsa_keypair, fake_jwks, fake_boto3, fake_publisher
+):
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session, "material-toolarge-subject", "material-toolarge@example.com"
+    )
+    course = await _create_course(db_session, instructor)
+    s3_key = material_service.build_material_s3_key(course.id, "huge.pdf")
+    fake_boto3.s3_client.sizes[s3_key] = settings.max_upload_size_bytes + 1
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    response = await _register(db_session, token, course.id, s3_key)
+
+    assert response.status_code == 413
+    assert fake_publisher == []
+    result = await db_session.execute(
+        select(Material).where(Material.course_id == course.id)
+    )
+    assert result.scalars().all() == []
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_register_material_at_size_cap_is_accepted(
+    db_session, rsa_keypair, fake_jwks, fake_boto3, fake_publisher
+):
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session, "material-atcap-subject", "material-atcap@example.com"
+    )
+    course = await _create_course(db_session, instructor)
+    s3_key = material_service.build_material_s3_key(course.id, "max.pdf")
+    fake_boto3.s3_client.sizes[s3_key] = settings.max_upload_size_bytes
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    response = await _register(db_session, token, course.id, s3_key)
+
+    assert response.status_code == 202
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_register_material_object_replaced_during_hash_returns_409(
+    db_session, rsa_keypair, fake_jwks, fake_boto3, fake_publisher, monkeypatch
+):
+    """The hash is read with If-Match; an object replaced between HEAD and the
+    read is rejected instead of registering a hash of a different version."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session, "material-replaced-subject", "material-replaced@example.com"
+    )
+    course = await _create_course(db_session, instructor)
+    s3_key = material_service.build_material_s3_key(course.id, "slides.pdf")
+    client = fake_boto3.s3_client
+    client.etags[s3_key] = '"v1"'
+    original_head = client.head_object
+
+    def head_then_replace(Bucket, Key):
+        info = original_head(Bucket, Key)
+        client.etags[Key] = '"v2"'  # replaced right after HEAD
+        return info
+
+    monkeypatch.setattr(client, "head_object", head_then_replace)
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    response = await _register(db_session, token, course.id, s3_key)
+
+    assert response.status_code == 409
+    assert fake_publisher == []
+    result = await db_session.execute(
+        select(Material).where(Material.course_id == course.id)
+    )
+    assert result.scalars().all() == []
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_get_material_pages_is_paginated(db_session, rsa_keypair, fake_jwks):
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session, "material-pages-paging-subject", "material-pages-paging@example.com"
+    )
+    course = await _create_course(db_session, owner)
+    material = await _create_material(db_session, course, owner)
+    await material_service.replace_material_pages(
+        db_session, material.id, pages=[(n, f"page {n}") for n in range(1, 6)]
+    )
+    await db_session.commit()
+    token = _build_token(private_key, sub=owner.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        first = await client.get(
+            f"/v1/materials/{material.id}/pages?limit=2", headers=headers
+        )
+        second = await client.get(
+            f"/v1/materials/{material.id}/pages?limit=2&offset=2", headers=headers
+        )
+        last = await client.get(
+            f"/v1/materials/{material.id}/pages?limit=2&offset=4", headers=headers
+        )
+        everything = await client.get(
+            f"/v1/materials/{material.id}/pages", headers=headers
+        )
+        too_big = await client.get(
+            f"/v1/materials/{material.id}/pages?limit=501", headers=headers
+        )
+
+    assert [p["page_number"] for p in first.json()["pages"]] == [1, 2]
+    assert [p["page_number"] for p in second.json()["pages"]] == [3, 4]
+    assert [p["page_number"] for p in last.json()["pages"]] == [5]
+    assert len(everything.json()["pages"]) == 5
+    assert too_big.status_code == 422
+
+    await db_session.delete(owner)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_write_endpoints_are_rate_limited_per_user(
+    db_session, rsa_keypair, fake_jwks, fake_boto3, monkeypatch
+):
+    monkeypatch.setattr(settings, "rate_limit_writes_per_minute", 2)
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session, "material-ratelimit-subject", "material-ratelimit@example.com"
+    )
+    course = await _create_course(db_session, instructor)
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        url = f"/v1/courses/{course.id}/materials/upload-url"
+        codes = [
+            (await client.post(url, json=_upload_url_payload(), headers=headers))
+            for _ in range(3)
+        ]
+        # Other write endpoints share the same per-user budget.
+        course_create = await client.post(
+            "/v1/courses", json={"title": "Another", "description": "x"}, headers=headers
+        )
+
+    assert [r.status_code for r in codes] == [200, 200, 429]
+    assert int(codes[2].headers["Retry-After"]) >= 1
+    assert course_create.status_code == 429
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_can_be_disabled(
+    db_session, rsa_keypair, fake_jwks, fake_boto3, monkeypatch
+):
+    monkeypatch.setattr(settings, "rate_limit_writes_per_minute", 0)
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session, "material-ratelimit-off-subject", "material-ratelimit-off@example.com"
+    )
+    course = await _create_course(db_session, instructor)
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        url = f"/v1/courses/{course.id}/materials/upload-url"
+        for _ in range(5):
+            response = await client.post(url, json=_upload_url_payload(), headers=headers)
+            assert response.status_code == 200
+
+    await db_session.delete(instructor)
+    await db_session.commit()

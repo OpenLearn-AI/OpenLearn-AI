@@ -61,12 +61,32 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/openlearn-${{ matrix.image }}:sha-${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          # Build-args (build-time). NEXT_PUBLIC_SENTRY_ENVIRONMENT is the
+          # client-side Sentry environment label: mirrors ci.yml's
+          # vars-with-fallback pattern for the same variable, with the
+          # deployment tier as fallback so a missing repo Variable can never
+          # mislabel the staging bundle. It must match the runtime
+          # SENTRY_ENVIRONMENT written to .env.runtime below (same
+          # expression, same source), per sentry.server.config.ts.
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.NEXT_PUBLIC_KEYCLOAK_URL }}
             NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.NEXT_PUBLIC_KEYCLOAK_REALM }}
             NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID }}
             NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+            NEXT_PUBLIC_SENTRY_ENVIRONMENT=${{ vars.NEXT_PUBLIC_SENTRY_ENVIRONMENT || 'staging' }}
+          # Build-time source-map upload secrets for withSentryConfig
+          # (frontend/next.config.ts). frontend/Dockerfile mounts them as
+          # BuildKit secrets for the `npm run build` step only — they never
+          # enter image layers, the runtime environment, or logs. The backend
+          # Dockerfile declares no secret mounts, so these entries are
+          # ignored for the backend build. When a secret is unset the value
+          # is empty and the Sentry SDK skips the upload; the build does not
+          # require them to succeed.
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
+            sentry_org=${{ secrets.SENTRY_ORG }}
+            sentry_project=${{ secrets.SENTRY_PROJECT }}
 
   deploy:
     needs: build-and-push
@@ -102,6 +122,12 @@ jobs:
             IMAGE_TAG=sha-${{ github.sha }}
 
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+
+            # Server-side Sentry environment label (runtime, read by
+            # sentry.server.config.ts). Same source expression as the
+            # build-time NEXT_PUBLIC_SENTRY_ENVIRONMENT above so the
+            # client bundle and the server process always share one label.
+            SENTRY_ENVIRONMENT=${{ vars.NEXT_PUBLIC_SENTRY_ENVIRONMENT || 'staging' }}
 
             LITELLM_MASTER_KEY=${{ secrets.LITELLM_MASTER_KEY }}
             LITELLM_SALT_KEY=${{ secrets.LITELLM_SALT_KEY }}

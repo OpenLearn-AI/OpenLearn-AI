@@ -13,6 +13,7 @@ implementation begins.
 | ADR-0005 | [LiteLLM as the LLM gateway](./0005-llm-gateway-litellm.md) | Accepted | 2026-08-31 |
 | ADR-006 | [Keycloak/OIDC authentication architecture](./006-keycloak-oidc-authentication.md) | Accepted | 2026-09-10 |
 | ADR-0009 | [PAL, document ingestion, and RAG architecture](./0009-rag-pal-architecture.md) | Accepted | 2026-09-16 |
+| ADR-0010 | [Frontend design direction and token layer ratification](./0010-frontend-design-direction-and-tokens.md) | Amended (2026-10-23 — Light Steel migration) | 2026-10-23 |
 
 The earlier deferral that preceded ADR-0004 is retained as historical context:
 [`0004-vector-store-deferred.md`](./0004-vector-store-deferred.md) (Superseded).

@@ -1,106 +1,56 @@
 "use client";
 
-import { useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { CourseCard } from "@/components/CourseCard";
-import { LoadingBlock } from "@/components/state/LoadingBlock";
-import { ErrorState } from "@/components/state/ErrorState";
-import { EmptyState } from "@/components/state/EmptyState";
-import { useCourses } from "@/features/courses/api/useCourses";
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
+import { CoursesIndex } from "@/components/courses/CoursesIndex";
+
+/**
+ * Courses & Learning Hub (Batch 4.2, Swiss Editorial Grid).
+ *
+ * The page owns the masthead only; the list pattern (search, live
+ * count, entry field, states) is the `CoursesIndex` component.
+ *
+ * Masthead hierarchy (the owner's correction E — the primary action
+ * must be immediately discoverable): the display-scale page title
+ * (a container-query clamp, so the scale follows the CONTENT column,
+ * not the viewport) and the single primary action — "+ Create New
+ * Course" as the app's filled primary Button rendered as a link —
+ * at the inline end. One filled control on an otherwise
+ * hairline-and-type page is the whole hierarchy: the action is
+ * unmissable without the page becoming loud. It renders in EVERY
+ * list state (populated, loading, error, empty, and no-results)
+ * exactly as before — same route, same flow, same pinned accessible
+ * name.
+ *
+ * Batch 4.2 correction A6: the redundant "Courses you've created."
+ * subtitle is REMOVED — the page's own title already says what the
+ * surface is, and the live count inside `CoursesIndex` carries the
+ * honest, useful numbers; descriptive copy is not kept merely to
+ * fill space. The masthead is the title and the primary action.
+ *
+ * The `<main>` is the page's inline-size container (`@container`),
+ * which drives the title clamp and the entry-field density inside
+ * `CoursesIndex`.
+ */
 export default function CoursesPage() {
-    const [searchQuery, setSearchQuery] = useState("");
-
-    const {
-        data: courses,
-        isLoading,
-        isError,
-        error,
-        refetch,
-    } = useCourses();
-
-    const filteredCourses = (courses ?? []).filter(
-        (course) =>
-            course.title
-                .toLowerCase()
-                .includes(searchQuery.toLowerCase()) ||
-            (course.description ?? "")
-                .toLowerCase()
-                .includes(searchQuery.toLowerCase()),
-    );
-
     return (
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8 bg-background min-h-screen">
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border pb-6">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                        Courses &amp; Learning Hub
-                    </h1>
-                    <p className="text-muted-foreground text-sm mt-1">
-                        Manage your active learning modules, course materials,
-                        and RAG knowledge bases.
-                    </p>
+        <main className="@container mx-auto w-full max-w-7xl min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
+            {/* Masthead — title and the primary action. */}
+            <header className="grid gap-4 @3xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)] @3xl:items-end @3xl:gap-8">
+                <h1 className="text-[clamp(1.875rem,4cqi,2.5rem)] font-semibold leading-[1.12] tracking-tight text-foreground break-words">
+                    Courses &amp; Learning Hub
+                </h1>
+                <div className="flex @3xl:justify-end">
+                    <Button render={<Link href="/courses/new" />}>
+                        + Create New Course
+                    </Button>
                 </div>
-                <Button render={<Link href="/courses/new" />}>
-                    + Create New Course
-                </Button>
-            </div>
+            </header>
 
-            {/* Search & Filter Bar */}
-            <div className="flex items-center gap-4">
-                <div className="w-full md:max-w-md">
-                    <Input
-                        placeholder="Search your courses or topics..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="bg-card text-foreground"
-                    />
-                </div>
-            </div>
+            <hr className="mt-6" />
 
-            {/* Courses Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {isLoading ? (
-                    <div className="col-span-full">
-                        <LoadingBlock message="Loading courses..." />
-                    </div>
-                ) : isError ? (
-                    <div className="col-span-full">
-                        <ErrorState
-                            message={
-                                error instanceof Error
-                                    ? error.message
-                                    : "Failed to load courses."
-                            }
-                            onRetry={() => void refetch()}
-                        />
-                    </div>
-                ) : filteredCourses.length > 0 ? (
-                    filteredCourses.map((course) => (
-                        <CourseCard key={course.id} course={course} />
-                    ))
-                ) : (
-                    <div className="col-span-full">
-                        <EmptyState
-                            message={
-                                searchQuery
-                                    ? "No courses found matching your search."
-                                    : "You don't have any courses yet."
-                            }
-                            actionHref={
-                                searchQuery ? undefined : "/courses/new"
-                            }
-                            actionLabel={
-                                searchQuery ? undefined : "Create your first course"
-                            }
-                        />
-                    </div>
-                )}
-            </div>
+            <CoursesIndex />
         </main>
     );
 }

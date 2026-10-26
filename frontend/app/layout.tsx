@@ -30,13 +30,33 @@ export const metadata: Metadata = {
   title: "OpenLearn AI",
   description: "AI-powered learning platform",
   icons: {
-    icon: "/logo.png",
+    // Batch 4.2 correction A9: the favicon referenced the removed
+    // `/logo.png` (a 404 since the owner's asset cleanup); the
+    // authoritative brand asset is the supplied `public/logo.svg`.
+    icon: { url: "/logo.svg", type: "image/svg+xml" },
   },
 };
 
 type LayoutProps = {
   children: React.ReactNode;
 };
+
+/**
+ * Pre-paint direction restoration (Batch 4.4).
+ *
+ * A stored RTL/LTR preference (set by the sidebar's direction
+ * control — `lib/direction.ts`) is applied to `<html dir>` BEFORE
+ * first paint, so a returning RTL user never sees an LTR flash.
+ * This is the same mechanism next-themes uses for the theme class:
+ * an inline script in the server-rendered markup, executed during
+ * HTML parsing, with `suppressHydrationWarning` on `<html>` (already
+ * present for the theme class) covering the attribute delta during
+ * hydration. Deliberately tiny and dependency-free; the `try/catch`
+ * keeps private-mode/unavailable storage harmless. Anything other
+ * than an exact "rtl"/"ltr" value is ignored — the SSR default
+ * ("ltr") stands.
+ */
+const DIRECTION_INIT_SCRIPT = `(function(){try{var d=localStorage.getItem("openlearn-direction");if(d==="rtl"||d==="ltr"){document.documentElement.dir=d;}}catch(e){}})();`;
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
@@ -47,9 +67,10 @@ export default function RootLayout({ children }: LayoutProps) {
       className={`${geistSans.variable} ${geistMono.variable} ${notoSansArabic.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground transition-colors">
+        <script dangerouslySetInnerHTML={{ __html: DIRECTION_INIT_SCRIPT }} />
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="dark"
           enableSystem={false}
           disableTransitionOnChange
         >

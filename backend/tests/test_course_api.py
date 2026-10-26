@@ -197,25 +197,61 @@ async def test_create_course_rejects_client_identity_fields(
 
 
 @pytest.mark.asyncio
-async def test_list_courses_available_to_authenticated_user(
+async def test_list_courses_returns_all_owned_courses(
     db_session,
     rsa_keypair,
     fake_jwks,
 ):
+    """A user with multiple owned courses sees exactly their own courses."""
     private_key, _ = rsa_keypair
     instructor = await _create_user(
         db_session,
-        "course-list-instructor-subject",
-        "course-list-instructor@example.com",
-    )
-    student = await _create_user(
-        db_session,
-        "course-list-student-subject",
-        "course-list-student@example.com",
+        "course-list-owned-instructor-subject",
+        "course-list-owned-instructor@example.com",
     )
 
     first = await _create_course(db_session, instructor, title="First")
     second = await _create_course(db_session, instructor, title="Second")
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get("/v1/courses", headers=headers)
+
+    assert response.status_code == 200
+
+    body = response.json()
+    ids = {course["id"] for course in body}
+    titles = {course["title"] for course in body}
+    assert ids == {str(first.id), str(second.id)}
+    assert titles == {"First", "Second"}
+    assert all(course["owner_id"] == str(instructor.id) for course in body)
+
+    await db_session.delete(instructor)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_list_courses_excludes_other_users_courses(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    """Courses owned by other users never appear in a user's list."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "course-list-excl-instructor-subject",
+        "course-list-excl-instructor@example.com",
+    )
+    student = await _create_user(
+        db_session,
+        "course-list-excl-student-subject",
+        "course-list-excl-student@example.com",
+    )
+
+    await _create_course(db_session, instructor, title="Instructor Course")
+    own = await _create_course(db_session, student, title="Student Course")
 
     token = _build_token(private_key, sub=student.keycloak_subject, roles=["student"])
 
@@ -224,44 +260,192 @@ async def test_list_courses_available_to_authenticated_user(
 
     assert response.status_code == 200
 
-    ids = {course["id"] for course in response.json()}
-    assert str(first.id) in ids
-    assert str(second.id) in ids
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == str(own.id)
+    assert body[0]["title"] == "Student Course"
+    assert body[0]["owner_id"] == str(student.id)
+
+    await db_session.delete(instructor)
+    await db_session.delete(student)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_list_courses_empty_for_user_without_courses(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    """A user with no owned courses gets an empty list even though other
+    users own courses; the previously-shared list must not leak them."""
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "course-list-empty-instructor-subject",
+        "course-list-empty-instructor@example.com",
+    )
+    student = await _create_user(
+        db_session,
+        "course-list-empty-student-subject",
+        "course-list-empty-student@example.com",
+    )
+
+    await _create_course(db_session, instructor, title="Not the student's")
+
+    token = _build_token(private_key, sub=student.keycloak_subject, roles=["student"])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get("/v1/courses", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+    await db_session.delete(instructor)
+    await db_session.delete(student)
+    await db_session.commit()
+
+
+@pytest.mark.parametrize("role", ["student", "instructor", "admin"])
+@pytest.mark.asyncio
+async def test_list_courses_scoped_for_every_role(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+    role,
+):
+    """No role lists another user's courses: ownership scoping is uniform
+    for student, instructor, and admin (no admin override)."""
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        f"course-list-role-owner-{role}-subject",
+        f"course-list-role-owner-{role}@example.com",
+    )
+    viewer = await _create_user(
+        db_session,
+        f"course-list-role-viewer-{role}-subject",
+        f"course-list-role-viewer-{role}@example.com",
+    )
+
+    await _create_course(db_session, owner, title="Someone else's")
+    own = await _create_course(db_session, viewer, title="Mine")
+
+    token = _build_token(private_key, sub=viewer.keycloak_subject, roles=[role])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get("/v1/courses", headers=headers)
+
+    assert response.status_code == 200
+
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == str(own.id)
+    assert body[0]["owner_id"] == str(viewer.id)
+
+    await db_session.delete(owner)
+    await db_session.delete(viewer)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_owner_can_get_own_course(db_session, rsa_keypair, fake_jwks):
+    private_key, _ = rsa_keypair
+    instructor = await _create_user(
+        db_session,
+        "course-get-owner-subject",
+        "course-get-owner@example.com",
+    )
+    course = await _create_course(db_session, instructor, title="Visible")
+
+    token = _build_token(private_key, sub=instructor.keycloak_subject, roles=["instructor"])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(f"/v1/courses/{course.id}", headers=headers)
+
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["title"] == "Visible"
+    assert body["owner_id"] == str(instructor.id)
+    assert body["id"] == str(course.id)
 
     await db_session.delete(instructor)
     await db_session.commit()
 
 
 @pytest.mark.asyncio
-async def test_get_course_works_for_authenticated_user(
+async def test_get_course_owned_by_another_returns_403(
     db_session,
     rsa_keypair,
     fake_jwks,
 ):
+    """Another user's existing course is forbidden, and the 403 response
+    carries none of the course's data (no title, owner, or description)."""
     private_key, _ = rsa_keypair
-    instructor = await _create_user(
+    owner = await _create_user(
         db_session,
-        "course-get-subject",
-        "course-get@example.com",
+        "course-get-forbidden-owner-subject",
+        "course-get-forbidden-owner@example.com",
     )
-    course = await _create_course(db_session, instructor, title="Visible")
+    intruder = await _create_user(
+        db_session,
+        "course-get-forbidden-intruder-subject",
+        "course-get-forbidden-intruder@example.com",
+    )
+    course = await _create_course(db_session, owner, title="Private")
 
-    student = await _create_user(
-        db_session,
-        "course-get-student-subject",
-        "course-get-student@example.com",
-    )
-    token = _build_token(private_key, sub=student.keycloak_subject, roles=["student"])
+    token = _build_token(private_key, sub=intruder.keycloak_subject, roles=["student"])
 
     async with _api(db_session, token) as (client, headers):
         response = await client.get(f"/v1/courses/{course.id}", headers=headers)
 
-    assert response.status_code == 200
-    assert response.json()["title"] == "Visible"
-    assert response.json()["owner_id"] == str(instructor.id)
+    assert response.status_code == 403
 
-    await db_session.delete(instructor)
-    await db_session.delete(student)
+    body = response.json()
+    assert "title" not in body
+    assert "description" not in body
+    assert "owner_id" not in body
+
+    await db_session.delete(owner)
+    await db_session.delete(intruder)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_admin_has_no_ownership_override_for_get(
+    db_session,
+    rsa_keypair,
+    fake_jwks,
+):
+    """Admin does not automatically own another user's course; owner-only
+    viewing remains owner-only."""
+    private_key, _ = rsa_keypair
+    owner = await _create_user(
+        db_session,
+        "course-admin-override-get-owner-subject",
+        "course-admin-override-get-owner@example.com",
+    )
+    admin = await _create_user(
+        db_session,
+        "course-admin-override-get-admin-subject",
+        "course-admin-override-get-admin@example.com",
+    )
+    course = await _create_course(db_session, owner, title="Not admin's")
+
+    token = _build_token(private_key, sub=admin.keycloak_subject, roles=["admin"])
+
+    async with _api(db_session, token) as (client, headers):
+        response = await client.get(f"/v1/courses/{course.id}", headers=headers)
+
+    assert response.status_code == 403
+
+    body = response.json()
+    assert "title" not in body
+    assert "owner_id" not in body
+
+    await db_session.delete(owner)
+    await db_session.delete(admin)
     await db_session.commit()
 
 

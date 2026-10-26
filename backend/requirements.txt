@@ -16,14 +16,14 @@ asyncpg==0.30.0
 pgvector==0.4.1
 # Authentication / Keycloak OIDC access-token validation (JWKS/RS256)
 # (password hashing is owned by Keycloak, not the backend)
-PyJWT==2.13.0
-cryptography==45.0.4
+PyJWT==2.15.1
+cryptography==50.0.2
 # Celery task queue with Redis support
 celery[redis]==5.6.3
 flower==2.0.1
 
 # Document ingestion / targeted OCR source extraction
-docling==2.127.0
+docling==2.132.0
 pypdfium2==5.13.0
 
 # S3-compatible object storage (MinIO) for course materials
@@ -35,7 +35,7 @@ google-genai==1.24.0
 
 # Direct import in gemini_provider (transport timeout mapping). Also a
 # transitive dependency of google-genai — declared because we import it.
-requests==2.32.5
+requests==2.34.2
 
 # LiteLLM reasoning provider (W2/B4) — official openai SDK (AsyncOpenAI)
 # pointed at the LiteLLM gateway's OpenAI-compatible chat surface (ADR-0005).
@@ -46,4 +46,4 @@ openai==3.24.0
 # Local dense embeddings (P9): sentence-transformers running on the
 # torch/transformers stack already installed via docling. Dense-only
 # BAAI/bge-m3 inference; no FlagEmbedding/ONNX/TEI.
-sentence-transformers==3.3.1
+sentence-transformers==5.6.0

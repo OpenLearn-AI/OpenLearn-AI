@@ -6,18 +6,34 @@ import { useRouter } from "next/navigation";
 import { useDeleteCourse } from "@/features/courses/api/useCourseMutations";
 import { ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/dialog";
 
 /**
- * Delete-course action with explicit confirmation (Phase 4 Patch 8).
+ * Delete-course action with explicit confirmation (Phase 4 Patch 8;
+ * confirmation extracted onto the shared alert-dialog primitive in
+ * Batch 3.2 — behavior preserved).
  *
- * Renders a "Delete" button. When clicked, it reveals a confirmation
- * panel ("Are you sure?" + Cancel / Delete buttons) so the user can
- * abort. The mutation is disabled while pending (prevents double
- * submission). On success, the course cache is invalidated by the
- * mutation and the user is navigated to `/courses`.
+ * Renders a "Delete Course" button. When clicked, it opens a modal
+ * alert dialog ("Delete this course?" + Cancel / confirm buttons) so
+ * the user can abort. The mutation is disabled while pending (prevents
+ * double submission, and the dialog cannot be dismissed mid-deletion).
+ * On success, the course cache is invalidated by the mutation and the
+ * user is navigated to `redirectTo`.
  *
- * The confirmation panel is inline (no external dialog dependency)
- * and accessible (role="alertdialog", aria-live for error messages).
+ * The dialog is the reusable `components/ui/dialog.tsx` primitive
+ * (role="alertdialog", labelled by `courseTitle`, focus-trapped).
+ * Error messages keep the same mapping as before and render inline
+ * (role="alert", aria-live="assertive") while the dialog stays open.
  */
 export function DeleteCourseButton({
     courseId,
@@ -30,33 +46,16 @@ export function DeleteCourseButton({
 }) {
     const router = useRouter();
     const deleteCourse = useDeleteCourse();
-    const [confirming, setConfirming] = useState(false);
+    const [open, setOpen] = useState(false);
 
     const handleConfirm = () => {
         deleteCourse.mutate(courseId, {
             onSuccess: () => {
-                setConfirming(false);
+                setOpen(false);
                 router.push(redirectTo);
             },
         });
     };
-
-    const handleCancel = () => {
-        setConfirming(false);
-    };
-
-    if (!confirming) {
-        return (
-            <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setConfirming(true)}
-                disabled={deleteCourse.isPending}
-            >
-                Delete Course
-            </Button>
-        );
-    }
 
     const errorMessage =
         deleteCourse.error instanceof ApiError
@@ -70,52 +69,64 @@ export function DeleteCourseButton({
                 : null;
 
     return (
-        <div
-            role="alertdialog"
-            aria-label={`Delete course: ${courseTitle}`}
-            className="space-y-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-6"
+        <AlertDialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                // While the deletion is in flight the dialog cannot be
+                // dismissed (the pre-extraction panel was equally rigid);
+                // the mutation itself closes it on success.
+                if (!deleteCourse.isPending) {
+                    setOpen(nextOpen);
+                }
+            }}
         >
-            <div className="space-y-1">
-                <h3 className="text-base font-bold text-foreground">
-                    Delete this course?
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                    This will permanently delete{" "}
-                    <span className="font-medium">{courseTitle}</span> and
-                    cannot be undone.
-                </p>
-            </div>
+            <AlertDialogTrigger
+                render={
+                    <Button
+                        variant="destructive"
+                        disabled={deleteCourse.isPending}
+                    >
+                        Delete Course
+                    </Button>
+                }
+            />
 
-            {errorMessage && (
-                <p
-                    role="alert"
-                    aria-live="assertive"
-                    className="text-sm text-destructive"
-                >
-                    {errorMessage}
-                </p>
-            )}
+            <AlertDialogContent aria-label={`Delete course: ${courseTitle}`}>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this course?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will permanently delete{" "}
+                        <span className="font-medium">{courseTitle}</span> and
+                        cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
 
-            <div className="flex gap-3">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCancel}
-                    disabled={deleteCourse.isPending}
-                >
-                    Cancel
-                </Button>
-                <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleConfirm}
-                    disabled={deleteCourse.isPending}
-                >
-                    {deleteCourse.isPending
-                        ? "Deleting..."
-                        : "Yes, delete it"}
-                </Button>
-            </div>
-        </div>
+                {errorMessage && (
+                    <p
+                        role="alert"
+                        aria-live="assertive"
+                        className="text-sm text-destructive"
+                    >
+                        {errorMessage}
+                    </p>
+                )}
+
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={deleteCourse.isPending}>
+                        Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleConfirm}
+                        disabled={deleteCourse.isPending}
+                    >
+                        {deleteCourse.isPending
+                            ? "Deleting..."
+                            : "Yes, delete it"}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }

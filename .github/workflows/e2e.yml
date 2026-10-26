@@ -21,8 +21,20 @@ name: E2E (Playwright)
 #   - A reachable Keycloak server at NEXT_PUBLIC_KEYCLOAK_URL with the
 #     configured realm + client.
 #   - Test credentials stored as repository secrets:
-#       E2E_USERNAME  — Keycloak test user
-#       E2E_PASSWORD  — Keycloak test user password
+#       E2E_USERNAME  — Keycloak student test user (login, profile,
+#                       onboarding, and the negative affordance-visibility
+#                       flow)
+#       E2E_PASSWORD  — Keycloak student test user password
+#       E2E_INSTRUCTOR_USERNAME — Keycloak instructor test account (the
+#                       course CRUD flow — its hub affordances are
+#                       instructor-gated since Batch 4.3). OPTIONAL at the
+#                       workflow level: when this pair is not configured,
+#                       the CRUD test SKIPS with an explicit message (it
+#                       never silently passes and never falls back to the
+#                       student account). Configure both secrets before a
+#                       dispatch whose purpose includes exercising the
+#                       CRUD flow.
+#       E2E_INSTRUCTOR_PASSWORD — Keycloak instructor test account password
 #   - Repository variables (non-secret):
 #       PLAYWRIGHT_BASE_URL       — e.g. https://openlearn-web-staging.duckdns.org
 #       NEXT_PUBLIC_API_URL       — e.g. https://openlearn-api-staging.duckdns.org
@@ -31,10 +43,13 @@ name: E2E (Playwright)
 #       NEXT_PUBLIC_KEYCLOAK_CLIENT_ID — e.g. openlearn-frontend
 #     (NEXT_PUBLIC_SENTRY_DSN is optional for E2E.)
 #
-# When any of these are unavailable, do NOT dispatch the workflow. The
-# suite does not silently skip tests when the env is missing — the login
-# spec uses test.skip() with a clear message, but the CRUD/profile specs
-# would still fail at runtime. This is intentional.
+# When any of the required items are unavailable, do NOT dispatch the
+# workflow. The suite does not silently skip tests when the env is missing:
+# every spec declares its required credential pair with test.skip() and a
+# clear message — the student pair gates login/profile/onboarding and the
+# affordance-visibility flow; the instructor pair gates the course CRUD
+# flow (a missing instructor pair therefore shows as an explicit CRUD
+# skip, never as a pass or a runtime failure). This is intentional.
 
 on:
   workflow_dispatch:
@@ -63,6 +78,8 @@ jobs:
       NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID }}
       E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
       E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      E2E_INSTRUCTOR_USERNAME: ${{ secrets.E2E_INSTRUCTOR_USERNAME }}
+      E2E_INSTRUCTOR_PASSWORD: ${{ secrets.E2E_INSTRUCTOR_PASSWORD }}
       CI: "true"
 
     defaults:
@@ -106,6 +123,14 @@ jobs:
             exit 1
           fi
           echo "E2E configuration present. Base URL: $PLAYWRIGHT_BASE_URL"
+          # The instructor pair is OPTIONAL (the CRUD test skips with an
+          # explicit message when absent) — surface its state honestly so a
+          # dispatch does not surprise its caller with a CRUD skip.
+          if [ -z "$E2E_INSTRUCTOR_USERNAME" ] || [ -z "$E2E_INSTRUCTOR_PASSWORD" ]; then
+            echo "::notice::E2E_INSTRUCTOR_USERNAME / E2E_INSTRUCTOR_PASSWORD are not configured — the course CRUD test will SKIP with an explicit message. Configure the E2E_INSTRUCTOR_USERNAME / E2E_INSTRUCTOR_PASSWORD repository secrets to exercise the instructor CRUD flow."
+          else
+            echo "Instructor credential pair present — the course CRUD flow will run."
+          fi
 
       - name: Run Playwright E2E suite
         run: npm run test:e2e
