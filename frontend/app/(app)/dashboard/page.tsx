@@ -15,7 +15,10 @@ import { useUserName } from "@/features/auth/useUserName";
 import { composeWelcomeGreeting } from "@/features/auth/user-identity";
 import { useCourses } from "@/features/courses/api/useCourses";
 import { useProfile } from "@/features/profile/api/useProfile";
-import type { Profile } from "@/features/profile/schemas";
+import {
+    PROFILE_FIELD_COUNT,
+    countMissingProfileFields,
+} from "@/features/profile/completeness";
 
 /**
  * Dashboard (Batch 4.2, Swiss Editorial Grid).
@@ -77,30 +80,10 @@ import type { Profile } from "@/features/profile/schemas";
  */
 
 /**
- * The six user-facing content fields of `ProfileResponse` (the identity
- * fields `id`/`user_id` are excluded). This is the denominator of the
- * profile-completeness measure — the same derivation recorded in the
- * ledger's Batch 1.4 real-metric inventory: a field counts as carried
- * when it is non-null AND non-empty. Four fields are non-nullable in the
- * contract (guaranteed present once a profile exists); `university` and
- * `learning_style_vark` are the only variable ones.
+ * The six user-facing content fields and the carried-field count now
+ * live in `features/profile/completeness.ts` (shared with the
+ * profile page since Batch 4.4 — one definition of the measure).
  */
-const PROFILE_FIELD_COUNT = 6;
-
-function countMissingProfileFields(profile: Profile): number {
-    const values = [
-        profile.education_level,
-        profile.major,
-        profile.preferred_language,
-        profile.university,
-        profile.learning_style_vark,
-        profile.daily_available_minutes,
-    ];
-    const carried = values.filter(
-        (value) => value !== null && String(value).trim() !== "",
-    ).length;
-    return PROFILE_FIELD_COUNT - carried;
-}
 
 /** The flat, hairline presentation for the state kit inside the
  * facts band's regions (D13 — real kit grammar, page-level flat

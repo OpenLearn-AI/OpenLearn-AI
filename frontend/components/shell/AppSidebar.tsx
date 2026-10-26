@@ -6,6 +6,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { DirectionToggle } from "@/components/ui/direction-toggle";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import {
     Tooltip,
@@ -23,7 +24,7 @@ import { NAV_LINKS, isActiveRoute } from "./nav-config";
  * - Expanded (224px): the "OpenLearn" brand identity with the
  *   adjacent collapse control, icon + text label per item, a visible
  *   current-route treatment, and an account region (identity, theme
- *   toggle, logout).
+ *   + direction controls, logout).
  * - Collapsed (56px, SIDE-01 — reduced from 64px; the smallest
  *   standard step that keeps every icon, the 36px brand mark, the
  *   avatar, and the toggle at their original sizes with usable hit
@@ -339,11 +340,16 @@ export function AppSidebar({
                     </div>
                 )}
 
-                {/* Account actions: theme, logout — same order in both
-                    states; icon-only controls keep sr-only names plus
-                    reinforcing tooltips when collapsed. The collapse
-                    control lives in the upper region, next to the
-                    product identity. */}
+                {/* Account actions: theme, direction, logout — same
+                    order in both states; icon-only controls keep
+                    sr-only/aria names plus reinforcing tooltips when
+                    collapsed. The collapse control lives in the upper
+                    region, next to the product identity. Batch 4.4:
+                    the direction control sits beside the theme control
+                    (one appearance-and-layout switch family — same
+                    visual grammar, distinct accessible name and icon);
+                    expanded, the two toggles group at the row's inline
+                    start with the logout control at the inline end. */}
                 <div
                     className={cn(
                         "flex items-center",
@@ -353,14 +359,27 @@ export function AppSidebar({
                     )}
                 >
                     {collapsed ? (
-                        <Tooltip>
-                            <TooltipTrigger render={<ThemeToggle />} />
-                            <TooltipContent side="inline-end">
-                                Toggle theme
-                            </TooltipContent>
-                        </Tooltip>
+                        <>
+                            <Tooltip>
+                                <TooltipTrigger render={<ThemeToggle />} />
+                                <TooltipContent side="inline-end">
+                                    Toggle theme
+                                </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                                <TooltipTrigger
+                                    render={<DirectionToggle />}
+                                />
+                                <TooltipContent side="inline-end">
+                                    Switch layout direction
+                                </TooltipContent>
+                            </Tooltip>
+                        </>
                     ) : (
-                        <ThemeToggle />
+                        <div className="flex items-center gap-2">
+                            <ThemeToggle />
+                            <DirectionToggle />
+                        </div>
                     )}
 
                     {collapsed ? (

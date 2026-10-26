@@ -8,6 +8,7 @@ import { Menu, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { DirectionToggle } from "@/components/ui/direction-toggle";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { NAV_LINKS, isActiveRoute } from "./nav-config";
 
@@ -177,7 +178,10 @@ export function MobileNav({
                         the drawer pattern. Correction A9: the theme
                         toggle lives HERE (inside the expanded menu),
                         in the same account-actions position and the
-                        same component as the desktop sidebar. */}
+                        same component as the desktop sidebar. Batch
+                        4.4: the direction control joins it — the
+                        same pairing, order, and components as the
+                        desktop account region. */}
                     <div className="shrink-0 border-t border-sidebar-border p-4">
                         <div className="flex items-center gap-2.5 pb-3">
                             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
@@ -189,6 +193,7 @@ export function MobileNav({
                         </div>
                         <div className="flex items-center gap-2">
                             <ThemeToggle />
+                            <DirectionToggle />
                             <LogoutButton className="flex-1 justify-center" />
                         </div>
                     </div>

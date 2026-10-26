@@ -22,6 +22,37 @@ type FieldErrors = Partial<
     Record<keyof ProfileFormValues, string>
 >;
 
+/**
+ * The shared profile create/edit form (Batch 4.4 presentation pass
+ * on the Batch 1 pattern — the CourseForm precedent from 4.3).
+ *
+ * Everything behavioral is the established contract, unchanged:
+ * - the Zod schema and the `safeParse` loop (field errors mapped
+ *   from the issues, exactly as before);
+ * - the full-replacement upsert payload (every field, always —
+ *   `PUT /v1/users/me` replaces the whole profile);
+ * - the mutation orchestration (`useUpdateProfile` with its
+ *   `profileKeys.all` invalidation) and the honest ApiError
+ *   status mapping;
+ * - the pinned labels ("Create Profile" / "Save Changes",
+ *   "Saving..."), the `role="alert"` error paragraph, and the
+ *   `role="status"` success paragraph the profile-roundtrip E2E
+ *   asserts on;
+ * - the create-vs-edit copy pair ("Profile created successfully."
+ *   / "Profile updated successfully.").
+ *
+ * Batch 4.4 improves the presentation and the associations only:
+ * - each control's validation error is programmatically associated
+ *   (`aria-describedby` → the Field's `role="alert"` paragraph), so
+ *   screen readers announce the field error with the control;
+ * - the optional contract fields (`university`,
+ *   `learning_style_vark`) say so in their helper text, and the
+ *   free-text fields that benefit from guidance carry honest hints
+ *   (the VARK examples; the 1–1440 range the schema actually
+ *   enforces) — no invented constraints;
+ * - the submit control keeps the family's lone-filled-button
+ *   hierarchy at the form's foot.
+ */
 export function ProfileForm({ profile }: ProfileFormProps) {
     const updateProfile = useUpdateProfile();
 
@@ -119,6 +150,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                     }
                     disabled={updateProfile.isPending}
                     aria-invalid={Boolean(errors.education_level)}
+                    aria-describedby={
+                        errors.education_level
+                            ? "education-level-error"
+                            : undefined
+                    }
                 />
             </Field>
 
@@ -129,6 +165,9 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                     onChange={(event) => setMajor(event.target.value)}
                     disabled={updateProfile.isPending}
                     aria-invalid={Boolean(errors.major)}
+                    aria-describedby={
+                        errors.major ? "major-error" : undefined
+                    }
                 />
             </Field>
 
@@ -147,6 +186,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                     }
                     disabled={updateProfile.isPending}
                     aria-invalid={Boolean(errors.preferred_language)}
+                    aria-describedby={
+                        errors.preferred_language
+                            ? "preferred-language-error"
+                            : undefined
+                    }
                 >
                     <option value="en">English</option>
                     <option value="ar">Arabic</option>
@@ -157,6 +201,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                 label="University"
                 htmlFor="university"
                 error={errors.university}
+                hint="Optional — your university or institution."
             >
                 <Input
                     id="university"
@@ -166,6 +211,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                     }
                     disabled={updateProfile.isPending}
                     aria-invalid={Boolean(errors.university)}
+                    aria-describedby={
+                        errors.university
+                            ? "university-error"
+                            : "university-hint"
+                    }
                 />
             </Field>
 
@@ -173,6 +223,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                 label="Learning Style (VARK)"
                 htmlFor="learning-style"
                 error={errors.learning_style_vark}
+                hint="Optional — e.g. Visual, Auditory, Read/Write, Kinesthetic, or a combination."
             >
                 <Input
                     id="learning-style"
@@ -182,6 +233,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                     }
                     disabled={updateProfile.isPending}
                     aria-invalid={Boolean(errors.learning_style_vark)}
+                    aria-describedby={
+                        errors.learning_style_vark
+                            ? "learning-style-error"
+                            : "learning-style-hint"
+                    }
                 />
             </Field>
 
@@ -189,6 +245,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                 label="Daily Available Minutes"
                 htmlFor="daily-available-minutes"
                 error={errors.daily_available_minutes}
+                hint="A whole number between 1 and 1440."
             >
                 <Input
                     id="daily-available-minutes"
@@ -203,6 +260,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
                     aria-invalid={Boolean(
                         errors.daily_available_minutes,
                     )}
+                    aria-describedby={
+                        errors.daily_available_minutes
+                            ? "daily-available-minutes-error"
+                            : "daily-available-minutes-hint"
+                    }
                 />
             </Field>
 

@@ -196,6 +196,21 @@ export const SidebarExpanded: Story = {
             name: "Collapse sidebar",
         });
         await expect(getComputedStyle(collapse).opacity).toBe("1");
+
+        // Batch 4.4: the account region carries BOTH appearance-and-
+        // layout switches — the theme control and, beside it, the
+        // direction control with its state exposed via aria-pressed
+        // (never the icon alone). Both are present, distinct, and
+        // correctly named in the expanded state too.
+        const theme = canvas.getByRole("button", {
+            name: "Toggle theme",
+        });
+        await expect(theme).toBeInTheDocument();
+        const direction = canvas.getByRole("button", {
+            name: "Right-to-left layout",
+        });
+        await expect(direction).toBeInTheDocument();
+        await expect(direction).toHaveAttribute("aria-pressed", "false");
     },
 };
 
@@ -362,6 +377,15 @@ export const SidebarCollapseInteraction: Story = {
         await expect(
             canvas.getByRole("button", { name: "Toggle theme" }),
         ).toBeInTheDocument();
+        // Batch 4.4: the direction control keeps its accessible name
+        // and pressed state in the collapsed rail as well.
+        const collapsedDirection = canvas.getByRole("button", {
+            name: "Right-to-left layout",
+        });
+        await expect(collapsedDirection).toHaveAttribute(
+            "aria-pressed",
+            "false",
+        );
 
         // Expand again restores the visible labels.
         await userEvent.click(expand);
@@ -438,11 +462,18 @@ export const MobileNavInteraction: Story = {
         // (correction A9) the theme toggle lives INSIDE the expanded
         // menu, next to the logout control, as the same accessible
         // button the desktop sidebar's account region renders.
+        // Batch 4.4: the direction control joins it — the mobile
+        // navigation keeps the full switch family reachable.
         await expect(
             within(dialog).getByRole("button", { name: "Logout" }),
         ).toBeInTheDocument();
         await expect(
             within(dialog).getByRole("button", { name: "Toggle theme" }),
+        ).toBeInTheDocument();
+        await expect(
+            within(dialog).getByRole("button", {
+                name: "Right-to-left layout",
+            }),
         ).toBeInTheDocument();
 
         // Explicit close affordance closes the drawer.
