@@ -3,6 +3,25 @@ import { test, expect } from "@playwright/test";
 import { performKeycloakLogin } from "./helpers";
 
 /**
+ * The dashboard greeting's structural pin (Batch 4.2 correction A3;
+ * the composition is unit-pinned in `composeWelcomeGreeting`): the
+ * plain "Welcome back!" when the session's ID token carries no
+ * `given_name`, "Welcome back, <Name>!" when it does. Which variant
+ * renders is decided by the REAL session — never by the test
+ * environment: the bootstrap provisions the E2E accounts without name
+ * claims, but Keycloak 26.7.3's first-login Verify Profile
+ * interstitial (the finding recorded in the 2.2.1 ledger) sets
+ * firstName/lastName the first time an account logs in manually, so
+ * a fixed-variant pin asserts an unguaranteeable environment
+ * property. The 2026-10-26 failure run proved exactly that: both dev
+ * accounts now carry names, the personalized variant rendered, and
+ * the old plain-wording pin failed. The anchored regex asserts the
+ * composed contract (either designed variant) and cannot match an
+ * unrelated "Welcome back …" heading.
+ */
+const greetingHeading = /^Welcome back(?:, .+)?!$/;
+
+/**
  * E2E smoke flow #1 — login → dashboard.
  *
  * This spec exercises the REAL authentication path:
@@ -15,9 +34,9 @@ import { performKeycloakLogin } from "./helpers";
  *      not by this repo, but they are the documented selectors across
  *      every Keycloak version since ~10.x.
  *   3. Wait for the redirect back to our origin at `/dashboard`.
- *   4. Assert meaningful dashboard content is present (the
- *      "Welcome back!" heading + the account colophon rendering the
- *      test user's roles).
+ *   4. Assert meaningful dashboard content is present (the composed
+ *      greeting heading + the account colophon rendering the test
+ *      user's roles).
  *
  * Batch 4.2: the dashboard's Email section was intentionally removed
  * (owner correction D — the email already lives on /profile, and the
@@ -25,12 +44,10 @@ import { performKeycloakLogin } from "./helpers";
  * to prove "/auth/me succeeded" via the UserInfo `Email:` line now
  * proves it via the account colophon's roles row, which renders from
  * the SAME /auth/me data. The greeting heading pin (Batch 4.2
- * corrections, A3: "Welcome back, <Name>!" with the exclamation
- * after the name) uses the no-name fallback wording "Welcome back!"
- * — the E2E bootstrap users are provisioned without name claims, so
- * the plain greeting renders here; any user WITH a first name in
- * their Keycloak profile sees "Welcome back, <Name>!" instead
- * (pinned by the composeWelcomeGreeting unit tests).
+ * corrections, A3) asserts the composed dual-variant contract — a
+ * fixed-variant pin would assert an environment property the suite
+ * cannot guarantee (explained at the file-level `greetingHeading`);
+ * the composition itself stays unit-pinned.
  *
  * Batch 4.1: the post-login wait is onboarding-aware (shared helper).
  * A fresh user without a profile is routed to the `/onboarding` wizard
@@ -84,11 +101,11 @@ test.describe("Login smoke flow", () => {
     // 5. Assert meaningful dashboard content. The dashboard's running
     //    head is the composed greeting (app/(app)/dashboard/page.tsx) —
     //    "Welcome back, <Name>!" when the session carries a first name,
-    //    the plain "Welcome back!" when it does not. The E2E users
-    //    have no name claims, so the plain greeting renders here
-    //    (the personalized variant is pinned by the unit tests).
+    //    the plain "Welcome back!" when it does not. Which variant
+    //    renders is decided by the session's real `given_name` claim
+    //    (the structural contract — see the file-level pin comment).
     await expect(
-      page.getByRole("heading", { name: "Welcome back!" }),
+      page.getByRole("heading", { name: greetingHeading }),
     ).toBeVisible();
 
     // The account colophon renders `Role:`/`Roles:` + the session's
@@ -141,7 +158,7 @@ test.describe("Login smoke flow", () => {
     // The flow's core page content remains visible and usable at the
     // compact width — the same greeting heading pinned above.
     await expect(
-      page.getByRole("heading", { name: "Welcome back!" }),
+      page.getByRole("heading", { name: greetingHeading }),
     ).toBeVisible();
 
     // Restore the desktop viewport (defensive hygiene — the compact block

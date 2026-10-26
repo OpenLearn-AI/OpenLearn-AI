@@ -7,6 +7,25 @@ import {
 } from "./helpers";
 
 /**
+ * The dashboard greeting's structural pin (Batch 4.2 correction A3;
+ * the composition is unit-pinned in `composeWelcomeGreeting`): the
+ * plain "Welcome back!" when the session's ID token carries no
+ * `given_name`, "Welcome back, <Name>!" when it does. Which variant
+ * renders is decided by the REAL session — never by the test
+ * environment: the bootstrap provisions the E2E accounts without name
+ * claims, but Keycloak 26.7.3's first-login Verify Profile
+ * interstitial (the finding recorded in the 2.2.1 ledger) sets
+ * firstName/lastName the first time an account logs in manually, so
+ * a fixed-variant pin asserts an unguaranteeable environment
+ * property. The 2026-10-26 failure run proved exactly that: both dev
+ * accounts now carry names, the personalized variant rendered, and
+ * the old plain-wording pin failed. The anchored regex asserts the
+ * composed contract (either designed variant) and cannot match an
+ * unrelated "Welcome back …" heading.
+ */
+const greetingHeading = /^Welcome back(?:, .+)?!$/;
+
+/**
  * E2E flow #4 — onboarding gate and first-login wizard (Batch 4.1).
  *
  * Coverage mapped to the Batch 4.1 brief (Q3 "E2E coverage"):
@@ -82,11 +101,12 @@ test.describe("Onboarding gate and wizard", () => {
 
     await expect(sharedPage).toHaveURL(/\/dashboard$/);
     // Batch 4.2 corrections (A3): the greeting composes as
-    // "Welcome back, <Name>!"; the E2E users carry no name claims, so
-    // the plain fallback renders (the pin is substring-based and
-    // case-insensitive either way).
+    // "Welcome back, <Name>!" when the session carries a first name and
+    // stays the plain "Welcome back!" otherwise — the variant is
+    // decided by the session's real `given_name` claim alone (the
+    // structural contract; see the greetingHeading comment above).
     await expect(
-      sharedPage.getByRole("heading", { name: "Welcome back!" }),
+      sharedPage.getByRole("heading", { name: greetingHeading }),
     ).toBeVisible();
   });
 
@@ -237,11 +257,12 @@ test.describe("Onboarding gate and wizard", () => {
     // The confirmed save routes back into the application.
     await sharedPage.waitForURL(/\/dashboard/, { timeout: 30_000 });
     // Batch 4.2 corrections (A3): the greeting composes as
-    // "Welcome back, <Name>!"; the E2E users carry no name claims, so
-    // the plain fallback renders (the pin is substring-based and
-    // case-insensitive either way).
+    // "Welcome back, <Name>!" when the session carries a first name and
+    // stays the plain "Welcome back!" otherwise — the variant is
+    // decided by the session's real `given_name` claim alone (the
+    // structural contract; see the greetingHeading comment above).
     await expect(
-      sharedPage.getByRole("heading", { name: "Welcome back!" }),
+      sharedPage.getByRole("heading", { name: greetingHeading }),
     ).toBeVisible();
   });
 
