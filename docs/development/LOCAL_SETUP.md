@@ -576,17 +576,26 @@ npx playwright install chromium   # once — installs the browser binary
 npm run test:storybook
 ```
 
-**E2E tests (Playwright).** Three smoke flows — `e2e/login.spec.ts`,
-`e2e/courses-crud.spec.ts`, `e2e/profile-roundtrip.spec.ts` — drive the
-real UI against the real stack. Start everything first: the `db` +
-`keycloak` containers (Section 5), the backend on `:8000` (Section 6), and
-the frontend on `:3000` (Section 7). Then set the credentials the specs
+**E2E tests (Playwright).** Four spec files — `e2e/login.spec.ts`,
+`e2e/courses-crud.spec.ts`, `e2e/profile-roundtrip.spec.ts`, and
+`e2e/onboarding.spec.ts` — drive the real UI against the real stack.
+Since Batch 5.1, the courses-crud file also carries the
+affordance-visibility checks, and its CRUD loop runs on the instructor
+account (the hub's Edit/Delete/Upload affordances are instructor-gated
+since Batch 4.3). Start everything first: the `db` + `keycloak`
+containers (Section 5), the backend on `:8000` (Section 6), and the
+frontend on `:3000` (Section 7). Then set the credentials the specs
 read:
 
 ```bash
 # Bash (Linux / macOS / WSL2 / Git Bash):
 export E2E_USERNAME=testuser
 export E2E_PASSWORD=<OPENLEARN_TEST_USER_PASSWORD value from ../.env.local>
+# Batch 5.1 — required ONLY by the courses-crud CRUD loop (the instructor
+# test account). Without it that test skips with an explicit message; the
+# other flows are unaffected.
+export E2E_INSTRUCTOR_USERNAME=instructor
+export E2E_INSTRUCTOR_PASSWORD=<OPENLEARN_INSTRUCTOR_USER_PASSWORD value from ../.env.local>
 npm run test:e2e
 ```
 
@@ -594,22 +603,31 @@ npm run test:e2e
 # Windows PowerShell:
 $env:E2E_USERNAME = "testuser"
 $env:E2E_PASSWORD = "<OPENLEARN_TEST_USER_PASSWORD value from ..\.env.local>"
+# Batch 5.1 — required ONLY by the courses-crud CRUD loop.
+$env:E2E_INSTRUCTOR_USERNAME = "instructor"
+$env:E2E_INSTRUCTOR_PASSWORD = "<OPENLEARN_INSTRUCTOR_USER_PASSWORD value from ..\.env.local>"
 npm run test:e2e
 ```
 
 Behavior worth knowing (from `frontend/playwright.config.ts` and the
 specs):
 
-- The Playwright runner itself needs only `E2E_USERNAME` and
-  `E2E_PASSWORD`. The `NEXT_PUBLIC_*` variables are consumed by the
-  frontend app itself and come from `frontend/.env.local` when `npm run
-  dev` starts (Section 3).
+- The Playwright runner reads the credential pairs from the environment:
+  `E2E_USERNAME`/`E2E_PASSWORD` (the student test user — login, profile,
+  onboarding, and the affordance-visibility flow) and
+  `E2E_INSTRUCTOR_USERNAME`/`E2E_INSTRUCTOR_PASSWORD` (the instructor
+  test account — the courses-crud CRUD loop only). The `NEXT_PUBLIC_*`
+  variables are consumed by the frontend app itself and come from
+  `frontend/.env.local` when `npm run dev` starts (Section 3).
 - The suite runs serially against Chromium only — the flows share
   Keycloak sessions and course/profile data. Locally there are no retries
   (CI retries twice); failures leave traces and screenshots under
   `frontend/test-results/`.
-- All three specs skip with a message when the credentials are unset, so
-  a green result without them does not mean the flows ran — set both.
+- Each credential pair gates exactly its own flows: a spec whose pair is
+  unset skips with an explicit, actionable message, so a green result
+  without both pairs does not mean every flow ran — set both for the
+  full suite. The instructor pair is never silently replaced by the
+  student pair (the CRUD flow's affordances are instructor-gated).
 - Targeted runs: `npm run test:e2e -- e2e/login.spec.ts` (one spec file)
   or `npm run test:e2e -- -g "Course"` (title filter).
 - `PLAYWRIGHT_BASE_URL` overrides the target URL (default

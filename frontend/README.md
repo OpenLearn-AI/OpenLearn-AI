@@ -295,7 +295,7 @@ Run 3/3: pending
 Required CI: NO
 ```
 
-To run E2E locally you need: a running backend at `NEXT_PUBLIC_API_URL`, a running Keycloak at `NEXT_PUBLIC_KEYCLOAK_URL`, the realm + client configured, and test credentials in `E2E_USERNAME` / `E2E_PASSWORD`. See `.github/workflows/e2e.yml` for the full environment contract.
+To run E2E locally you need: a running backend at `NEXT_PUBLIC_API_URL`, a running Keycloak at `NEXT_PUBLIC_KEYCLOAK_URL`, the realm + client configured, and test credentials in `E2E_USERNAME` / `E2E_PASSWORD` (the student test user) plus — since Batch 5.1 — `E2E_INSTRUCTOR_USERNAME` / `E2E_INSTRUCTOR_PASSWORD` (the instructor test account, required by the courses-crud CRUD loop; an absent pair skips that test with an explicit message). See `.github/workflows/e2e.yml` for the full environment contract and `docs/development/LOCAL_SETUP.md` for the local export commands.
 
 ---
 

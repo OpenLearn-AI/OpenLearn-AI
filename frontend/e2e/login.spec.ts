@@ -40,6 +40,11 @@ import { performKeycloakLogin } from "./helpers";
  * wizard branch is simply skipped. The dashboard assertions themselves
  * are unchanged — NOT weakened.
  *
+ * Batch 5.1 (D1): the flow ends with an in-spec compact-viewport block
+ * (360×800) asserting the responsive shell contract on the SAME login
+ * session — no second Playwright project, no repeated Keycloak login.
+ * The block is additive; the assertions above are untouched.
+ *
  * Why fill the Keycloak form rather than mock our auth state: Phase 6
  * requires the suite to "prove that a real user can authenticate and
  * land on `/dashboard`" through the actual UI. Mocking `keycloak.authenticated`
@@ -92,5 +97,56 @@ test.describe("Login smoke flow", () => {
     // it is present proves /auth/me succeeded with the authenticated
     // user's session, not merely that the route loaded).
     await expect(page.getByText(/Roles?:/)).toBeVisible();
+
+    // ---- 6. Compact-viewport shell contract (Batch 5.1, D1) ---------------
+    // The desktop project viewport is 1280×720; the application shell
+    // flips to the mobile pattern below the `md` breakpoint (768px).
+    // At 360×800 the responsive contract is: no desktop sidebar, the
+    // mobile top bar with its real "Open menu" trigger, a drawer that
+    // exposes real navigation destinations and closes through its real
+    // close control, and the flow's core content still visible. This
+    // block exercises the compact state INSIDE the same flow on the
+    // SAME authenticated session — deliberately not a second Playwright
+    // project, which would duplicate the expensive Keycloak login (and,
+    // because three spec files create their page via browser.newPage(),
+    // silently bypass the project viewport anyway).
+    await page.setViewportSize({ width: 360, height: 800 });
+
+    // The desktop sidebar is `hidden md:flex` (AppSidebar) — display:none
+    // at compact width takes it out of the accessibility tree, so its
+    // "Primary navigation" landmark matches nothing. The mobile drawer
+    // carries the identically-named landmark but is unmounted while
+    // closed (Base UI portal), so ZERO such landmarks exist right now.
+    await expect(
+      page.getByRole("navigation", { name: "Primary navigation" }),
+    ).toHaveCount(0);
+
+    // The mobile top bar (md:hidden header) renders the real menu trigger.
+    const openMenu = page.getByRole("button", { name: "Open menu" });
+    await expect(openMenu).toBeVisible();
+
+    // Opening the drawer exposes a real navigation destination (the
+    // shared nav-config "Courses" link — the same source of truth as the
+    // desktop sidebar).
+    await openMenu.click();
+    await expect(page.getByRole("link", { name: "Courses" })).toBeVisible();
+
+    // ...and the drawer closes through its real close control (the
+    // drawer's landmark unmounts again with the popup).
+    await page.getByRole("button", { name: "Close menu" }).click();
+    await expect(
+      page.getByRole("navigation", { name: "Primary navigation" }),
+    ).toHaveCount(0);
+
+    // The flow's core page content remains visible and usable at the
+    // compact width — the same greeting heading pinned above.
+    await expect(
+      page.getByRole("heading", { name: "Welcome back!" }),
+    ).toBeVisible();
+
+    // Restore the desktop viewport (defensive hygiene — the compact block
+    // is this flow's last step, so nothing below depends on it, but the
+    // block stays position-independent for future edits).
+    await page.setViewportSize({ width: 1280, height: 720 });
   });
 });

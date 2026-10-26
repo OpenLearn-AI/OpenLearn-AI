@@ -32,7 +32,14 @@ import { performKeycloakLogin } from "./helpers";
  * unaffected by the later UI/UX redesign (which will retain the
  * architectural rails, not the visual presentation).
  *
- * Environment required: same as courses-crud.spec.ts.
+ * Batch 5.1 (D1): the flow ends with an in-spec compact-viewport block
+ * (360×800) asserting the responsive shell contract on the SAME login
+ * session — no second Playwright project, no repeated Keycloak login.
+ * The block is additive; the round-trip assertions above are untouched.
+ *
+ * Environment required: same as courses-crud.spec.ts (the student
+ * E2E_USERNAME / E2E_PASSWORD pair; this flow does not need the
+ * instructor account).
  */
 
 const E2E_USERNAME = process.env.E2E_USERNAME;
@@ -171,6 +178,42 @@ test.describe("Profile round-trip smoke flow", () => {
     await expect(sharedPage.getByLabel("Daily Available Minutes")).toHaveValue(
       UPDATED.dailyAvailableMinutes,
     );
+
+    // ---- 6. Compact-viewport shell contract (Batch 5.1, D1) ---------------
+    // Same in-spec block as the login flow's step 6, asserted here after
+    // the round trip's final persistence reload — the shell contract
+    // holds on the profile surface too, on the SAME authenticated
+    // session (no second project, no repeated Keycloak login).
+    await sharedPage.setViewportSize({ width: 360, height: 800 });
+
+    // Desktop sidebar out of the accessibility tree; the closed drawer's
+    // identically-named landmark unmounted (see the login flow's note).
+    await expect(
+      sharedPage.getByRole("navigation", { name: "Primary navigation" }),
+    ).toHaveCount(0);
+
+    const openMenu = sharedPage.getByRole("button", { name: "Open menu" });
+    await expect(openMenu).toBeVisible();
+
+    await openMenu.click();
+    await expect(
+      sharedPage.getByRole("link", { name: "Courses" }),
+    ).toBeVisible();
+
+    await sharedPage.getByRole("button", { name: "Close menu" }).click();
+    await expect(
+      sharedPage.getByRole("navigation", { name: "Primary navigation" }),
+    ).toHaveCount(0);
+
+    // The flow's core page content remains visible and usable at the
+    // compact width — the update-mode section heading pinned in step 3.
+    await expect(
+      sharedPage.getByRole("heading", { name: "Personal Information" }),
+    ).toBeVisible();
+
+    // Restore the desktop viewport (defensive hygiene — see the login
+    // flow's note).
+    await sharedPage.setViewportSize({ width: 1280, height: 720 });
   });
 });
 

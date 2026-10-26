@@ -6,7 +6,13 @@
 # LOCAL evidence collector for the three checks that were BLOCKED in the
 # remote sandbox (no Docker, no credentials, staging unreachable):
 #
-#   Check 6  E2E trio with real Keycloak  (login / courses-crud / profile)
+#   Check 6  E2E suite with real Keycloak  (login / courses-crud /
+#                                         profile / affordance — since
+#                                         Batch 5.1 the CRUD flow consumes
+#                                         the instructor credential pair;
+#                                         an absent pair shows as an
+#                                         explicit CRUD skip, never a
+#                                         silent pass)
 #   Check 7  F5 live probe                (authenticated GET /v1/courses —
 #                                         does created_at carry a TZ offset?)
 #   Check 8  CORS preflight               (local web origin vs local backend;
@@ -72,6 +78,15 @@ API_URL="${API_URL:-http://localhost:8000}"
 WEB_URL="${WEB_URL:-http://localhost:3000}"
 KC_DISCOVERY="${KC_DISCOVERY:-http://localhost:8080/realms/openlearn/.well-known/openid-configuration}"
 E2E_USERNAME="${E2E_USERNAME:-testuser}"
+# Batch 5.1: the course CRUD flow runs on the instructor account. The
+# username defaults to the bootstrap-provisioned 'instructor'; the
+# password falls back to the root .env.local's
+# OPENLEARN_INSTRUCTOR_USER_PASSWORD (the same mechanism as the student
+# password below). Absence is LEGAL — the CRUD test then skips with an
+# explicit, actionable message; it never falls back to the student pair.
+E2E_INSTRUCTOR_USERNAME="${E2E_INSTRUCTOR_USERNAME:-instructor}"
+OPENLEARN_INSTRUCTOR_USER_PASSWORD="$(sed -n 's/^OPENLEARN_INSTRUCTOR_USER_PASSWORD=//p' "$REPO_DIR/.env.local" | head -1 | tr -d '\r')"
+E2E_INSTRUCTOR_PASSWORD="${E2E_INSTRUCTOR_PASSWORD:-$OPENLEARN_INSTRUCTOR_USER_PASSWORD}"
 STAGING_API="https://openlearn-api-staging.duckdns.org"
 STAGING_WEB="https://openlearn-web-staging.duckdns.org"
 
@@ -139,6 +154,9 @@ if [ -z "${OPENLEARN_TEST_USER_PASSWORD:-}" ] && [ -z "${E2E_PASSWORD:-}" ]; the
   fail_soft "OPENLEARN_TEST_USER_PASSWORD not set in .env.local — add it (see scripts/setup-dev.sh) and re-run"
 fi
 E2E_PASSWORD="${E2E_PASSWORD:-$OPENLEARN_TEST_USER_PASSWORD}"
+if [ -z "$E2E_INSTRUCTOR_PASSWORD" ]; then
+  echo "NOTE: E2E_INSTRUCTOR_PASSWORD is not set (neither the env var nor OPENLEARN_INSTRUCTOR_USER_PASSWORD in .env.local) — the instructor course-CRUD test will SKIP with an explicit message (see scripts/setup-dev.sh for the credential generation)."
+fi
 [ -f "$REPO_DIR/backend/.env" ] || echo "WARN: backend/.env missing — backend may fail to start (run scripts/setup-dev.sh)"
 [ -f "$REPO_DIR/frontend/.env.local" ] || echo "WARN: frontend/.env.local missing — dev server may fail (run scripts/setup-dev.sh)"
 [ -x "$REPO_DIR/backend/.venv/bin/uvicorn" ] || echo "WARN: backend/.venv missing — backend cannot be auto-started (run scripts/setup-dev.sh)"
@@ -210,15 +228,17 @@ else
   record "fast.checks" "SKIPPED" "not requested (--with-fast-checks); already PASS in remote run"
 fi
 
-# ----------------------------- 3. E2E trio ----------------------------------
-section "3. Check 6 — E2E trio with real Keycloak (Chromium, serial)"
+# ----------------------------- 3. E2E suite ---------------------------------
+section "3. Check 6 — E2E suite with real Keycloak (Chromium, serial)"
 echo "Ensuring Playwright chromium is installed (idempotent) ..."
 ( cd "$REPO_DIR/frontend" && npx playwright install chromium >/dev/null 2>&1 ) \
   || record "e2e.browser-install" "BLOCKED" "playwright install failed (network?)"
 
 E2E_OUT="$EVIDENCE_DIR/e2e-output.txt"
 ( cd "$REPO_DIR/frontend" && \
-  E2E_USERNAME="$E2E_USERNAME" E2E_PASSWORD="$E2E_PASSWORD" CI= \
+  E2E_USERNAME="$E2E_USERNAME" E2E_PASSWORD="$E2E_PASSWORD" \
+  E2E_INSTRUCTOR_USERNAME="$E2E_INSTRUCTOR_USERNAME" E2E_INSTRUCTOR_PASSWORD="$E2E_INSTRUCTOR_PASSWORD" \
+  CI= \
   npm run test:e2e ) 2>&1 | tee "$EVIDENCE_DIR/e2e-raw.txt"
 E2E_RC=${PIPESTATUS[0]}
 tail -40 "$EVIDENCE_DIR/e2e-raw.txt" > "$E2E_OUT"
@@ -230,10 +250,19 @@ for d in test-results playwright-report; do
 done
 E2E_SUMMARY="$(grep -Eo '[0-9]+ (passed|failed|skipped|flaky)[^()]*' "$EVIDENCE_DIR/e2e-raw.txt" | tail -6 | tr '\n' ' ')"
 echo "E2E exit code: $E2E_RC | summary: ${E2E_SUMMARY:-<none parsed>}"
+# Batch 5.1: the suite is no longer a fixed trio — the affordance flow
+# grew it to four tests, and an absent credential pair skips its tests
+# explicitly. The PASS condition is therefore structural (exit 0, at
+# least one test actually ran, nothing failed), not a hard-coded count;
+# skips are surfaced honestly in the note.
+E2E_SKIPPED_NOTE=""
+if echo "$E2E_SUMMARY" | grep -q "skipped"; then
+  E2E_SKIPPED_NOTE=" (some tests skipped — a credential pair is not configured; see the specs' explicit skip messages)"
+fi
 if echo "$E2E_SUMMARY" | grep -q "skipped" && ! echo "$E2E_SUMMARY" | grep -q "passed"; then
   record "e2e.trio" "BLOCKED" "specs self-skipped — credentials not picked up (E2E_USERNAME=$E2E_USERNAME; check .env.local)"
-elif [ "$E2E_RC" = "0" ] && echo "$E2E_SUMMARY" | grep -q "3 passed"; then
-  record "e2e.trio" "PASS" "login + courses-crud + profile-roundtrip all green"
+elif [ "$E2E_RC" = "0" ] && echo "$E2E_SUMMARY" | grep -q "passed" && ! echo "$E2E_SUMMARY" | grep -q "failed"; then
+  record "e2e.trio" "PASS" "suite green${E2E_SKIPPED_NOTE}"
 else
   record "e2e.trio" "FAIL" "exit=$E2E_RC summary=${E2E_SUMMARY:-none}; traces/screenshots moved to evidence dir"
 fi
