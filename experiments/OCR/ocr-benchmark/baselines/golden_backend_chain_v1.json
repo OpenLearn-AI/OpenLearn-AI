@@ -1,0 +1,290 @@
+{
+  "schema": "ocrbench-run-results",
+  "run_id": "golden-baseline-v1",
+  "engine": "backend_chain",
+  "created": "2026-10-29T22:31:40",
+  "aggregate": {
+    "overall": {
+      "samples": 15,
+      "ok": 15,
+      "errors": 0,
+      "mean_cer": 0.079333,
+      "mean_wer": 0.21798
+    },
+    "by_category": {
+      "arabic_born_digital": 0.052587,
+      "arabic_english_mixed": 0.043559,
+      "arabic_scanned": 0.083729,
+      "dense_academic": 0.052522,
+      "english_born_digital": 0.023815,
+      "english_scanned": 0.125766,
+      "figures_diagrams": 0.222222,
+      "formulas": 0.16899,
+      "multi_column": 0.054364,
+      "noisy_low_quality": 0.23287,
+      "slides": 0.016088,
+      "tables": 0.0
+    },
+    "by_language": {
+      "ar": 0.069888,
+      "en": 0.0708
+    }
+  },
+  "records": [
+    {
+      "sample_id": "custom_custom_arabic_born_digital_001_p002",
+      "path": "2. Arabic born-digital/custom_custom_arabic_born_digital_001_p002.pdf",
+      "languages": [
+        "ar"
+      ],
+      "categories": [
+        "arabic_born_digital"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 27.3017,
+      "cer": 0.029304,
+      "wer": 0.195652
+    },
+    {
+      "sample_id": "custom_custom_arabic_born_digital_002_p002",
+      "path": "2. Arabic born-digital/custom_custom_arabic_born_digital_002_p002.pdf",
+      "languages": [
+        "ar",
+        "en"
+      ],
+      "categories": [
+        "arabic_born_digital",
+        "arabic_english_mixed"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 27.5628,
+      "cer": 0.011519,
+      "wer": 0.091304
+    },
+    {
+      "sample_id": "custom_custom_arabic_born_digital_002_p004",
+      "path": "2. Arabic born-digital/custom_custom_arabic_born_digital_002_p004.pdf",
+      "languages": [
+        "ar",
+        "en"
+      ],
+      "categories": [
+        "arabic_born_digital",
+        "arabic_english_mixed"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 27.7358,
+      "cer": 0.043185,
+      "wer": 0.142276
+    },
+    {
+      "sample_id": "custom_arabic_scanned_001",
+      "path": "4. Arabic scanned/custom_arabic_scanned_001.png",
+      "languages": [
+        "ar"
+      ],
+      "categories": [
+        "arabic_scanned"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 19.453,
+      "cer": 0.033333,
+      "wer": 0.227273
+    },
+    {
+      "sample_id": "custom_custom_english_born_digital_005_p001",
+      "path": "1. English born-digital/custom_custom_english_born_digital_005_p001.pdf",
+      "languages": [
+        "en"
+      ],
+      "categories": [
+        "english_born_digital",
+        "dense_academic"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 27.6362,
+      "cer": 0.005764,
+      "wer": 0.038388
+    },
+    {
+      "sample_id": "custom_custom_english_born_digital_005_p002",
+      "path": "1. English born-digital/custom_custom_english_born_digital_005_p002.pdf",
+      "languages": [
+        "en"
+      ],
+      "categories": [
+        "english_born_digital",
+        "dense_academic",
+        "formulas"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 34.6593,
+      "cer": 0.041232,
+      "wer": 0.083688
+    },
+    {
+      "sample_id": "custom_custom_english_born_digital_001_p002",
+      "path": "1. English born-digital/custom_custom_english_born_digital_001_p002.pdf",
+      "languages": [
+        "en"
+      ],
+      "categories": [
+        "english_born_digital",
+        "slides"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 18.7802,
+      "cer": 0.0369,
+      "wer": 0.068182
+    },
+    {
+      "sample_id": "Custom_English_scanned_002",
+      "path": "3.English scanned/Custom_English_scanned_002.jpg",
+      "languages": [
+        "en"
+      ],
+      "categories": [
+        "english_scanned",
+        "formulas",
+        "noisy_low_quality"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 25.3743,
+      "cer": 0.440217,
+      "wer": 0.647887
+    },
+    {
+      "sample_id": "custom_custom_english_scanned_001_p001",
+      "path": "3.English scanned/custom_custom_english_scanned_001_p001.png",
+      "languages": [
+        "en"
+      ],
+      "categories": [
+        "english_scanned",
+        "formulas",
+        "noisy_low_quality"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 23.1462,
+      "cer": 0.025522,
+      "wer": 0.146067
+    },
+    {
+      "sample_id": "custom_arabic_scanned_005",
+      "path": "4. Arabic scanned/custom_arabic_scanned_005.png",
+      "languages": [
+        "ar"
+      ],
+      "categories": [
+        "arabic_scanned",
+        "figures_diagrams"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 22.7271,
+      "cer": 0.222222,
+      "wer": 0.47619
+    },
+    {
+      "sample_id": "custom_custom_mixed_arabic_english_002_p001",
+      "path": "5. Arabic + English mixed/custom_custom_mixed_arabic_english_002_p001.pdf",
+      "languages": [
+        "ar",
+        "en"
+      ],
+      "categories": [
+        "arabic_english_mixed",
+        "multi_column",
+        "arabic_scanned",
+        "english_scanned",
+        "dense_academic"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 43.9006,
+      "cer": 0.074074,
+      "wer": 0.364865
+    },
+    {
+      "sample_id": "custom_custom_mixed_arabic_english_002_p002",
+      "path": "5. Arabic + English mixed/custom_custom_mixed_arabic_english_002_p002.pdf",
+      "languages": [
+        "ar",
+        "en"
+      ],
+      "categories": [
+        "arabic_english_mixed",
+        "multi_column",
+        "arabic_scanned",
+        "english_scanned",
+        "dense_academic"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 33.9283,
+      "cer": 0.089018,
+      "wer": 0.475219
+    },
+    {
+      "sample_id": "custom_custom_multi_column_002_p002",
+      "path": "6. Multi-column/custom_custom_multi_column_002_p002.pdf",
+      "languages": [
+        "ar",
+        "en"
+      ],
+      "categories": [
+        "english_scanned",
+        "arabic_scanned",
+        "arabic_english_mixed",
+        "slides",
+        "tables",
+        "multi_column"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 18.3175,
+      "cer": 0.0,
+      "wer": 0.0
+    },
+    {
+      "sample_id": "custom_custom_arabic_born_digital_001_p001",
+      "path": "2. Arabic born-digital/custom_custom_arabic_born_digital_001_p001.pdf",
+      "languages": [
+        "ar"
+      ],
+      "categories": [
+        "arabic_born_digital"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 18.4848,
+      "cer": 0.126338,
+      "wer": 0.233766
+    },
+    {
+      "sample_id": "custom_custom_english_born_digital_001_p001",
+      "path": "1. English born-digital/custom_custom_english_born_digital_001_p001.pdf",
+      "languages": [
+        "en"
+      ],
+      "categories": [
+        "english_born_digital",
+        "slides"
+      ],
+      "status": "ok",
+      "error": null,
+      "duration_s": 21.8156,
+      "cer": 0.011364,
+      "wer": 0.078947
+    }
+  ]
+}
