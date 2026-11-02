@@ -8,6 +8,7 @@ from app.api.materials import (
     router as materials_router,
     status_router as material_status_router,
 )
+from app.api.retrieval import router as retrieval_router
 from app.api.users import router as users_router
 
 from app.config import settings
@@ -49,6 +50,7 @@ app.include_router(users_router)
 app.include_router(courses_router)
 app.include_router(materials_router)
 app.include_router(material_status_router)
+app.include_router(retrieval_router)
 
 
 # A validated Keycloak token that cannot be resolved to a user is a caller

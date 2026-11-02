@@ -1,15 +1,22 @@
-"""Minimal per-user rate limit for the write endpoints (review finding B-16).
+"""Minimal per-user rate limit for the expensive write and retrieval
+endpoints (review finding B-16).
 
 A fixed-window counter kept in process memory and keyed by the authenticated
 local user id, used as a FastAPI dependency::
 
     @router.post("", dependencies=[Depends(limit_writes)])
+    @router.post("/search", dependencies=[Depends(limit_retrieval)])
 
+Writes and retrieval use independent budgets (namespaced counters), so a
+burst of searches can never starve material registration and vice versa.
 It is deliberately small: the limit is per API process (a multi-process or
-multi-replica deployment would need a shared store such as Redis, or a limit at
-the reverse proxy), and ``settings.rate_limit_writes_per_minute = 0`` turns it
-off. Unauthenticated requests are rejected by ``get_current_user`` before they
-reach the counter.
+multi-replica deployment would need a shared store such as Redis, or a limit
+at the reverse proxy), and both limits are disabled at ``0``
+(``settings.rate_limit_writes_per_minute``,
+``settings.rate_limit_retrieval_per_minute``). Retrieval is metered because
+every search request runs embedding inference plus one vector query per
+material on the server. Unauthenticated requests are rejected by
+``get_current_user`` before they reach the counter.
 """
 
 import time
@@ -24,7 +31,7 @@ _WINDOW_SECONDS = 60
 #: Drop expired counters when this many users are tracked (bounds memory).
 _PRUNE_THRESHOLD = 10_000
 
-# user id -> (window start, requests in window)
+# namespaced key (e.g. "write:<user id>") -> (window start, requests in window)
 _windows: dict[str, tuple[float, int]] = {}
 
 
@@ -41,9 +48,8 @@ def _prune(now: float) -> None:
         del _windows[key]
 
 
-def limit_writes(user: User = Depends(get_current_user)) -> None:
-    """Reject with 429 when the user exceeds the per-minute write limit."""
-    limit = settings.rate_limit_writes_per_minute
+def _consume(key: str, limit: int) -> None:
+    """Apply one fixed-window counter to ``key``; 429 once over ``limit``."""
     if limit <= 0:
         return
 
@@ -51,7 +57,6 @@ def limit_writes(user: User = Depends(get_current_user)) -> None:
     if len(_windows) >= _PRUNE_THRESHOLD:
         _prune(now)
 
-    key = str(user.id)
     start, count = _windows.get(key, (now, 0))
     if now - start >= _WINDOW_SECONDS:
         start, count = now, 0
@@ -63,3 +68,13 @@ def limit_writes(user: User = Depends(get_current_user)) -> None:
             headers={"Retry-After": str(retry_after)},
         )
     _windows[key] = (start, count + 1)
+
+
+def limit_writes(user: User = Depends(get_current_user)) -> None:
+    """Reject with 429 when the user exceeds the per-minute write limit."""
+    _consume(f"write:{user.id}", settings.rate_limit_writes_per_minute)
+
+
+def limit_retrieval(user: User = Depends(get_current_user)) -> None:
+    """Reject with 429 over the per-minute retrieval limit (its own budget)."""
+    _consume(f"retrieval:{user.id}", settings.rate_limit_retrieval_per_minute)

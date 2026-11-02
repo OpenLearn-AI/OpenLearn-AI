@@ -457,6 +457,100 @@
         "title": "ProfileUpdate",
         "type": "object"
       },
+      "RetrievalResult": {
+        "additionalProperties": false,
+        "description": "One retrieved chunk with its provenance (existing page conventions).",
+        "properties": {
+          "chunk_id": {
+            "description": "Chunker-local chunk id (document id + sequence). It is not stable across reprocessing or chunking configuration changes.",
+            "minLength": 1,
+            "title": "Chunk Id",
+            "type": "string"
+          },
+          "content": {
+            "description": "Text of the retrieved chunk.",
+            "title": "Content",
+            "type": "string"
+          },
+          "material_id": {
+            "format": "uuid",
+            "title": "Material Id",
+            "type": "string"
+          },
+          "pages": {
+            "description": "1-based source page numbers the chunk was drawn from.",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Pages",
+            "type": "array"
+          },
+          "score": {
+            "description": "1 minus the cosine distance of the stored vector \u2014 a similarity (higher is closer), not a probability or confidence.",
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "material_id",
+          "chunk_id",
+          "content",
+          "pages",
+          "score"
+        ],
+        "title": "RetrievalResult",
+        "type": "object"
+      },
+      "RetrievalSearchRequest": {
+        "additionalProperties": false,
+        "description": "Retrieval search request for one course.\n\nOnly the search text is accepted: material, document and metadata filters\nare derived server-side from the authorized course and are never\nclient-controlled. The query is untrusted plain text \u2014 it is trimmed and\nlength-checked, never interpreted or transformed.",
+        "properties": {
+          "query": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "top_k": {
+            "default": 5,
+            "description": "Maximum similar chunks to return (1-20).",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "RetrievalSearchRequest",
+        "type": "object"
+      },
+      "RetrievalSearchResponse": {
+        "additionalProperties": false,
+        "description": "Ranked results for one course; empty list means nothing matched.",
+        "properties": {
+          "course_id": {
+            "format": "uuid",
+            "title": "Course Id",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/RetrievalResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "course_id",
+          "results"
+        ],
+        "title": "RetrievalSearchResponse",
+        "type": "object"
+      },
       "UploadUrlCreate": {
         "additionalProperties": false,
         "description": "Payload for the presigned-URL endpoint.\n\nOnly the minimum metadata required to build a server-side key and carry\nthe material title is accepted; identity and the object key are never\nclient-controlled.",
@@ -1023,6 +1117,77 @@
         "summary": "Register Material Handler",
         "tags": [
           "materials"
+        ]
+      }
+    },
+    "/v1/courses/{course_id}/materials/search": {
+      "post": {
+        "description": "Search one course's materials by semantic similarity.\n\nCourse ownership is enforced (404/403, ``app.api.deps.require_owned_course``)\nbefore embedding or vector access. Results may come from any material of\nthe course whose vectors exist; no matching content yields a successful\n200 with an empty ``results`` array.",
+        "operationId": "search_materials_handler_v1_courses__course_id__materials_search_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "course_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Course Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrievalSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrievalSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated (missing or invalid bearer token)"
+          },
+          "403": {
+            "description": "Insufficient permissions (course ownership required)"
+          },
+          "404": {
+            "description": "Course does not exist"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Too many requests (per-user retrieval rate limit)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search Materials Handler",
+        "tags": [
+          "retrieval"
         ]
       }
     },

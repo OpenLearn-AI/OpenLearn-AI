@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # create course), requests per minute. 0 disables the limit.
     rate_limit_writes_per_minute: int = 30
 
+    # Per-user limit for the retrieval search endpoint, requests per minute.
+    # Separate budget from the write limit (independent counters): each search
+    # runs embedding inference plus one vector query per material. 0 disables.
+    rate_limit_retrieval_per_minute: int = 60
+
     # PAL / AI Settings
     ai_ocr_provider: str = "mock"
     ai_ocr_fallbacks: str = ""
