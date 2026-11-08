@@ -40,3 +40,5 @@ experiments/OCR/ocr-benchmark/data/raw/bce-arabic-v1/
 *.sh.pre-*
 frontend/test-results/
 *.patch
+.vscode/
+
